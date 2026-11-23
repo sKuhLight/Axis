@@ -17,8 +17,9 @@ import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, 
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
+import { liveBlockState, withBypassModeLabels } from './blockState';
 import { resolveCurrentSlot, checkSaveTarget, guardedStore, isSlotConfirmed, saveBlockedText, withTimeout, canProbePreset, saveProbeMs } from './saveTarget';
-import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, BlockState } from './types';
 import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
@@ -108,6 +109,9 @@ class EditorStore {
   get paramsWithoutPack(): boolean { return this.isV2 ? !!this.caps?.paramsWithoutPack : this.isAm4; }
   /** Presets can be renamed (working buffer + stored slots). */
   get canRenamePresets(): boolean { return this.isV2 ? !!this.caps?.presets?.canRename : !this.isAm4; }
+  /** caps.blockState: the block params carry Scene Ignore + Bypass Mode (true / false); undefined when the
+   *  server does not say (a pre-v2 or older ForgeFX) — the header then names a newer server as the fix. */
+  get blockStateCap(): boolean | undefined { return this.isV2 ? this.caps?.blockState : undefined; }
   /** Scene names are writable on this device. */
   get canRenameScenes(): boolean { return this.isV2 ? !!this.caps?.sceneNamesWritable : !this.isAm4; }
   /** Device supports full preset dumps → the library's deep param index (summary/params reads). */
@@ -145,6 +149,26 @@ class EditorStore {
   /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
   looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
+  /** Scene Ignore + Bypass Mode tag of the open block as the server served it, keyed by the block's effect id
+   *  and the channel it was read on (a reload of the same block keeps it until the read lands; another block
+   *  never shows it). */
+  #blockStateTag = $state<{ eid: number; channel: string | null; state: BlockState } | null>(null);
+  /** Scene Ignore + Bypass Mode of the open block, values read from its live enums (the board edits the same
+   *  params), so header and board stay in step; null when the server served none for this block. */
+  get blockState(): BlockState | null {
+    const t = this.#blockStateTag;
+    const c = this.selected;
+    if (!t || !c || this.virtual || c.effectId !== t.eid) return null;
+    return liveBlockState(t.state, this.enums);
+  }
+  /** The open block's channel changed since its block state was read (a channel switch or a scene change,
+   *  the re-read still pending): both params are per channel, so the values shown are the old channel's and
+   *  nothing may be written until the read lands. */
+  get blockStateStale(): boolean {
+    const t = this.#blockStateTag;
+    const c = this.selected;
+    return !!t && !!c && c.effectId === t.eid && (c.channel ?? null) !== t.channel;
+  }
   /** Device-authentic editor pages for the open block/virtual effect (seeds the Block Editor's Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
@@ -550,7 +574,7 @@ class EditorStore {
         const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(eid) : await forgefx.blockParams(eid);
         this.pinnedParams = {
           ...this.pinnedParams,
-          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: r.enums ?? [] }
+          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: withBypassModeLabels(r.enums ?? [], r.blockState) }
         };
       } catch {
         /* best-effort — the control falls back to a read-only preview */
@@ -1497,6 +1521,7 @@ class EditorStore {
       this.sheetState = 'nopack';
       this.params = [];
       this.enums = [];
+      this.#blockStateTag = null;
       return;
     }
     await this.#loadParams();
@@ -1538,17 +1563,21 @@ class EditorStore {
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
     this.sheetState = 'loading';
+    const readChannel = c.channel ?? null; // the channel this read reflects (Scene Ignore / Bypass Mode are per channel)
     try {
       // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
       // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
       // way, so the rest of this method is model-agnostic.
       const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
-      this.enums = r.enums ?? [];
+      // the tagged Bypass Mode's labels read like the header's ("Mute FX Out") on the board's select too
+      this.enums = withBypassModeLabels(r.enums ?? [], r.blockState);
       this.blockType = r.type ?? null;
       this.blockSlug = r.slug ?? null;
       if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
       this.blockLayout = r.layout ?? null; // device-authentic pages seed the Block Editor's Default layout
+      // Scene Ignore + Bypass Mode (header); forgefx.blockParams already dropped a missing / malformed tag
+      this.#blockStateTag = !this.virtual && r.blockState ? { eid: c.effectId, channel: readChannel, state: r.blockState } : null;
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
         const fallback = this.params[0];
@@ -1569,6 +1598,7 @@ class EditorStore {
       this.sheetState = 'ready';
     } catch (e) {
       this.sheetState = 'error';
+      this.#blockStateTag = null;
       if (e instanceof ForgeError) console.warn(e.message);
     }
   };
@@ -1609,12 +1639,38 @@ class EditorStore {
     e.value = value; // optimistic
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return;
-    if (from !== value) history.record({
+    const step = from !== value ? history.record({
       kind: 'param', eid: c.effectId, paramId: e.id, continuous: false, from, to: value,
       block: c.display, param: e.name,
       fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
-    });
-    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
+    }) : null;
+    // A write the device did not take — the request failed, or a grid device (gen-3) refused it (`ok:false`;
+    // on the AM4's linear chain `ok:false` only means "no acknowledgement in time", so it is left alone): put
+    // the value back if nothing changed it since, drop the undo step that never happened, say so once.
+    const failed = () => {
+      if (e.value === value) e.value = from;
+      if (step) history.discard(step);
+      this.showToast(`${e.name}: the device did not take the change`, '#d6543f');
+    };
+    const refusalMeansNo = this.caps?.slotModel === 'grid';
+    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).then(
+      (r) => {
+        if (r?.ok === false && refusalMeansNo) failed();
+      },
+      failed
+    );
+  };
+  /** Write the open block's Scene Ignore / Bypass Mode (the header). The param is one of the block's own
+   *  enums, so this IS the board's enum write (optimistic + history + revert), and the board's control
+   *  follows. Nothing is written while the block state is another channel's (`blockStateStale`) or for a
+   *  param the block does not list (no such control). */
+  setBlockStateParam = (paramId: number, value: number) => {
+    const c = this.selected;
+    const t = this.#blockStateTag;
+    if (!c || !t || t.eid !== c.effectId || this.blockStateStale) return;
+    if (t.state.sceneIgnore?.paramId !== paramId && t.state.bypassMode?.paramId !== paramId) return;
+    const e = this.enums.find((x) => x.id === paramId);
+    if (e) this.setEnum(e, value);
   };
   toggleBypass = async (cell?: Cell) => {
     const c = cell ?? this.selected;

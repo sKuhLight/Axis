@@ -1,6 +1,7 @@
 <script lang="ts">
   // Block Editor header: type chip (glyph · type name or cab summary · channel letter that unfolds A–D),
-  // the page tabs (top navigation), "Find a control…", the Engaged | Mute | Scene Ignore segments and
+  // the page tabs (top navigation), "Find a control…", the Engaged | Bypass mode ▾ | Scene Ignore segments
+  // (both from the device, per channel; on a phone-width editor Bypass mode moves into ⋯) and
   // the ⋯ menu trigger (amber dot while the layout differs from its seed). One row when every part fits
   // at its widest (`oneRowMinWidth`: ~1240 px with the tabs, less with the side navigation, whose page
   // list sits beside the board), two rows below: chip · segments · ⋯ on top, tabs · search underneath.
@@ -11,12 +12,13 @@
   import { tick } from 'svelte';
   import BePageNav from './BePageNav.svelte';
   import type { BeNav } from './boardGeometry';
-  import { CHANNELS, headerFit, headerOrder, headerRows, MORE_MENU_W, stateLabels, typeChip, type BeBlockChrome } from './headerModel';
+  import { CHANNELS, bypassModeInMenu, bypassModeText, headerFit, headerOrder, headerRows, MORE_MENU_W, stateLabels, typeChip, type BeBlockChrome } from './headerModel';
 
   let {
     block,
     nav,
     phone = false,
+    touch = false,
     width = $bindable(0),
     pages,
     active,
@@ -32,14 +34,19 @@
     moreDot,
     moreAnchor = $bindable(null),
     onMore,
+    bypassModeOpen = false,
+    bypassModeAnchor = $bindable(null),
+    onBypassMode = () => {},
     search,
     end
   }: {
     block: BeBlockChrome | null;
     /** Effective navigation: the tabs live here only for `top`. */
     nav: BeNav;
-    /** Phone device class: ≥ 40 px hit targets. */
+    /** Phone device class: the channel letters open as a bar over row one. */
     phone?: boolean;
+    /** Touch device class (phone and tablet): ≥ 40 px hit targets. */
+    touch?: boolean;
     /** Measured header (= editor) width. */
     width?: number;
     pages: readonly string[];
@@ -57,13 +64,19 @@
     /** Box the ⋯ menu opens under (right-aligned to the trigger). */
     moreAnchor?: HTMLElement | null;
     onMore: () => void;
+    /** The Bypass mode menu is open (it opens under the control). */
+    bypassModeOpen?: boolean;
+    /** The Bypass mode control (the menu's anchor); null while ⋯ holds it (a phone-width editor). */
+    bypassModeAnchor?: HTMLElement | null;
+    /** Open / close the Bypass mode menu. */
+    onBypassMode?: () => void;
     /** The search (field, or icon button on a narrow editor). */
     search: Snippet<[boolean]>;
     /** Trailing control (the monolith's ✕). */
     end?: Snippet;
   } = $props();
 
-  const rows = $derived(block ? headerRows(width, nav, !!end) : 1);
+  const rows = $derived(block ? headerRows(width, nav, !!end, touch) : 1);
   const fit = $derived(headerFit(width));
   const chip = $derived(
     block
@@ -72,6 +85,9 @@
   );
   const labels = $derived(stateLabels(width, !!block?.bypassed));
   const canBypass = $derived(!!block?.pack);
+  // where chip · state · ⋯ (· ✕) would not share row one, the Bypass mode control moves into ⋯ (BeSurface
+  // reads the same measured `width` for the ⋯ rows)
+  const bmInMenu = $derived(bypassModeInMenu(width, { hasEnd: !!end, touch }));
   const showTabs = $derived(nav === 'top' && pages.length > 0);
   const order = $derived(headerOrder({ rows, block: !!block, tabs: showTabs, end: !!end, tiny: fit.tiny }));
 
@@ -175,6 +191,8 @@
 
 {#snippet statePart()}
   {#if block}
+    {@const scene = block.blockState.scene}
+    {@const bm = block.blockState.bypassMode}
     <div class="be-state" role="group" aria-label="Block state">
       <button
         class="be-seg eng"
@@ -188,12 +206,52 @@
       >
         <span class="be-led" aria-hidden="true"></span><span>{labels.engaged}</span>
       </button>
+      {#if !bmInMenu}
+        <span class="be-seg-sep" aria-hidden="true"></span>
+        <!-- Bypass mode: what the block does while bypassed (the device's own modes); a muting mode shows the
+             muted mark, red while the block is bypassed (it is silent now). Unavailable = aria-disabled with
+             the reason in the title (it stays focusable so the reason can be read); while the block is
+             re-read the last mode stays on show (`pending`: disabled, not dimmed — no flicker). -->
+        <button
+          class="be-seg be-bm"
+          class:off={!bm.enabled}
+          class:pending={bm.pending}
+          class:open={bypassModeOpen}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={bypassModeOpen}
+          aria-disabled={!bm.enabled}
+          aria-busy={bm.pending}
+          aria-label={bm.label ? `Bypass mode: ${bm.label}` : 'Bypass mode'}
+          title={bm.title}
+          data-be-bypass-mode={bm.value ?? 'off'}
+          data-be-bypass-muting={bm.muting ? 'true' : 'false'}
+          bind:this={bypassModeAnchor}
+          onclick={() => bm.enabled && onBypassMode()}
+        >
+          {#if bm.muting}
+            <svg class="be-bm-mute" class:live={block.bypassed} data-be-bypass-muted width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"
+              ><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" /><path d="M11 5.5l4 5M15 5.5l-4 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg
+            >
+          {/if}
+          <span class="be-bm-txt">{bypassModeText(bm, width)}</span>
+          {#if bm.label}<span class="be-bm-caret" aria-hidden="true">▾</span>{/if}
+        </button>
+      {/if}
       <span class="be-seg-sep" aria-hidden="true"></span>
-      <button class="be-seg" type="button" aria-pressed="false" title="Mute block output (coming soon)" data-be-mute onclick={() => block.onMute()}>
-        <span class="be-led" aria-hidden="true"></span><span>{labels.mute}</span>
-      </button>
-      <span class="be-seg-sep" aria-hidden="true"></span>
-      <button class="be-seg" type="button" aria-pressed="false" title="Scene Ignore — scene changes leave this block alone (coming soon)" data-be-scene onclick={() => block.onScene()}>
+      <button
+        class="be-seg be-scene"
+        class:on={scene.on}
+        class:off={!scene.enabled}
+        class:pending={scene.pending}
+        aria-busy={scene.pending}
+        type="button"
+        aria-pressed={scene.on}
+        aria-disabled={!scene.enabled}
+        title={scene.title}
+        data-be-scene={scene.on ? 'on' : 'off'}
+        onclick={() => scene.enabled && block.onSceneIgnore(!scene.on)}
+      >
         <span class="be-led" aria-hidden="true"></span><span>{labels.scene}</span>
       </button>
     </div>
@@ -208,6 +266,7 @@
   class:tiny={fit.tiny}
   class:xs={fit.xs}
   class:phone
+  class:touch
   class:hasend={!!end}
   data-be-head
   data-be-head-rows={rows}
@@ -558,6 +617,52 @@
     flex: none;
     background: var(--border2);
   }
+  /* unavailable (aria-disabled, focusable: the title says why); a pending re-read keeps the last state at
+     full strength (no flicker on a channel switch / scene change / undo) */
+  .be-seg.off {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .be-seg.off.pending {
+    cursor: progress;
+    opacity: 1;
+  }
+  .be-seg.off:hover {
+    filter: none;
+  }
+  /* Scene Ignore on: accent LED and text */
+  .be-seg.be-scene.on {
+    background: var(--accent-tint);
+    color: var(--accentbright);
+  }
+  .be-seg.be-scene.on .be-led {
+    background: var(--accent);
+    box-shadow: 0 0 7px var(--accent);
+  }
+  /* Bypass mode: the current mode, a caret, the muted mark for a silencing mode */
+  .be-bm {
+    gap: 5px;
+  }
+  .be-bm.open {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .be-bm-txt {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .be-bm-caret {
+    font-size: 10px;
+    color: var(--textdim);
+  }
+  .be-bm-mute {
+    flex: none;
+    color: var(--amber);
+  }
+  .be-bm-mute.live {
+    color: var(--danger);
+  }
 
   /* ── ⋯ ── */
   .be-morewrap {
@@ -645,19 +750,23 @@
     height: 40px;
     font-size: 14px;
   }
-  /* ── phone device class: every hit target ≥ 40 px ── */
-  .phone .be-chip {
+  /* ── touch device classes (phone and tablet): every hit target ≥ 40 px ── */
+  .touch .be-chip {
     height: 42px;
   }
-  .phone .be-chan,
-  .phone .be-more {
+  .touch .be-chan,
+  .touch .be-more {
     width: 40px;
     height: 40px;
   }
-  .phone .be-state {
+  .touch .be-state {
     height: 42px; /* 40 px segments inside the 1 px border */
   }
-  .phone .be-chip-ch {
+  .touch .be-seg {
+    min-width: 40px;
+    justify-content: center;
+  }
+  .touch .be-chip-ch {
     min-width: 40px;
     justify-content: center;
   }

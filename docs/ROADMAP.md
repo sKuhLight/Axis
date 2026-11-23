@@ -56,9 +56,10 @@ are. Realistic paths:
 Scene **switching** is wired. Missing the management surface:
 - **Scene naming** — `buildSetSceneName` / `buildQuerySceneName` are **Available** (names already
   decode into `PresetGridDTO.scenes`). Just need edit UI.
-- Per-scene **copy / clear / reset**, "scene ignore" per block (the BlockEditor footer stub),
-  scene-level bypass/channel matrix view, **scene controllers** (per-scene values).
-  **Effort:** naming = easy; copy/ignore/controllers = moderate (touches modifiers, see §5).
+- Per-scene **copy / clear / reset**, scene-level bypass/channel matrix view, **scene controllers**
+  (per-scene values). Per-block **Scene Ignore** (and the block's **Bypass mode**) is done: the Block
+  Editor header edits the device's own per-channel params (AXIS-81; FM3 / FM9 / Axe-Fx III).
+  **Effort:** naming = easy; copy/controllers = moderate (touches modifiers, see §5).
 
 ### 4. Sets & Songs / Preset Librarian (≣)  — *bank browsing + backup*
 Currently only a `GET /presets/:n` stub. Missing:

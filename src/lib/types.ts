@@ -126,6 +126,44 @@ export interface BlockParams {
   type: { value: number; name: string } | null;
   /** Device-authentic editor pages (seeds the Block Editor's "Default" layout). */
   layout?: DeviceLayout;
+  /** Scene Ignore + Bypass Mode of the block's active channel, tagged by the server (cap `blockState`).
+   *  Absent on servers / devices without it. */
+  blockState?: BlockState;
+}
+
+/** The block's Scene Ignore toggle on its ACTIVE channel (the device param is per channel). `paramId` is
+ *  the same id as the block's own `enums[]` entry: a toggle is the ordinary enum write. */
+export interface BlockSceneIgnore {
+  paramId: number;
+  /** 0 = OFF, 1 = ON (the block keeps its state on scene changes). */
+  value: number;
+  /** False when the device firmware is known and below the param's gate (`reason` says which). */
+  supported: boolean;
+  reason?: string;
+}
+
+/** One bypass-mode option: the device's own label, and whether the mode silences the block. */
+export interface BypassModeOption {
+  value: number;
+  label: string;
+  muting: boolean;
+}
+
+/** The block's Bypass Mode (what it does WHILE bypassed) on its active channel. */
+export interface BlockBypassMode {
+  paramId: number;
+  value: number;
+  options: BypassModeOption[];
+}
+
+/** `blockState` on GET /preset/blocks/:eid/params. A null member = the block has no such param.
+ *  Not to be confused with the `DeviceEvent` kind `'blockState'` (a pushed bypass / channel change of some
+ *  block, which only triggers a re-read): this is the open block's Scene Ignore + Bypass Mode. */
+export interface BlockState {
+  sceneIgnore: BlockSceneIgnore | null;
+  bypassMode: BlockBypassMode | null;
+  /** The server could not read the block (its values unknown): neither control is usable. */
+  readError?: boolean;
 }
 
 /** Foot Controller (eid 199) address model — field bases + config formula + enums. */
@@ -532,6 +570,8 @@ export type DeviceEvent =
   // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
   // `changed` = a structural change (grid/preset) → reload.
   | { type: 'param'; effectId: number; paramId: number; norm: number }
+  // a block's bypass / channel changed (re-read the scene state) — unrelated to `BlockState` (the open
+  // block's Scene Ignore + Bypass Mode on the block params)
   | { type: 'blockState'; effectId?: number }
   | { type: 'changed'; scope: 'grid' | 'preset' }
   // A shared Axis config doc (layouts / swipe quick-actions / tags / surface arrange …) was written by
@@ -640,6 +680,10 @@ export interface DeviceCaps {
    *  produces a redacted result bundle the user can save or upload for analysis. True for gen-3 devices
    *  that self-describe. Absent on older servers → the Debug tab only explains why it is unavailable. */
   diagnosticCapture?: boolean;
+  /** The block-params response carries `blockState` (Scene Ignore + Bypass Mode of the open block). True on
+   *  the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older servers → the Block Editor header's
+   *  Scene Ignore / Bypass mode controls are disabled with "Needs a newer ForgeFX server". */
+  blockState?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */

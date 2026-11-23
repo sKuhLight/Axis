@@ -5,7 +5,7 @@
   import BeSurface from './blockEditor/BeSurface.svelte';
   import { trackDeviceClass } from './blockEditor/deviceClass.svelte';
   import { browserFlagStore, readGridMapShown, writeGridMapShown } from './blockEditor/gridMapPrefs';
-  import type { BeBlockChrome } from './blockEditor/headerModel';
+  import { blockStateView, type BeBlockChrome } from './blockEditor/headerModel';
   import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
@@ -19,6 +19,7 @@
   // default fold follow it, the same value the board uses for its storage key
   const dc = trackDeviceClass();
   const isPhone = $derived(dc.current === 'phone');
+  const isTouch = $derived(dc.current !== 'desktop'); // phone and tablet: ≥ 40 px hit targets
   // Grid map: folded by default in the workbench (every device class; its grid panel is right there) and
   // on a phone in the monolith; unfolded by default only in the monolith on desktop / tablet. A stored
   // fold state always wins. ⋯ "Grid map" shows / hides the whole strip (stored separately).
@@ -85,14 +86,27 @@
   const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
 
   // ── header: the type chip and block actions the surface's header shows ──
-  // Mute / Scene Ignore have no device endpoint yet (F7): the segments say so.
+  // Scene Ignore and Bypass mode come from the device (ForgeFX tags them on the block params, cap
+  // `blockState`) and write through the board's own enum write; unavailable = disabled with the reason.
   let gridMapShown = $state(readGridMapShown(browserFlagStore()));
   function setGridMapShown(show: boolean) {
     gridMapShown = show;
     writeGridMapShown(browserFlagStore(), show);
   }
+  const blockStateUi = $derived(
+    blockStateView({
+      live: !!editor.setBlockStateParam,
+      cap: editor.blockStateCap,
+      device: editor.detected?.name,
+      status: editor.sheetState,
+      state: editor.blockState,
+      stale: !!editor.blockStateStale,
+      channel: sel?.channel
+    })
+  );
   const chrome = $derived.by((): BeBlockChrome | null => {
     if (!sel || !cat) return null;
+    const bs = blockStateUi;
     return {
       glyph: cat.glyph,
       glyphBg: `linear-gradient(180deg,${shade(cat.accent, 0.14)},${shade(cat.accent, -0.5)})`,
@@ -104,12 +118,17 @@
       cabSummary,
       channel: sel.channel,
       bypassed: !!sel.bypassed,
+      blockState: bs,
       gridMapShown,
       onType: () => (isCab ? editor.openCabPicker() : editor.openRetype()),
       onChannel: (ch) => void editor.setChannel(ch),
       onBypass: () => void editor.toggleBypass(),
-      onMute: () => editor.showToast('Mute — coming soon', 'var(--accent)'),
-      onScene: () => editor.showToast('Scene Ignore — coming soon', 'var(--accent)'),
+      onSceneIgnore: (on) => {
+        if (bs.scene.enabled && bs.scene.paramId != null) editor.setBlockStateParam?.(bs.scene.paramId, on ? 1 : 0);
+      },
+      onBypassMode: (value) => {
+        if (bs.bypassMode.enabled && bs.bypassMode.paramId != null) editor.setBlockStateParam?.(bs.bypassMode.paramId, value);
+      },
       onRemove: () => void editor.removeSelected(),
       onGridMap: setGridMapShown
     };
@@ -162,6 +181,7 @@
     class:mob={editor.isMobile && !embedded}
     class:embedded
     class:phone={isPhone}
+    class:touch={isTouch}
     style="--c:{cat.accent}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
     data-screen="Block Editor"
   >
@@ -173,7 +193,7 @@
         </div>
       {/if}
 
-      <!-- header (type chip · pages · search · Engaged | Mute | Scene Ignore · ⋯), the grid map strip under
+      <!-- header (type chip · pages · search · Engaged | Bypass mode ▾ | Scene Ignore · ⋯), the grid map strip under
            it (default fold above, so the board keeps the height where space is short; ⋯ shows / hides it),
            then the block's control board (every page at once, always fitted; arrange mode). The no-pack /
            reading / error states show in the board area while the header stays usable. -->
@@ -296,8 +316,8 @@
     border-color: var(--border3);
     color: var(--text);
   }
-  /* phone: ≥ 40 px hit target */
-  .ed.phone .close {
+  /* phone and tablet: ≥ 40 px hit target */
+  .ed.touch .close {
     width: 40px;
     height: 40px;
   }

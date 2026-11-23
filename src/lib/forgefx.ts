@@ -46,8 +46,20 @@ import type {
   CaptureUploadResult
 } from './types';
 import { checkSaveTarget, saveBlockedText } from './saveTarget';
+import { parseBlockState } from './blockState';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
+
+/** Normalize the additive `blockState` of a block-params response (absent when not served or malformed). */
+function withParsedBlockState(r: BlockParams): BlockParams {
+  if (!r || typeof r !== 'object') return r;
+  const blockState = parseBlockState((r as { blockState?: unknown }).blockState);
+  if (blockState) return { ...r, blockState };
+  if (!('blockState' in r)) return r;
+  const rest: BlockParams = { ...r };
+  delete rest.blockState;
+  return rest;
+}
 
 // Per-tab client id, stamped onto config writes (putDoc) so the live cross-UI sync can tell a UI's own echo
 // from a genuine change made elsewhere (host↔remote). See editor.applyDeviceEvent('config').
@@ -274,7 +286,9 @@ export const forgefx = {
     }),
 
   // ── live block parameters (addressed by the placed instance's effect id) ──
-  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`),
+  /** `blockState` (Scene Ignore + Bypass Mode, cap `blockState`) is normalized: absent on servers / devices
+   *  without it, and a malformed tag reads as absent rather than breaking the editor. */
+  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`).then(withParsedBlockState),
   /** Set a parameter. continuous=true (knob, value 0..1) by default; false sends an enum ordinal. */
   setParam: (eid: number, paramId: number, value: number, continuous = true) =>
     req<{ ok: boolean }>(`/preset/blocks/${eid}/params/${paramId}`, {

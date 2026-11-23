@@ -133,11 +133,22 @@ class HistoryStore {
     }
   };
 
-  /** Record a discrete/structural op — always its own step. */
-  record = (op: HistoryOp) => {
-    if (this.applying) return;
+  /** Record a discrete/structural op — always its own step. Returns the step's id (null while replaying),
+   *  so a write the device then refuses can `discard` it. */
+  record = (op: HistoryOp): string | null => {
+    if (this.applying) return null;
     this.endGesture();
-    this.#push({ id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true });
+    return this.#push({ id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true }).id;
+  };
+  /** Drop a recorded step whose write never took effect (the device refused it / the request failed): it is
+   *  not something to undo. No-op when the step is gone already (cleared, trimmed, switched preset). */
+  discard = (id: string) => {
+    const i = this.entries.findIndex((e) => e.id === id);
+    if (i < 0) return;
+    this.entries.splice(i, 1);
+    if (i < this.cursor) this.cursor--;
+    this.cursor = Math.min(this.cursor, this.entries.length);
+    this.#schedulePersist();
   };
   /** Record a composite step (move/connect): primitive ops in execution order, undone in reverse. */
   recordComposite = (label: string, ops: HistoryOp[]) => {

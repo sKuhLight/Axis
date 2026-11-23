@@ -247,4 +247,21 @@ describe('buildMoreMenu', () => {
   it('a missing type name reads "this block"', () => {
     expect(byId(buildMoreMenu(state({ typeName: '' }), actions()), 'save-default').label).toBe('Save as default for this block');
   });
+
+  it('a phone-width header moves Bypass mode in here: a submenu first in the block rows (disabled with its reason)', () => {
+    const rows: WorkbenchMenuItem[] = [{ id: 'bm:0', kind: 'radio', label: 'Thru', checked: true, run: () => {} }];
+    const items = buildMoreMenu(state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: 'Thru', reason: null, muting: false, rows } } }), actions());
+    expect(ids(items).slice(-4)).toEqual(['bypass-mode', 'change-type', 'grid-map', 'remove']);
+    expect(byId(items, 'bypass-mode')).toMatchObject({ kind: 'submenu', label: 'Bypass mode', hint: 'Thru', disabled: false, items: rows, separatorBefore: true });
+    expect(byId(items, 'change-type').separatorBefore).toBeFalsy();
+    const muting = buildMoreMenu(state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: 'Mute Out', reason: null, muting: true, rows } } }), actions());
+    expect(byId(muting, 'bypass-mode').className).toBe('be-mi be-mi-bypass-mode muting');
+    const off = buildMoreMenu(
+      state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: '', reason: 'Not available on VP4', muting: false, rows: [] } } }),
+      actions()
+    );
+    expect(byId(off, 'bypass-mode')).toMatchObject({ disabled: true, hint: 'Not available on VP4', items: [] });
+    // a wider header keeps the control: no row
+    expect(ids(buildMoreMenu(state(), actions()))).not.toContain('bypass-mode');
+  });
 });

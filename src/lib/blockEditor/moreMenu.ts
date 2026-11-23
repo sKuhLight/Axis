@@ -13,6 +13,9 @@ export interface MoreMenuBlock {
   canRetype: boolean;
   /** The grid map strip is shown. */
   gridMapShown: boolean;
+  /** The Bypass mode control, when the header moved it in here (a phone-width editor): the current mode,
+   *  why it is not available, whether the mode mutes, and its menu rows (headerModel `bypassModeMenu`). */
+  bypassMode?: { label: string; reason: string | null; muting: boolean; rows: WorkbenchMenuItem[] } | null;
 }
 
 export interface MoreMenuState {
@@ -212,6 +215,20 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
   const b = s.block;
   if (b) {
     section();
+    // a phone-width header leaves the Bypass mode control out: it is a submenu here instead
+    const bm = b.bypassMode;
+    if (bm) {
+      push({
+        id: 'bypass-mode',
+        kind: 'submenu',
+        label: 'Bypass mode',
+        hint: bm.reason ?? bm.label,
+        disabled: !!bm.reason,
+        items: bm.reason ? [] : bm.rows,
+        className: cls('bypass-mode', bm.muting ? 'muting' : ''),
+        run: () => {}
+      });
+    }
     push({ id: 'change-type', label: b.isCab ? 'Choose cab…' : 'Change type…', disabled: !b.canRetype, className: cls('change-type'), run: () => a.changeType() });
     out.push({ id: 'grid-map', label: b.gridMapShown ? 'Hide grid map' : 'Show grid map', className: cls('grid-map'), run: () => a.gridMap(!b.gridMapShown) });
     out.push({

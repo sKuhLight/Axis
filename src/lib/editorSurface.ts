@@ -11,7 +11,7 @@
 import { getContext, hasContext } from 'svelte';
 import { editor } from './editor.svelte';
 import type { Cell, Layout } from './grid';
-import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState } from './types';
+import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState, BlockState } from './types';
 import type { SwipeCtrl } from './layouts';
 
 export const EDITOR_SURFACE_KEY = Symbol('axis.editorSurface');
@@ -75,6 +75,17 @@ export interface EditorSurface {
   setParam: (p: NamedParam, v: number) => void;
   setEnum: (e: EnumParam, value: number) => void;
   cabState: (eid: number) => Promise<CabState>;
+
+  // ── block state (Scene Ignore / Bypass Mode of the open block: the Block Editor header) ──
+  // Optional: a surface without them (an offline buffer) shows both controls disabled.
+  /** caps.blockState of the device (undefined = the server does not say: an older ForgeFX). */
+  readonly blockStateCap?: boolean;
+  /** The open block's Scene Ignore + Bypass Mode, values live from `enums`; null when none was served. */
+  readonly blockState?: BlockState | null;
+  /** The block state was read on another channel than the active one (re-read pending): not writable. */
+  readonly blockStateStale?: boolean;
+  /** Write one of them (the enum write the board uses). */
+  setBlockStateParam?: (paramId: number, value: number) => void;
 
   // ── telemetry / meters / swipe controls ──
   levels: { out1L: number; out1R: number; out2L: number; out2R: number } | null;

@@ -49,7 +49,7 @@
   import BePageNav from './BePageNav.svelte';
   import { findGroups, flatMatches, itemIdOn, jumpPage, pagesOf, type FindFilter } from './findControls';
   import { beLayer } from './overlayLayer';
-  import type { BeBlockChrome } from './headerModel';
+  import { bypassModeInMenu, bypassModeMenu, type BeBlockChrome } from './headerModel';
   import { buildMoreMenu, builtInName, canArrangeOn, resetAllToast } from './moreMenu';
   import { buildControlMenu, placePinTargets, VIEW_NAME, type PinPanelPlace } from './controlMenu';
   import { isForeignOverlay } from './arrangeModel';
@@ -806,6 +806,7 @@
       resultsOpen = false;
       findOpen = false;
       moreOpen = false;
+      bmOpen = false;
       barMenu = null;
       renamingPage = null;
       sel = null;
@@ -815,6 +816,19 @@
       closeCtx();
       cancelGestures();
     });
+  });
+
+  // ── Bypass mode menu: opens under the header's Bypass mode control (radio rows, one per device mode);
+  // on a phone-width editor the control is a ⋯ submenu instead ──
+  let bmOpen = $state(false);
+  let bmAnchor = $state<HTMLElement | null>(null);
+  // one measurement: the header's own width (bound below), with the same ✕ / touch inputs BeHeader uses
+  let headW = $state(0);
+  const bmInMore = $derived(bypassModeInMenu(headW, { hasEnd: !!headerEnd, touch: deviceClass !== 'desktop' }));
+  const bmRows = (b: BeBlockChrome) => bypassModeMenu(b.blockState.bypassMode, b.channel, (v) => b.onBypassMode(v));
+  const bmItems = $derived(bmOpen && block && !bmInMore ? bmRows(block) : []);
+  $effect(() => {
+    if (bmInMore || !block?.blockState.bypassMode.enabled) untrack(() => (bmOpen = false));
   });
 
   // ── ⋯ menu ──
@@ -839,7 +853,21 @@
             hasUserSeed: be.userSeed,
             hasDeviceLayout,
             typeName: saveName,
-            block: block ? { isCab: block.isCab, canRetype: !!block.pack, gridMapShown: block.gridMapShown } : null
+            block: block
+              ? {
+                  isCab: block.isCab,
+                  canRetype: !!block.pack,
+                  gridMapShown: block.gridMapShown,
+                  bypassMode: bmInMore
+                    ? {
+                        label: block.blockState.bypassMode.label,
+                        reason: block.blockState.bypassMode.reason,
+                        muting: block.blockState.bypassMode.muting,
+                        rows: bmRows(block)
+                      }
+                    : null
+                }
+              : null
           },
           {
             arrange: (on) => setEdit(on),
@@ -1501,6 +1529,8 @@
     {block}
     {nav}
     phone={isPhone}
+    touch={deviceClass !== 'desktop'}
+    bind:width={headW}
     pages={board?.pageOrder ?? []}
     {active}
     {highlight}
@@ -1515,6 +1545,9 @@
     moreDot={custom}
     bind:moreAnchor
     onMore={() => (moreOpen = !moreOpen)}
+    bypassModeOpen={bmOpen}
+    bind:bypassModeAnchor={bmAnchor}
+    onBypassMode={() => (bmOpen = !bmOpen)}
     search={findField}
     end={headerEnd}
   />
@@ -1654,6 +1687,9 @@
 
     <!-- ⋯ menu: arrange · navigation · control size · layout · block (opens under the trigger) -->
     <BeMenu open={moreOpen} items={moreItems} anchor={moreAnchor} touch={isPhone} label="Block and layout options" onClose={() => (moreOpen = false)} />
+
+    <!-- Bypass mode ▾ (header): the block's own modes as radio rows, opens under the control -->
+    <BeMenu open={bmOpen && bmItems.length > 0} items={bmItems} anchor={bmAnchor} touch={deviceClass !== 'desktop'} label="Bypass mode" onClose={() => (bmOpen = false)} />
 
     <!-- the arrange bar's Page ▾ and ⋯ (the tools that did not fit the row) -->
     <BeMenu open={barMenu === 'page'} items={pageMenuItems} anchor={barPageAnchor} touch={deviceClass === 'tablet'} label="Page options" onClose={() => (barMenu = null)} />

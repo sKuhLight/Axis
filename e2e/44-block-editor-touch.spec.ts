@@ -131,6 +131,32 @@ test.describe('Block Editor touch (tablet profile)', () => {
     await page.setViewportSize({ width: 1100, height: 800 }); // the workbench's tablet profile
   });
 
+  test('header: every target ≥ 40 px (Engaged, Bypass mode, Scene Ignore, ⋯, channel letter); the row does not wrap', async ({ page }) => {
+    await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    const head = page.locator('[data-be-head]');
+    await expect(head).toHaveClass(/\btouch\b/);
+    for (const sel of ['[data-be-engaged]', '[data-be-bypass-mode]', '[data-be-scene]', '[data-be-more]', '[data-be-channel-toggle]']) {
+      const b = (await page.locator(sel).first().boundingBox())!;
+      expect(Math.min(b.width, b.height), sel).toBeGreaterThanOrEqual(40);
+    }
+    // the unfolded channel letters too
+    await page.locator('[data-be-channel-toggle]').click();
+    for (const ch of ['A', 'B', 'C', 'D']) {
+      const b = (await page.locator(`[data-be-channel="${ch}"]`).boundingBox())!;
+      expect(Math.min(b.width, b.height), ch).toBeGreaterThanOrEqual(40);
+    }
+    await page.keyboard.press('Escape');
+    // chip · state · ⋯ on row one
+    const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
+    expect(Math.abs((await top('[data-be-engaged]')) - (await top('[data-be-more]')))).toBeLessThan(8);
+    expect(await head.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    // its menu has touch rows
+    await page.locator('[data-be-bypass-mode]').click();
+    const row = page.getByRole('menu', { name: 'Bypass mode' }).locator('.be-bm-opt').first();
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  });
+
   test('Top: a sideways swipe over a knob scrolls the strip and writes nothing; a vertical drag changes the value', async ({ page }) => {
     const mock = await bootBlockEditorMock(page);
     await openAmpEditor(page);

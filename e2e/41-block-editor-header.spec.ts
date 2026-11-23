@@ -1,16 +1,47 @@
 import { test, expect, type Page } from '@playwright/test';
-import { arrangeAdd, bootBlockEditorMock, checkedProfile, openAmpEditor, openMore, pickMore, pickProfile, profileRow, selectTile } from './support/blockEditorMock';
+import {
+  BYPASS_MODE_PID,
+  SCENE_IGNORE_PID,
+  arrangeAdd,
+  bootBlockEditorMock,
+  checkedProfile,
+  openAmpEditor,
+  openMore,
+  pickMore,
+  pickProfile,
+  profileRow,
+  selectTile
+} from './support/blockEditorMock';
 import { clickNav } from './support/workbench';
 
 // Block Editor rework, slice 3 (AXIS-76): the header — type chip (glyph · type · channel letter that
 // unfolds A–D), page tabs / side page list, "Find a control…" popover with the flat results behind it,
-// the Engaged | Mute | Scene Ignore segments — and the ⋯ menu (Arrange, Top / Side, control size, layout
-// profiles and resets, save as default, change type, grid map, remove) with its amber "custom" dot.
+// the Engaged | Bypass mode ▾ | Scene Ignore segments (the device's own per-channel params, AXIS-81:
+// written through the board's enum write, disabled with the reason where the device / server lacks them)
+// — and the ⋯ menu (Arrange, Top / Side, control size, layout profiles and resets, save as default,
+// change type, grid map, remove) with its amber "custom" dot.
 // Fully mocked backend (support/blockEditorMock.ts) — no device.
 
 const board = (page: Page) => page.locator('[data-be-board]');
 const tile = (page: Page, key: string) => page.locator(`[data-be-key="${key}"]`).first();
 const dot = (page: Page) => page.locator('[data-be-more-dot]');
+
+/** A page tab click scrolls the board smoothly; wait until it rests (a select opened mid-scroll closes). */
+async function gotoPage(page: Page, name: string) {
+  await page.locator(`[data-be-tab="${name}"]`).click();
+  await expect(page.locator(`section[data-be-page="${name}"]`)).toBeInViewport({ ratio: 0.5 });
+  await expect
+    .poll(() =>
+      board(page).evaluate(
+        (el) =>
+          new Promise<boolean>((res) => {
+            const a = `${el.scrollLeft},${el.scrollTop}`;
+            setTimeout(() => res(a === `${el.scrollLeft},${el.scrollTop}`), 150);
+          })
+      )
+    )
+    .toBe(true);
+}
 
 /** Arrange (via ⋯), select a control and remove it with the arrange bar's ✕, finish arranging. */
 async function removeInArrange(page: Page, key: string) {
@@ -51,7 +82,7 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(page.locator('[data-be-channel-toggle]')).toHaveCount(0);
   });
 
-  test('the Engaged segment bypasses and engages the block; Mute / Scene Ignore are placeholders', async ({ page }) => {
+  test('the Engaged segment bypasses and engages the block; one joined group with Bypass mode and Scene Ignore', async ({ page }) => {
     const mock = await bootBlockEditorMock(page, { channel: 'A' });
     await openAmpEditor(page);
     const eng = page.locator('[data-be-engaged]');
@@ -65,14 +96,278 @@ test.describe('Block Editor header (slice 3)', () => {
     await eng.click();
     await expect.poll(() => mock.bypassWrites).toEqual([true, false]);
     await expect(eng).toHaveText(/Engaged/);
+    await expect(page.getByRole('group', { name: 'Block state' }).getByRole('button')).toHaveText([/Engaged/, /Bypass: Thru/, /Scene Ignore/]);
+    expect(mock.enumWrites).toEqual([]);
+  });
 
-    // one joined group with the two placeholders (no endpoint yet: a toast, no write)
-    await expect(page.getByRole('group', { name: 'Block state' }).getByRole('button')).toHaveText([/Engaged/, /Mute/, /Scene Ignore/]);
-    await page.locator('[data-be-mute]').click();
-    await expect(page.locator('.toast')).toContainText('Mute — coming soon');
+  test('Scene Ignore toggles the device param of the active channel; the board control follows and back', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    const scene = page.locator('[data-be-scene]');
+    await expect(scene).toHaveAttribute('aria-pressed', 'false');
+    await expect(scene).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(scene).toHaveAttribute('title', 'Scene Ignore · channel A — this block keeps its state on scene changes');
+    await scene.click();
+    // the write is the ordinary enum write with the id the server tagged
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: SCENE_IGNORE_PID, value: 1 }]);
+    await expect(scene).toHaveAttribute('aria-pressed', 'true');
+    await expect(scene).toHaveAttribute('data-be-scene', 'on');
+    // the board's own Scene Ignore control (the device layout's button on Preamp) shows the same value
+    await gotoPage(page, 'Preamp');
+    const boardSi = tile(page, `e${SCENE_IGNORE_PID}`).locator('button[aria-pressed]');
+    await expect(boardSi).toHaveAttribute('aria-pressed', 'true');
+    // …and a click there moves the header back
+    await boardSi.click();
+    await expect.poll(() => mock.enumWrites).toEqual([
+      { pid: SCENE_IGNORE_PID, value: 1 },
+      { pid: SCENE_IGNORE_PID, value: 0 }
+    ]);
+    await expect(scene).toHaveAttribute('aria-pressed', 'false');
+    // per channel: another channel re-reads the block, the header shows that channel
+    await page.locator('[data-be-channel-toggle]').click();
+    await page.locator('[data-be-channel="B"]').click();
+    await expect(scene).toHaveAttribute('title', /channel B/);
+    await expect(page.getByText(/coming soon/)).toHaveCount(0);
+  });
+
+  test('Bypass mode: the block\'s own modes in a menu; a pick writes and relabels; a muting mode shows the mark', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    const bm = page.locator('[data-be-bypass-mode]');
+    await expect(bm).toHaveText(/Bypass: Thru/);
+    await expect(bm).toHaveAttribute('data-be-bypass-muting', 'false');
+    await expect(page.locator('[data-be-bypass-muted]')).toHaveCount(0);
+    await bm.click();
+    const menu = page.getByRole('menu', { name: 'Bypass mode' });
+    await expect(menu).toBeVisible();
+    await expect(bm).toHaveAttribute('aria-expanded', 'true');
+    await expect(menu.locator('.be-bm-head')).toHaveText('Bypass mode · channel A');
+    await expect(menu.locator('.be-bm-opt')).toHaveText([/Thru/, /Mute FX Out/, /Mute Out\s*mutes/]);
+    await expect(menu.locator('.be-bm-0')).toHaveAttribute('aria-checked', 'true');
+    await menu.locator('.be-bm-2').click();
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: BYPASS_MODE_PID, value: 2 }]);
+    await expect(bm).toHaveText(/Bypass: Mute Out/);
+    await expect(bm).toHaveAttribute('data-be-bypass-muting', 'true');
+    await expect(bm.locator('[data-be-bypass-muted]')).toBeVisible();
+    await expect(bm).toHaveAttribute('title', /Mute Out — what this block does while bypassed \(it mutes\)/);
+    // the board's Bypass Mode select follows; a pick there relabels the header
+    await gotoPage(page, 'Preamp');
+    const field = tile(page, `e${BYPASS_MODE_PID}`).locator('.be-field');
+    await expect(field).toContainText('Mute Out');
+    await field.click();
+    await page.locator('[data-be-select-menu] [data-be-option="Mute FX Out"]').click();
+    await expect.poll(() => mock.enumWrites.at(-1)).toEqual({ pid: BYPASS_MODE_PID, value: 1 });
+    await expect(bm).toHaveText(/Bypass: Mute FX Out/);
+    await expect(bm).toHaveAttribute('data-be-bypass-muting', 'false');
+  });
+
+  test('keyboard: Bypass mode opens with Enter, Escape closes it and stays in the editor; Space toggles Scene Ignore', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    await page.getByRole('button', { name: 'Maximize Block Editor' }).click();
+    const restore = page.getByRole('button', { name: 'Restore Block Editor' });
+    await expect(restore).toBeVisible();
+    const bm = page.locator('[data-be-bypass-mode]');
+    await bm.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.getByRole('menu', { name: 'Bypass mode' });
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('.be-bm-opt').first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(bm).toBeFocused();
+    await expect(restore).toBeVisible(); // the window's Escape chain never saw it
+    await expect(page.locator('[data-be-board]')).toBeVisible();
+    // arrows + Enter pick a mode
+    await page.keyboard.press('Enter');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: BYPASS_MODE_PID, value: 1 }]);
+    // Scene Ignore from the keyboard
+    await page.locator('[data-be-scene]').focus();
+    await page.keyboard.press('Space');
+    await expect.poll(() => mock.enumWrites.at(-1)).toEqual({ pid: SCENE_IGNORE_PID, value: 1 });
+    await expect(page.locator('[data-be-scene]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(restore).toBeVisible();
+  });
+
+  for (const [cap, reason] of [
+    [false, 'Not available on FM3'],
+    ['absent', 'Needs a newer ForgeFX server']
+  ] as const) {
+    test(`without the device capability (${cap === false ? 'device' : 'older ForgeFX'}): both disabled with the reason, nothing written`, async ({ page }) => {
+      const mock = await bootBlockEditorMock(page, { channel: 'A', blockState: cap });
+      await openAmpEditor(page);
+      const scene = page.locator('[data-be-scene]');
+      const bm = page.locator('[data-be-bypass-mode]');
+      // aria-disabled (still focusable, so the reason in the title can be read)
+      await expect(scene).toBeDisabled();
+      await expect(scene).toHaveAttribute('title', `Scene Ignore — ${reason}`);
+      await expect(bm).toBeDisabled();
+      await expect(bm).toHaveAttribute('title', `Bypass mode — ${reason}`);
+      await expect(bm).toHaveText(/Bypass mode/);
+      await bm.focus();
+      await expect(bm).toBeFocused();
+      // a click (forced past the disabled state) does nothing
+      await scene.click({ force: true });
+      await bm.click({ force: true });
+      await expect(page.getByRole('menu', { name: 'Bypass mode' })).toHaveCount(0);
+      await expect(scene).toHaveAttribute('aria-pressed', 'false');
+      // the board's own controls stay editable — and a board write is the FIRST write: the clicks above wrote
+      // nothing (requests go out in order)
+      await tile(page, 'e10').locator('[role="switch"]').click();
+      await expect.poll(() => mock.enumWrites).toEqual([{ pid: 10, value: 1 }]);
+      await expect(page.getByText(/coming soon/)).toHaveCount(0);
+    });
+  }
+
+  test('a firmware gate: Scene Ignore disabled with "Needs firmware ≥ X.YY", Bypass mode still works', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A', sceneIgnoreGate: 'Needs firmware ≥ 5.03' });
+    await openAmpEditor(page);
+    const scene = page.locator('[data-be-scene]');
+    await expect(scene).toBeDisabled();
+    await expect(scene).toHaveAttribute('title', 'Scene Ignore — Needs firmware ≥ 5.03');
+    await scene.click({ force: true });
+    const bm = page.locator('[data-be-bypass-mode]');
+    await expect(bm).toBeEnabled();
+    await bm.click();
+    await page.getByRole('menu', { name: 'Bypass mode' }).locator('.be-bm-1').click();
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: BYPASS_MODE_PID, value: 1 }]); // the forced click wrote nothing
+  });
+
+  test('a write the device does not take: the header and the board go back, one toast', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    const scene = page.locator('[data-be-scene]');
+    mock.failNextEnumWrite = SCENE_IGNORE_PID;
+    await scene.click();
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: SCENE_IGNORE_PID, value: 1 }]);
+    await expect(scene).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.toast')).toHaveText('Scene Ignore: the device did not take the change');
+    await gotoPage(page, 'Preamp');
+    await expect(tile(page, `e${SCENE_IGNORE_PID}`).locator('button[aria-pressed]')).toHaveAttribute('aria-pressed', 'false');
+    // the board's select on the same path: back to Thru, the header too
+    mock.failNextEnumWrite = BYPASS_MODE_PID;
+    await tile(page, `e${BYPASS_MODE_PID}`).locator('.be-field').click();
+    await page.locator('[data-be-select-menu] [data-be-option="Mute Out"]').click();
+    await expect.poll(() => mock.enumWrites.at(-1)).toEqual({ pid: BYPASS_MODE_PID, value: 2 });
+    await expect(tile(page, `e${BYPASS_MODE_PID}`).locator('.be-field')).toContainText('Thru');
+    await expect(page.locator('[data-be-bypass-mode]')).toHaveText(/Bypass: Thru/);
+    // (the dropped undo step is covered by editor.blockState.runes.test.ts)
+  });
+
+  test('a channel switch keeps the last state on show while the block is re-read: disabled, nothing written, no width jump', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await openAmpEditor(page);
+    const scene = page.locator('[data-be-scene]');
+    const bm = page.locator('[data-be-bypass-mode]');
+    await scene.click();
+    await bm.click();
+    await page.getByRole('menu', { name: 'Bypass mode' }).locator('.be-bm-2').click();
+    await expect(bm).toHaveText(/Bypass: Mute Out/);
+    const width = (await bm.boundingBox())!.width;
+    // hold the next block read
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    await page.route(`**/api/preset/blocks/*/params`, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    await page.locator('[data-be-channel-toggle]').click();
+    await page.locator('[data-be-channel="B"]').click();
+    await expect(scene).toHaveAttribute('title', 'Scene Ignore — Reading the block…');
+    await expect(scene).toBeDisabled();
+    await expect(scene).toHaveAttribute('aria-pressed', 'true'); // the last state stays
+    await expect(bm).toBeDisabled();
+    await expect(bm).toHaveText(/Bypass: Mute Out/);
+    await expect(bm.locator('[data-be-bypass-muted]')).toBeVisible();
+    expect(Math.abs((await bm.boundingBox())!.width - width)).toBeLessThan(1);
+    const before = mock.enumWrites.length;
+    await scene.click({ force: true });
+    await bm.click({ force: true });
+    await expect(page.getByRole('menu', { name: 'Bypass mode' })).toHaveCount(0);
+    release();
+    await expect(scene).toBeEnabled();
+    await expect(scene).toHaveAttribute('title', /channel B/);
+    expect(mock.enumWrites.length).toBe(before); // the forced clicks wrote nothing
+  });
+
+  for (const target of [470, 500, 540]) {
+    test(`a ${target} px editor with "Mute FX Out": chip · state · ⋯ stay on one row`, async ({ page }) => {
+      // phone-width workbench: the header is the window's width less a fixed margin; aim it at `target`
+      await page.setViewportSize({ width: target + 40, height: 844 });
+      const mock = await bootBlockEditorMock(page, { channel: 'A' });
+      await page.locator('[data-idx="0,0"].cell.block').click({ position: { x: 6, y: 6 } });
+      const head = page.locator('[data-be-head]');
+      await expect(head).toBeVisible();
+      const margin = 40 + target - (await head.evaluate((el) => el.clientWidth));
+      await page.setViewportSize({ width: target + margin, height: 844 });
+      await expect.poll(() => head.evaluate((el) => el.clientWidth)).toBe(target);
+      // touch targets, no ✕: below 538 px a readable chip, "Bypassed | Mute FX Out ▾ | Ignore" and ⋯ would not
+      // share row one, so the control is in ⋯ at 470 and 500 and in the header at 540 (headerModel `bypassModeInMenu`)
+      const inHeader = target >= 538;
+      await expect.poll(() => page.locator('[data-be-bypass-mode]').count()).toBe(inHeader ? 1 : 0);
+      if (inHeader) {
+        await page.locator('[data-be-bypass-mode]').click();
+        await page.getByRole('menu', { name: 'Bypass mode' }).locator('.be-bm-1').click();
+        await expect(page.locator('[data-be-bypass-mode]')).toHaveText(/Mute FX Out/);
+      } else {
+        const menu = await openMore(page);
+        await menu.locator('.be-mi-bypass-mode').click();
+        await menu.locator('.be-bm-1').click();
+        await expect(menu).toHaveCount(0);
+      }
+      await expect.poll(() => mock.enumWrites.at(-1)).toEqual({ pid: BYPASS_MODE_PID, value: 1 });
+      await page.locator('[data-be-engaged]').click(); // "Bypassed": the widest Engaged label
+      await expect(page.locator('[data-be-engaged]')).toHaveText(/Bypassed|Byp/);
+      const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
+      expect(Math.abs((await top('[data-be-chip]')) - (await top('[data-be-engaged]')))).toBeLessThan(8);
+      expect(Math.abs((await top('[data-be-engaged]')) - (await top('[data-be-more]')))).toBeLessThan(8);
+      expect(Math.abs((await top('[data-be-scene]')) - (await top('[data-be-more]')))).toBeLessThan(8);
+      expect(await head.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+      // and the chip keeps a readable type name (not cut to a letter)
+      expect((await page.locator('[data-be-chip]').boundingBox())!.width).toBeGreaterThanOrEqual(160);
+    });
+  }
+
+  test('phone 390 px: chip · Engaged | Ignore · ⋯ on one row, 40 px targets; Bypass mode is a ⋯ submenu', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mock = await bootBlockEditorMock(page, { channel: 'A' });
+    await page.locator('[data-idx="0,0"].cell.block').click({ position: { x: 6, y: 6 } });
+    await expect(page.locator('[data-be-board]')).toBeVisible();
+    const head = page.locator('[data-be-head]');
+    // fits: nothing scrolls sideways
+    expect(await head.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    await expect(page.locator('[data-be-bypass-mode]')).toHaveCount(0);
+    const box = async (sel: string) => (await page.locator(sel).first().boundingBox())!;
+    for (const sel of ['[data-be-engaged]', '[data-be-scene]', '[data-be-more]', '[data-be-channel-toggle]']) {
+      const b = await box(sel);
+      expect(Math.min(b.width, b.height), sel).toBeGreaterThanOrEqual(40);
+      expect(b.x + b.width, sel).toBeLessThanOrEqual(390);
+    }
+    const top = async (sel: string) => (await box(sel)).y;
+    expect(Math.abs((await top('[data-be-scene]')) - (await top('[data-be-more]')))).toBeLessThan(8);
+    expect(Math.abs((await top('[data-be-engaged]')) - (await top('[data-be-chip]')))).toBeLessThan(8);
+    // Scene Ignore toggles here too
     await page.locator('[data-be-scene]').click();
-    await expect(page.locator('.toast')).toContainText('Scene Ignore — coming soon');
-    expect(mock.bypassWrites).toEqual([true, false]);
+    await expect.poll(() => mock.enumWrites).toEqual([{ pid: SCENE_IGNORE_PID, value: 1 }]);
+    // Bypass mode: ⋯ → Bypass mode ▸ → a mode
+    let menu = await openMore(page);
+    const row = menu.locator('.be-mi-bypass-mode');
+    await expect(row).toContainText('Thru');
+    const rb = (await row.boundingBox())!;
+    expect(rb.height).toBeGreaterThanOrEqual(40);
+    await row.click();
+    await menu.locator('.be-bm-2').click();
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => mock.enumWrites.at(-1)).toEqual({ pid: BYPASS_MODE_PID, value: 2 });
+    menu = await openMore(page);
+    await expect(menu.locator('.be-mi-bypass-mode')).toContainText('Mute Out');
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
   });
 
   test('Navigation Top / Side via ⋯ is kept after a reload; the side list has no heading and no counts', async ({ page }) => {
@@ -359,7 +654,7 @@ async function focusedPart(page: Page): Promise<string> {
     if (!el) return '';
     const d = el.dataset;
     if (d.beTab) return 'tab:' + d.beTab;
-    for (const k of ['beType', 'beChannelToggle', 'beFindInput', 'beFindToggle', 'beEngaged', 'beMute', 'beScene', 'beMore'] as const) if (k in d) return k;
+    for (const k of ['beType', 'beChannelToggle', 'beFindInput', 'beFindToggle', 'beEngaged', 'beBypassMode', 'beScene', 'beMore'] as const) if (k in d) return k;
     return el.tagName.toLowerCase();
   });
 }
@@ -409,7 +704,7 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await expect(page.locator('[data-be-arrange-done]')).toBeVisible();
     // in arrange mode a seventh ＋ tab follows the page tabs
     const walk = await tabWalk(page, '[data-be-type]', 12);
-    expect(walk).toEqual(['beType', 'beChannelToggle', ...TABS, 'button', 'beFindInput', 'beEngaged', 'beMute', 'beScene']);
+    expect(walk).toEqual(['beType', 'beChannelToggle', ...TABS, 'button', 'beFindInput', 'beEngaged', 'beBypassMode', 'beScene']);
     await page.keyboard.press('Tab');
     expect(await focusedPart(page)).toBe('beMore');
     await expect(page.locator('[data-be-find]')).toHaveCount(0); // focus alone never opens it
@@ -433,7 +728,7 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await openAmpEditor(page);
     await expect(page.locator('[data-be-head]')).toHaveAttribute('data-be-head-rows', '2');
     const walk = await tabWalk(page, '[data-be-type]', 11);
-    expect(walk).toEqual(['beType', 'beChannelToggle', 'beEngaged', 'beMute', 'beScene', 'beMore', ...TABS]);
+    expect(walk).toEqual(['beType', 'beChannelToggle', 'beEngaged', 'beBypassMode', 'beScene', 'beMore', ...TABS]);
     await page.keyboard.press('Tab');
     expect(await focusedPart(page)).toBe('beFindInput');
   });

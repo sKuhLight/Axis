@@ -110,7 +110,7 @@ attributes were added**:
   `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
   `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
 
-## Test inventory (27 spec files, 233 tests on `chromium`; the first nine below)
+## Test inventory (27 spec files, 246 tests on `chromium`; the first nine below)
 
 1. **01-boot** — shell chrome renders; no console errors beyond the filtered
    ForgeFX/`/api` connection failures.
@@ -177,8 +177,19 @@ previous editor (seeded `axs.surface3.*` keys) surviving the first change, the e
 button, the phone width without Top/Side and Arrange, and the Setup screen on the same board (since slice 3
 these steps go through the header's ⋯ menu).
 **41-block-editor-header** — the header and its ⋯ menu: the channel letter of the type chip unfolds A–D and a
-pick writes the channel (mocked `POST …/channel`), the Engaged segment writes bypass / engage while Mute and
-Scene Ignore stay "coming soon" toasts, Top / Side via ⋯ kept after a reload (the side list has no heading and
+pick writes the channel (mocked `POST …/channel`), the Engaged segment writes bypass / engage, Scene Ignore
+and Bypass mode from the device (AXIS-81: the mocked amp's params carry `blockState`; the header's Scene
+Ignore toggle writes the tagged param through the enum write (`mock.enumWrites`) with `aria-pressed`, the
+board's own Scene Ignore button follows and back, the channel names itself in the title; the Bypass mode ▾
+menu lists the block's own modes, a pick writes and relabels "Bypass: …", a muting mode shows the muted mark,
+the board's select follows and back; Enter opens it, Escape closes it back to the control with a maximized
+panel staying maximized, Space toggles Scene Ignore; caps off (`blockState: false` / `'absent'`) both
+disabled with the reason in the title and nothing written (a later board write arrives first); a firmware gate
+(`sceneIgnoreGate`: "Needs firmware ≥ 5.03") disables Scene Ignore only; a refused write (`mock.failNextEnumWrite`,
+a 500) puts the header and the board back with one toast; a held re-read after a channel switch keeps the last
+state on show, disabled, same width, nothing written; 470 / 500 / 540 px editors with "Mute FX Out" keep chip · state ·
+⋯ on one row with a readable chip (the control in ⋯ at 470 and 500, in the header at 540); the phone at 390 px keeps chip · Engaged | Ignore ·
+⋯ on one row with 40 px targets and Bypass mode as a ⋯ submenu), Top / Side via ⋯ kept after a reload (the side list has no heading and
 no counts), reset this page / new copy / profile switch / delete copy, the amber "custom" dot appearing after a
 change and leaving after the whole-layout reset ("Reset to device layout" for the Default profile), save as default for the type, the type chip and "Change type…"
 opening the model palette, the search popover jumping to a control with "Show all" / Enter opening the flat
@@ -238,7 +249,8 @@ puts an arranged control back (kept after a reload); its own Drive page is its b
 parameters → mixer change only starts a new line there (no divider row: height budget).
 **44-block-editor-touch** (Chromium only) — touch through Chromium's input pipeline (CDP
 `Input.dispatchTouchEvent`, so the tiles' `touch-action` — `pan-x pinch-zoom` / `pan-y pinch-zoom` — decides what
-the browser pans; `hasTouch` profiles; not a physical device): on the tablet profile (1100×800) a sideways swipe
+the browser pans; `hasTouch` profiles; not a physical device): on the tablet profile (1100×800) the header's
+targets are ≥ 40 px (Engaged, Bypass mode and its menu rows, Scene Ignore, ⋯, CH and A–D) on one row; a sideways swipe
 over a knob scrolls the Top strip and writes nothing while a vertical drag changes the value; in the Side
 navigation (F11) a vertical swipe scrolls the pages and writes nothing while a sideways drag changes it; a swipe
 along the strip from a fader track writes nothing, a tap on the track sets the tapped value; a `pointercancel`
@@ -276,11 +288,15 @@ Board selectors: `[data-be-board]` (`data-nav`; `phone` class on the phone layou
 `[data-be-tab]` (`data-visible`, `data-active`; header tabs
 and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, `[data-be-empty]`,
 `[data-be-arrange-done]`. Header selectors: `[data-be-head]` (`data-be-head-rows`), `[data-be-chip]`,
-`[data-be-type]`, `[data-be-channel-toggle]` / `[data-be-channel]`, `[data-be-engaged]`, `[data-be-mute]`,
-`[data-be-scene]`, `[data-be-more]` (`data-custom`) / `[data-be-more-dot]`, `[data-be-find-input]`,
+`[data-be-type]`, `[data-be-channel-toggle]` / `[data-be-channel]`, `[data-be-engaged]`,
+`[data-be-bypass-mode]` (`data-be-bypass-muting`; `[data-be-bypass-muted]` the muted mark; its menu is
+`role="menu"` named "Bypass mode" with `be-bm-head` / `be-bm-opt` / `be-bm-<value>` rows),
+`[data-be-scene]` (`on` / `off`; both use `aria-disabled` + the reason in `title` when unavailable),
+`[data-be-more]` (`data-custom`) / `[data-be-more-dot]`, `[data-be-find-input]`,
 `[data-be-find]` / `[data-be-find-row]` / `[data-be-find-all]`, `[data-be-results]` / `[data-be-results-close]`.
 ⋯ rows carry `be-mi-<id>` classes (`arrange`, `nav-top|side`, `size-s|m|l`, `profile`, `reset-page`,
-`reset-all`, `new-copy`, `delete-copy`, `save-default`, `change-type`, `grid-map`, `remove`, …); helpers
+`reset-all`, `new-copy`, `delete-copy`, `save-default`, `bypass-mode` (phone-width editors only),
+`change-type`, `grid-map`, `remove`, …); helpers
 `openMore` / `pickMore` / `pickProfile` / `checkedProfile` live in `support/blockEditorMock.ts`. The control
 menu (`role="menu"` named "Control options") has `be-ci-<id>` rows (`head`, `pin` → `pin-panel` / `pin-tab` /
 `pin-new`, `modifier`, `view` → `view-opt`, `size` → `size-opt`, `move` → `move-opt`, `swipe` (`on`), `remove`).

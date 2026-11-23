@@ -21,7 +21,8 @@ const CAPS = {
   gridCursorSelect: false,
   shuntBase: 1024,
   editorLayouts: true,
-  meters: { liveMonitors: true }
+  meters: { liveMonitors: true },
+  blockState: true
 };
 const DEVICE = { model: 'FM3', modelByte: '0x11', modelId: 17, apiVersion: 2, capabilities: CAPS, firmware: null, port: 'mock' };
 const DETECT = { connected: true, modelId: 17, name: 'FM3', short: 'FM3', gen: 3, supported: true, port: 'mock' };
@@ -39,9 +40,15 @@ const knob = (id: number, name: string, norm = 0.5, extra: Record<string, unknow
 const ctl = (label: string, paramId: number | null, widget: string, rawWidget = widget) => ({ label, paramName: `AMP_${label.toUpperCase().replace(/\W+/g, '_')}`, paramId, widget, rawWidget });
 const row = (...controls: ReturnType<typeof ctl>[]) => ({ section: 'parameters', controls });
 
-/** Amp params + a six-page layout: knobs and a switch (Authentic), selects, a slider and the bypass
- *  (Preamp), a fader, a button and the level meter (Power Amp; drawn only while metering is on), number
- *  views (EQ), and two plain knob pages so the strip is wider than the board. */
+/** The amp's Scene Ignore (an OFF / ON enum, shown on the board as the device layout's button) and Bypass
+ *  Mode (a select on the Preamp page): the ids the server tags as the block state. */
+export const SCENE_IGNORE_PID = 32;
+export const BYPASS_MODE_PID = 12;
+
+/** Amp params + a six-page layout: knobs and a switch (Authentic), selects, a slider, the bypass and the
+ *  Scene Ignore button (Preamp), a fader, a button and the level meter (Power Amp; drawn only while
+ *  metering is on), number views (EQ), and two plain knob pages so the strip is wider than the board.
+ *  `blockState` tags Scene Ignore + Bypass Mode (cap `blockState`; Mute Out silences the block). */
 export const AMP_PARAMS = {
   block: 'Amp',
   slug: 'amp',
@@ -77,8 +84,21 @@ export const AMP_PARAMS = {
     { id: 10, name: 'Bright Switch', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] },
     { id: 11, name: 'Input Select', value: 0, options: [{ value: 0, label: 'Sum L+R' }, { value: 1, label: 'Left' }, { value: 2, label: 'Right' }] },
     { id: 12, name: 'Bypass Mode', value: 0, options: [{ value: 0, label: 'Thru' }, { value: 1, label: 'Mute FX Out' }, { value: 2, label: 'Mute Out' }] },
-    { id: 20, name: 'Boost', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }
+    { id: 20, name: 'Boost', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] },
+    { id: 32, name: 'Scene Ignore', value: 0, options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] }
   ],
+  blockState: {
+    sceneIgnore: { paramId: SCENE_IGNORE_PID, value: 0, supported: true },
+    bypassMode: {
+      paramId: BYPASS_MODE_PID,
+      value: 0,
+      options: [
+        { value: 0, label: 'Thru', muting: false },
+        { value: 1, label: 'Mute FX Out', muting: false },
+        { value: 2, label: 'Mute Out', muting: true }
+      ]
+    }
+  } as Record<string, unknown> | undefined,
   type: { value: 7, name: 'Plexi 100W' },
   layout: {
     editorName: 'Amp',
@@ -98,7 +118,7 @@ export const AMP_PARAMS = {
         rows: [
           row(ctl('Input Select', 11, 'dropdown', 'dropdown1'), ctl('Bypass Mode', 12, 'dropdown', 'dropdown1'), ctl('Level', 7, 'knob'), ctl('Balance', 8, 'knob')),
           row(ctl('Depth', 9, 'slider')),
-          row(ctl('Bypass', 31, 'button', 'btnBypass'))
+          row(ctl('Bypass', 31, 'button', 'btnBypass'), ctl('Scene Ignore', 32, 'button', 'btnIgnoreScene'))
         ]
       },
       {
@@ -167,7 +187,11 @@ export const AMP_PARAMS_POSITIONED = {
       },
       {
         name: 'Preamp',
-        rows: [row(ctl('Input Select', 11, 'dropdown', 'dropdown1'), ctl('Bypass Mode', 12, 'dropdown', 'dropdown1')), row(ctl('Depth', 9, 'slider')), row(ctl('Bypass', 31, 'button', 'btnBypass'))]
+        rows: [
+          row(ctl('Input Select', 11, 'dropdown', 'dropdown1'), ctl('Bypass Mode', 12, 'dropdown', 'dropdown1')),
+          row(ctl('Depth', 9, 'slider')),
+          row(ctl('Bypass', 31, 'button', 'btnBypass'), ctl('Scene Ignore', 32, 'button', 'btnIgnoreScene'))
+        ]
       },
       ...AMP_PARAMS.layout.pages.slice(2, 4),
       {
@@ -187,6 +211,12 @@ export interface ParamWrite {
 
 export interface BlockEditorMock {
   writes: ParamWrite[];
+  /** Captured discrete (enum) writes of the amp (`PUT …/params/<pid>` with `continuous:false`), in order:
+   *  the board's selects / switches and the header's Scene Ignore / Bypass mode. The amp's params read
+   *  back with these values (and its `blockState` with them). */
+  enumWrites: { pid: number; value: number }[];
+  /** Answer the amp's next discrete write to this param with a 500 (captured, not applied); cleared after. */
+  failNextEnumWrite: number | null;
   /** Captured channel switches of the amp (`POST /preset/blocks/<eid>/channel`). */
   channelWrites: string[];
   /** Captured bypass writes of the amp (`POST /preset/blocks/<eid>/bypass`). */
@@ -205,6 +235,12 @@ export interface BlockEditorMockOptions {
   /** Serve the amp's layout with device positions (`AMP_PARAMS_POSITIONED`): an Authentic page with exact
    *  pixel positions, section titles and a mixer section. */
   positioned?: boolean;
+  /** The device's `blockState` capability (default true). `false`: a device without it (caps false, no
+   *  tag on the params); `'absent'`: an older ForgeFX (no caps key, no tag). */
+  blockState?: boolean | 'absent';
+  /** Serve the amp's Scene Ignore as firmware-gated (`supported: false` with this reason, e.g.
+   *  "Needs firmware ≥ 5.03"). */
+  sceneIgnoreGate?: string;
 }
 
 export const CAB_EID = 101;
@@ -237,15 +273,45 @@ const CAB_STATE = {
 
 /** Install the mocked backend and boot a clean workbench with the amp block on the grid. */
 export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptions = {}): Promise<BlockEditorMock> {
-  const mock: BlockEditorMock = { writes: [], channelWrites: [], bypassWrites: [], bypassByEid: {} };
+  const mock: BlockEditorMock = { writes: [], enumWrites: [], failNextEnumWrite: null, channelWrites: [], bypassWrites: [], bypassByEid: {} };
   const grid = opts.extraBlocks ? { ...GRID, cells: [...GRID.cells, ...EXTRA_CELLS] } : GRID;
+  const bsCap = opts.blockState ?? true;
+  const device =
+    bsCap === true
+      ? DEVICE
+      : bsCap === false
+        ? { ...DEVICE, capabilities: { ...CAPS, blockState: false } }
+        : { ...DEVICE, capabilities: Object.fromEntries(Object.entries(CAPS).filter(([k]) => k !== 'blockState')) };
+  // the amp's enum values as the device holds them (the captured enum writes land here)
+  const enumValues = new Map<number, number>();
+  const ampParams = () => {
+    const base = opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS;
+    const enums = base.enums.map((e) => (enumValues.has(e.id) ? { ...e, value: enumValues.get(e.id)! } : e));
+    const valueOf = (pid: number) => enums.find((e) => e.id === pid)?.value ?? 0;
+    const bs = base.blockState as { sceneIgnore: { paramId: number }; bypassMode: { paramId: number } } | undefined;
+    const blockState =
+      bsCap === true && bs
+        ? {
+            sceneIgnore: {
+              ...bs.sceneIgnore,
+              value: valueOf(bs.sceneIgnore.paramId),
+              ...(opts.sceneIgnoreGate ? { supported: false, reason: opts.sceneIgnoreGate } : {})
+            },
+            bypassMode: { ...bs.bypassMode, value: valueOf(bs.bypassMode.paramId) }
+          }
+        : undefined;
+    const out: Record<string, unknown> = { ...base, enums };
+    if (blockState) out.blockState = blockState;
+    else delete out.blockState;
+    return out;
+  };
   const live = { bypassed: false, channel: opts.channel ?? null };
   const blockState = () => [{ slug: 'Amp', name: 'Amp 1', effectId: AMP_EID, row: 0, col: 0, fromRows: [], bypassed: live.bypassed, channel: live.channel }];
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   await page.route('**/api/**', async (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace(/^\/api/, '');
-    if (path === '/device') return json(route, DEVICE);
+    if (path === '/device') return json(route, device);
     if (path === '/device/detect') return json(route, DETECT);
     if (path === '/healthz') return json(route, { ok: true, api: { version: 2 }, device: 'FM3' });
     if (path === '/preset/grid') return json(route, grid);
@@ -275,11 +341,20 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
       if (path === `/preset/blocks/${ERROR_EID}/params`) return json(route, { error: 'unknown block' }, 404); // 4xx: a read error without the failure reporter
     }
     if (path === '/ports') return json(route, { chosen: null, override: null, profileOverride: null, ports: [] });
-    if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS);
+    if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, ampParams());
     const w = new RegExp(`^/preset/blocks/${AMP_EID}/params/(\\d+)$`).exec(path);
     if (w && req.method() === 'PUT') {
       const body = req.postDataJSON() as { value: number; continuous: boolean };
-      mock.writes.push({ pid: Number(w[1]), value: body.value, continuous: body.continuous });
+      const pid = Number(w[1]);
+      mock.writes.push({ pid, value: body.value, continuous: body.continuous });
+      if (body.continuous === false) {
+        mock.enumWrites.push({ pid, value: body.value });
+        if (mock.failNextEnumWrite === pid) {
+          mock.failNextEnumWrite = null;
+          return json(route, { error: 'device timeout' }, 500);
+        }
+        enumValues.set(pid, body.value);
+      }
       return json(route, { ok: true });
     }
     if (path.startsWith('/help/')) return json(route, null, 404); // no parameter help copy
