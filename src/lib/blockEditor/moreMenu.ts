@@ -11,8 +11,6 @@ export interface MoreMenuBlock {
   isCab: boolean;
   /** The block has a model palette / cab picker to open. */
   canRetype: boolean;
-  /** The grid map strip is shown. */
-  gridMapShown: boolean;
   /** The Bypass mode control, when the header moved it in here (a phone-width editor): the current mode,
    *  why it is not available, whether the mode mutes, and its menu rows (headerModel `bypassModeMenu`). */
   bypassMode?: { label: string; reason: string | null; muting: boolean; rows: WorkbenchMenuItem[] } | null;
@@ -34,6 +32,13 @@ export interface MoreMenuState {
   page: string;
   pageCustom: boolean;
   pageInSeed: boolean;
+  /** What "Reset this page" does beside the page (names): the controls that go to the fixed area, whether that
+   *  area is added for them, and the controls that are on no page afterwards. */
+  pageReset?: { toFixed: readonly string[]; addsFixed: boolean; lost: readonly string[] } | null;
+  /** The fixed area: whether the board or its seed has one (else there is no row for it), whether the seed
+   *  has one, whether the board's differs from it (Reset fixed area), and the controls (names) that are on no
+   *  page after its reset. Absent = none anywhere. */
+  fixed?: { inSeed: boolean; custom: boolean; lost?: readonly string[] } | null;
   /** A board is loaded (the layout actions need one). */
   hasBoard: boolean;
   /** A "default for this type" is saved for the block family. */
@@ -43,7 +48,7 @@ export interface MoreMenuState {
   hasDeviceLayout: boolean;
   /** Name in "Save as default for …" (the block family, or the screen). */
   typeName: string;
-  /** Rows that only a grid block has (change type, grid map, remove); absent on virtual screens. */
+  /** Rows that only a grid block has (change type, remove); absent on virtual screens. */
   block?: MoreMenuBlock | null;
 }
 
@@ -53,6 +58,7 @@ export interface MoreMenuActions {
   density(density: BeDensity): void;
   profile(name: string): void;
   resetPage(): void;
+  resetFixed(): void;
   resetAll(): void;
   resetDevice(): void;
   newCopy(): void;
@@ -60,7 +66,6 @@ export interface MoreMenuActions {
   saveDefault(): void;
   forgetDefault(): void;
   changeType(): void;
-  gridMap(show: boolean): void;
   remove(): void;
 }
 
@@ -88,6 +93,22 @@ export function resetAllToast(profile: string, hasUserSeed: boolean, hasDeviceLa
   if (profile === BLANK_PROFILE) return 'All pages cleared';
   if (seedIsDevice(profile, hasUserSeed, hasDeviceLayout)) return 'Reset to the device layout';
   return hasUserSeed ? 'All pages reset to your saved default' : 'All pages reset to the default layout';
+}
+
+/** "Mix", "Mix and Level", "Mix, Level and Balance", "Mix, Level and 4 more". */
+function nameList(names: readonly string[]): string {
+  if (names.length < 2) return names[0] ?? '';
+  const shown = names.length > 3 ? names.slice(0, 2) : names.slice(0, -1);
+  const last = names.length > 3 ? `${names.length - 2} more` : names[names.length - 1];
+  return `${shown.join(', ')} and ${last}`;
+}
+const onNoPage = (lost: readonly string[]): string => (lost.length ? ` ${nameList(lost)} will be on no page.` : '');
+/** The rest of the "Reset this page" prompt: no control goes away (or somewhere else) unsaid. */
+export function pageResetNote(r: MoreMenuState['pageReset']): string {
+  if (!r) return '';
+  const go = r.toFixed.length === 1 ? 'moves' : 'move';
+  const area = r.toFixed.length ? ` ${nameList(r.toFixed)} ${go} to the fixed area${r.addsFixed ? ', which is added' : ''}.` : '';
+  return area + onNoPage(r.lost);
 }
 
 const cls = (id: string, extra = ''): string => `be-mi be-mi-${id}${extra ? ' ' + extra : ''}`;
@@ -163,7 +184,7 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
   const pagePrompt = blank
     ? `Clear “${s.page}”?`
     : s.pageInSeed
-      ? `Reset “${s.page}” to ${seedName}?`
+      ? `Reset “${s.page}” to ${seedName}?${pageResetNote(s.pageReset)}`
       : `“${s.page}” is not in ${seedName} — clear it?`;
   out.push({
     id: 'reset-page',
@@ -173,6 +194,25 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
     confirm: { prompt: pagePrompt, confirmLabel: blank || !s.pageInSeed ? 'Clear' : 'Reset' },
     run: () => a.resetPage()
   });
+  // the fixed area the same way: only when it differs; without one in the seed the reset takes it away
+  if (s.fixed) {
+    const back = s.fixed.inSeed && !blank;
+    out.push({
+      id: 'reset-fixed',
+      label: back ? 'Reset fixed area' : 'Remove fixed area',
+      disabled: off || !s.fixed.custom,
+      className: cls('reset-fixed'),
+      confirm: back
+        ? { prompt: `Reset the fixed area to ${seedName}?${onNoPage(s.fixed.lost ?? [])}`, confirmLabel: 'Reset' }
+        : {
+            prompt: blank
+              ? 'Remove the fixed area and every control in it?'
+              : `${s.hasUserSeed ? 'Your saved default' : s.hasDeviceLayout ? 'The device layout' : 'The default layout'} has no fixed area — remove it?${onNoPage(s.fixed.lost ?? [])}`,
+            confirmLabel: 'Remove'
+          },
+      run: () => a.resetFixed()
+    });
+  }
   // the whole layout back to its seed: with the device layout as the seed (the Default profile, F10) the
   // row says so; with a saved default it resets to that one and "Reset to device layout" follows; without
   // a device layout (curated fallback) it stays "Reset all pages"
@@ -230,7 +270,6 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
       });
     }
     push({ id: 'change-type', label: b.isCab ? 'Choose cab…' : 'Change type…', disabled: !b.canRetype, className: cls('change-type'), run: () => a.changeType() });
-    out.push({ id: 'grid-map', label: b.gridMapShown ? 'Hide grid map' : 'Show grid map', className: cls('grid-map'), run: () => a.gridMap(!b.gridMapShown) });
     out.push({
       id: 'remove',
       label: 'Remove block from grid',

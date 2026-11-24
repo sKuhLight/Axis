@@ -1,4 +1,4 @@
-// Data-source SEAM for the editor-backed grid components (SignalGrid / GridMap /
+// Data-source SEAM for the editor-backed grid components (SignalGrid /
 // BlockEditor / BeSurface / EQGraph / CabPicker). Today every one of them resolves
 // the live device-backed `editor` singleton; this indirection lets a later milestone drive
 // them from an OFFLINE buffer (an alternative EditorSurface set into Svelte context) without

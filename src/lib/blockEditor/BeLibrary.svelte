@@ -2,7 +2,8 @@
   // The "Add" library of Arrange: the block's controls grouped like the "Find a control…" popover (Knobs &
   // faders · Switches · Selectors · Graphs · meters · actions), each row marked when the control is already
   // on the current page. A click adds the control at the first free spot of the current page; dragging a
-  // row places it at an exact spot (teal / red preview on the board, also on another page of the strip).
+  // row places it at an exact spot (teal / red preview on the board, also on another page of the strip or in
+  // the fixed area). While the fixed area is the selected target a click adds there.
   // It stays open while arranging (close: ✕, Escape, "+ Control" again, Done) and fades out of the way while
   // a row is dragged. It is rendered inside the editor's ONE overlay layer (BeSurface, overlayLayer.ts), so
   // the editor's menus stack above it; it opens under the arrange bar, right-aligned to its trigger — or
@@ -12,6 +13,7 @@
   import { effectiveZoom } from '../workbench';
   import type { FindFilter, FindGroup } from './findControls';
   import { KIND_ICON, KIND_NAME } from './findControls';
+  import { FIXED_PAGE, pageInText, pageLabel } from './boardModel';
   import { libraryPlacement, type LibraryPlacement } from './arrangeModel';
 
   let {
@@ -36,7 +38,7 @@
     /** The arrange bar: the library opens below it, or above it when there is more room there. */
     floor: HTMLElement | null;
     groups: FindGroup[];
-    /** The page a click adds to. */
+    /** The page a click adds to (`FIXED_PAGE`: the fixed area, while it is the selected target). */
     page: string;
     query?: string;
     filter?: FindFilter;
@@ -58,6 +60,7 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let pos = $state<LibraryPlacement | null>(null);
   const count = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
+  const fixed = $derived(page === FIXED_PAGE);
 
   /** Place under (or over) the bar, right-aligned to the trigger (visual px → layout px). */
   function place() {
@@ -160,7 +163,7 @@
       </div>
       <button class="be-lclose" type="button" aria-label="Close the library" title="Close (Esc)" data-be-lib-close onclick={onClose}>✕</button>
     </div>
-    <div class="be-lhint"><span>Adds to</span><b>{page}</b><span class="be-lsp"></span><span>click = first free spot · drag = exact spot</span></div>
+    <div class="be-lhint"><span>Adds to</span><b>{pageLabel(page)}</b><span class="be-lsp"></span><span>click = first free spot · drag = exact spot</span></div>
     <div class="be-llist">
       {#each groups as g (g.id)}
         <div class="be-lgroup">{g.title}</div>
@@ -169,7 +172,7 @@
             class="be-lrow"
             class:here={r.onCurrent}
             type="button"
-            title={r.onCurrent ? `${r.label} is already on ${page}` : `Add ${r.label} to ${page} — or drag it to a spot`}
+            title={r.onCurrent ? `${r.label} is already ${fixed ? 'in' : 'on'} ${pageInText(page)}` : `Add ${r.label} to ${pageInText(page)} — or drag it to a spot`}
             data-be-lib-row={r.key}
             data-on-page={r.onCurrent ? 'true' : 'false'}
             onpointerdown={(e) => onPress(e, r.key)}
@@ -181,9 +184,9 @@
               <span class="be-lmeta">{KIND_NAME[r.kind]} · {meta(r.key)}</span>
             </span>
             {#if r.onCurrent}
-              <span class="be-lmark here">on this page</span>
+              <span class="be-lmark here">{fixed ? 'in this area' : 'on this page'}</span>
             {:else if r.pages.length}
-              <span class="be-lmark" title={r.pages.join(', ')}>on {r.pages.length === 1 ? r.pages[0] : `${r.pages.length} pages`}</span>
+              <span class="be-lmark" title={r.pages.map(pageLabel).join(', ')}>{r.pages.length === 1 ? (r.pages[0] === FIXED_PAGE ? 'in Fixed area' : `on ${r.pages[0]}`) : `on ${r.pages.length} pages`}</span>
             {/if}
             <span class="be-ladd" aria-hidden="true">+</span>
           </button>

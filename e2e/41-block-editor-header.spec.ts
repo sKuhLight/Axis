@@ -19,7 +19,7 @@ import { clickNav } from './support/workbench';
 // the Engaged | Bypass mode ▾ | Scene Ignore segments (the device's own per-channel params, AXIS-81:
 // written through the board's enum write, disabled with the reason where the device / server lacks them)
 // — and the ⋯ menu (Arrange, Top / Side, control size, layout profiles and resets, save as default,
-// change type, grid map, remove) with its amber "custom" dot.
+// change type, remove) with its amber "custom" dot.
 // Fully mocked backend (support/blockEditorMock.ts) — no device.
 
 const board = (page: Page) => page.locator('[data-be-board]');
@@ -41,6 +41,18 @@ async function gotoPage(page: Page, name: string) {
       )
     )
     .toBe(true);
+}
+
+/** Put controls on a page of the board (Arrange → "Add" library): the header's own are in no default board. */
+async function placeOnBoard(page: Page, name: string, keys: string[]) {
+  await gotoPage(page, name);
+  await pickMore(page, 'arrange');
+  for (const key of keys) {
+    await arrangeAdd(page, key);
+    await expect(page.locator(`section[data-be-page="${name}"] [data-be-key="${key}"]`)).toHaveCount(1);
+  }
+  await page.locator('[data-be-arrange-done]').click();
+  await expect(page.locator('[data-be-arrange-done]')).toHaveCount(0);
 }
 
 /** Arrange (via ⋯), select a control and remove it with the arrange bar's ✕, finish arranging. */
@@ -112,7 +124,8 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect.poll(() => mock.enumWrites).toEqual([{ pid: SCENE_IGNORE_PID, value: 1 }]);
     await expect(scene).toHaveAttribute('aria-pressed', 'true');
     await expect(scene).toHaveAttribute('data-be-scene', 'on');
-    // the board's own Scene Ignore control (the device layout's button on Preamp) shows the same value
+    // a Scene Ignore control of one's own on the board (no default board has one) shows the same value
+    await placeOnBoard(page, 'Preamp', [`e${SCENE_IGNORE_PID}`]);
     await gotoPage(page, 'Preamp');
     const boardSi = tile(page, `e${SCENE_IGNORE_PID}`).locator('button[aria-pressed]');
     await expect(boardSi).toHaveAttribute('aria-pressed', 'true');
@@ -151,7 +164,8 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(bm).toHaveAttribute('data-be-bypass-muting', 'true');
     await expect(bm.locator('[data-be-bypass-muted]')).toBeVisible();
     await expect(bm).toHaveAttribute('title', /Mute Out — what this block does while bypassed \(it mutes\)/);
-    // the board's Bypass Mode select follows; a pick there relabels the header
+    // a Bypass Mode select of one's own on the board follows; a pick there relabels the header
+    await placeOnBoard(page, 'Preamp', [`e${BYPASS_MODE_PID}`]);
     await gotoPage(page, 'Preamp');
     const field = tile(page, `e${BYPASS_MODE_PID}`).locator('.be-field');
     await expect(field).toContainText('Mute Out');
@@ -241,6 +255,7 @@ test.describe('Block Editor header (slice 3)', () => {
   test('a write the device does not take: the header and the board go back, one toast', async ({ page }) => {
     const mock = await bootBlockEditorMock(page, { channel: 'A' });
     await openAmpEditor(page);
+    await placeOnBoard(page, 'Preamp', [`e${SCENE_IGNORE_PID}`, `e${BYPASS_MODE_PID}`]);
     const scene = page.locator('[data-be-scene]');
     mock.failNextEnumWrite = SCENE_IGNORE_PID;
     await scene.click();
@@ -579,23 +594,6 @@ test.describe('Block Editor header (slice 3)', () => {
     expect(Math.abs((await top('[data-be-more]')) - (await top('[data-be-engaged]')))).toBeLessThan(8);
   });
 
-  test('⋯ "Grid map" hides and shows the strip, and the choice is kept', async ({ page }) => {
-    await bootBlockEditorMock(page);
-    await openAmpEditor(page);
-    const map = page.locator('[data-screen="Block Editor"] [data-screen="Grid Map"]');
-    await expect(map).toBeVisible();
-    await pickMore(page, 'grid-map');
-    await expect(map).toHaveCount(0);
-    await page.reload();
-    await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
-    await openAmpEditor(page);
-    await expect(map).toHaveCount(0);
-    const menu = await openMore(page);
-    await expect(menu.locator('.be-mi-grid-map')).toHaveText(/Show grid map/);
-    await menu.locator('.be-mi-grid-map').click();
-    await expect(map).toBeVisible();
-  });
-
   test('⋯ "Remove block from grid" asks first, then removes the block', async ({ page }) => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
@@ -641,7 +639,7 @@ test.describe('Block Editor header (slice 3)', () => {
     const menu = await openMore(page, screen);
     for (const id of ['arrange', 'nav-side', 'size-m', 'new-copy', 'save-default']) await expect(menu.locator(`.be-mi-${id}`)).toBeVisible();
     await expect(menu.locator('.be-mi-save-default')).toHaveText(/Save as default for Setup/);
-    await expect(menu.locator('.be-mi-change-type, .be-mi-grid-map, .be-mi-remove')).toHaveCount(0);
+    await expect(menu.locator('.be-mi-change-type, .be-mi-remove')).toHaveCount(0);
     await menu.locator('.be-mi-arrange').click();
     await expect(screen.locator('[data-be-arrange-done]')).toBeVisible();
   });
@@ -765,15 +763,18 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await expect(page.locator('.toast')).toContainText('Pinned Bass');
     await expect(page.locator('.custom-panel .axis-widget.param').filter({ hasText: 'Bass' })).toHaveCount(1);
 
-    // Drive leaves every page, then Unused + Show all lists only it
+    // Drive leaves every page, then Unused + Show all lists it — beside the header's own three controls, which
+    // are on no page of the default board
     await removeInArrange(page, 'k0');
     await input.click();
     await input.fill('');
     const pop = page.locator('[data-be-find]');
     await pop.getByRole('button', { name: 'Unused' }).click();
-    await expect(pop.locator('[data-be-find-row]')).toHaveCount(1);
+    const unused = ['k0', `e${BYPASS_MODE_PID}`, `e${SCENE_IGNORE_PID}`, 'bypass'];
+    await expect(pop.locator('[data-be-find-row]')).toHaveCount(unused.length);
+    for (const k of unused) await expect(pop.locator(`[data-be-find-row="${k}"]`)).toHaveCount(1);
     await pop.locator('[data-be-find-all]').click();
-    await expect(page.locator('[data-be-results] [data-be-key]')).toHaveCount(1);
+    await expect(page.locator('[data-be-results] [data-be-key]')).toHaveCount(unused.length);
     await expect(page.locator('[data-be-results] [data-be-key="k0"]')).toBeVisible();
   });
 
@@ -802,7 +803,6 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     let menu = await openMore(page);
     for (const id of ['arrange', 'size-m', 'new-copy', 'save-default']) await expect(menu.locator(`.be-mi-${id}`)).toBeDisabled();
     await expect(menu.locator('.be-mi-remove')).toBeEnabled();
-    await expect(menu.locator('.be-mi-grid-map')).toBeEnabled();
     await page.keyboard.press('Escape');
 
     // a read error: the type palette and bypass still work

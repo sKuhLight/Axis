@@ -1,7 +1,8 @@
 <script lang="ts">
   // The Arrange bar: ONE row under the header while arranging — the selection's tools (a control: View,
   // Size S/M/L, ⚡ Pin, ⇆ grid swipe control, ✕ Remove; a divider: label field, Rotate, ✕ Remove) or a hint,
-  // then Undo · + Add · + Divider h / v · Close gaps · Tidy up · Auto-pack · Page ▾ · ✓ Done. What does
+  // then Undo · + Add · + Divider h / v · Close gaps · Tidy up · Auto-pack · Add fixed area (a board without one)
+  // · Page ▾ · ✓ Done. What does
   // not fit goes into a "⋯" menu at the end of the row (arrangeBar.ts decides from the parts' measured
   // widths), so the board keeps its height. The Page ▾ and ⋯ menus (which one is open: `menu`; their
   // triggers: `pageAnchor` / `moreAnchor`; the parts in the ⋯: `overflow`) are rendered by BeSurface in the
@@ -17,6 +18,9 @@
     canUndo,
     autoPack,
     page,
+    target = page,
+    selFixed = false,
+    canAddFixed = false,
     touch = false,
     libOpen = false,
     labelFocus = 0,
@@ -32,8 +36,14 @@
     sel: ArrangeSel | null;
     canUndo: boolean;
     autoPack: boolean;
-    /** The current page (Page ▾ acts on it; "+ Add" adds to it). */
+    /** The current page (Page ▾ acts on it). */
     page: string;
+    /** Where "+ Add", the dividers, Close gaps and Tidy up act: the page, or the fixed area while selected. */
+    target?: string;
+    /** The selection sits in the fixed area. */
+    selFixed?: boolean;
+    /** The board has no fixed area: offer "Add fixed area". */
+    canAddFixed?: boolean;
     /** Tablet: ≥ 40 px targets. */
     touch?: boolean;
     libOpen?: boolean;
@@ -56,7 +66,7 @@
   const GAP = 6;
   const moreW = $derived(touch ? 40 : 30);
 
-  const parts = $derived(barParts(sel));
+  const parts = $derived(barParts(sel, canAddFixed));
   let rowW = $state(0);
   let measEl = $state<HTMLElement | null>(null);
   let widths = $state<Partial<Record<BarPart, number>>>({});
@@ -73,7 +83,7 @@
     if (!same) widths = next;
   }
   $effect(() => {
-    void [parts, sel, page, touch, autoPack, canUndo];
+    void [parts, sel, page, target, touch, autoPack, canUndo];
     void tick().then(measure);
   });
   $effect(() => {
@@ -206,7 +216,7 @@
   {:else if p === 'div-rotate'}
     <button class="be-ab-btn" type="button" title="Switch between horizontal and vertical" data-be-ab={live ? 'rotate' : null} onclick={() => actions.rotate()}>⟲ Rotate</button>
   {:else if p === 'sel-remove'}
-    <button class="be-ab-ic danger" type="button" title="Remove from page (Del)" aria-label={sel?.kind === 'divider' ? 'Remove divider' : 'Remove from page'} data-be-ab={live ? 'remove' : null} onclick={() => actions.remove()}>✕</button>
+    <button class="be-ab-ic danger" type="button" title={selFixed ? 'Remove from the fixed area (Del)' : 'Remove from page (Del)'} aria-label={sel?.kind === 'divider' ? 'Remove divider' : selFixed ? 'Remove from the fixed area' : 'Remove from page'} data-be-ab={live ? 'remove' : null} onclick={() => actions.remove()}>✕</button>
   {:else if p === 'undo'}
     <button class="be-ab-ic undo" type="button" title="Undo ({UNDO_KEYS})" aria-label="Undo" disabled={!canUndo} data-be-ab={live ? 'undo' : null} onclick={() => actions.undo()}>↶</button>
   {:else if p === 'add'}
@@ -216,7 +226,7 @@
         class="be-ab-btn accent"
         class:on={libOpen}
         type="button"
-        title="Add a control to {page} (library: click = first free spot, drag = exact spot)"
+        title="Add a control to {target} (library: click = first free spot, drag = exact spot)"
         aria-label="Add a control"
         aria-expanded={libOpen}
         aria-haspopup="dialog"
@@ -236,9 +246,9 @@
       >
     </div>
   {:else if p === 'close-gaps'}
-    <button class="be-ab-btn" type="button" title="Remove the empty rows and columns of {page}" data-be-ab={live ? 'close-gaps' : null} onclick={() => actions.closeGaps()}>Close gaps</button>
+    <button class="be-ab-btn" type="button" title="Remove the empty rows and columns of {target}" data-be-ab={live ? 'close-gaps' : null} onclick={() => actions.closeGaps()}>Close gaps</button>
   {:else if p === 'tidy'}
-    <button class="be-ab-btn" type="button" title="Slide everything on {page} up and left" data-be-ab={live ? 'tidy' : null} onclick={() => actions.tidy()}>Tidy up</button>
+    <button class="be-ab-btn" type="button" title="Slide everything on {target} up and left" data-be-ab={live ? 'tidy' : null} onclick={() => actions.tidy()}>Tidy up</button>
   {:else if p === 'autopack'}
     <button
       class="be-ab-btn"
@@ -250,6 +260,8 @@
       data-be-ab={live ? 'autopack' : null}
       onclick={() => actions.autoPack(!autoPack)}>{autoPack ? '⊞' : '⊡'} Auto-pack</button
     >
+  {:else if p === 'fixed'}
+    <button class="be-ab-btn" type="button" title="An area at the right for controls that stay in view beside every page" data-be-ab={live ? 'fixed' : null} onclick={() => actions.addFixed()}>Add fixed area</button>
   {:else if p === 'page'}
     {#if live}
       <button bind:this={pageAnchor} class="be-ab-btn page" class:on={menu === 'page'} type="button" title="Page options" aria-haspopup="menu" aria-expanded={menu === 'page'} data-be-ab="page" onclick={() => (menu = menu === 'page' ? null : 'page')}

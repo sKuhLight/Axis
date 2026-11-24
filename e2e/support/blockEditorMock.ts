@@ -204,6 +204,57 @@ export const AMP_PARAMS_POSITIONED = {
   }
 };
 
+// ── the same amp as a device editor that repeats things on every page (`fixed: true`) ──
+// Every page ends in the same mixer (Level, Balance, Input Select, and the header's Bypass Mode / Bypass /
+// Scene Ignore), shows Depth among its parameters and carries a page-level "Tracking Mode" beside its rows
+// (`pageControls`, with a section title that is not used). The default board's fixed area is then Tracking
+// Mode (4 cells: a long label), Level, Balance, Input Select, Depth, packed 4 cells wide at (0,0), (0,2), (2,2),
+// (0,4), (2,4): six rows, no taller than the tallest page (Dynamics, three knob rows), so it is not widened.
+
+export const TRACKING_PID = 40;
+const trackingMode = at(ctl('Tracking Mode', TRACKING_PID, 'dropdown', 'dropdown1'), 120, 200);
+const mixer = {
+  section: 'mixer',
+  controls: [
+    ctl('Level', 7, 'knob'),
+    ctl('Balance', 8, 'knob'),
+    ctl('Input Select', 11, 'dropdown', 'dropdown1'),
+    ctl('Bypass Mode', BYPASS_MODE_PID, 'dropdown', 'dropdown1Tight'),
+    ctl('Bypass', 31, 'button', 'btnBypass'),
+    ctl('Scene Ignore', SCENE_IGNORE_PID, 'button', 'btnIgnoreScene')
+  ]
+};
+const depth = ctl('Depth', 9, 'knob');
+const fixedPage = (name: string, ...rows: ReturnType<typeof row>[]) => ({
+  name,
+  rows: [...rows.slice(0, -1), { ...rows[rows.length - 1]!, controls: [...rows[rows.length - 1]!.controls, depth] }, mixer],
+  pageControls: [title('VOICE', 120, 10), trackingMode]
+});
+
+export const AMP_PARAMS_FIXED = {
+  ...AMP_PARAMS,
+  named: AMP_PARAMS.named.map((p) => (p.id === 5 ? { ...p, name: 'Master' } : p)),
+  enums: [
+    ...AMP_PARAMS.enums,
+    { id: TRACKING_PID, name: 'Tracking Mode', value: 0, options: [{ value: 0, label: 'Mono' }, { value: 1, label: 'Poly' }, { value: 2, label: 'Wide' }] }
+  ],
+  layout: {
+    ...AMP_PARAMS.layout,
+    variantValue: 'Fixed',
+    pages: [
+      fixedPage(
+        'Authentic',
+        row(ctl('Drive', 0, 'knob'), ctl('Bass', 1, 'knob'), ctl('Mid', 2, 'knob'), ctl('Treble', 3, 'knob'), ctl('Presence', 4, 'knob'), ctl('Master', 5, 'knob')),
+        row(ctl('Input Trim', 6, 'knob'), ctl('Bright', 10, 'toggle'))
+      ),
+      fixedPage('Power Amp', row(ctl('Sag', 13, 'knob'), ctl('Bias', 14, 'knob'), ctl('Hum', 15, 'fader'), ctl('Boost', 20, 'button'))),
+      fixedPage('EQ', row(ctl('Low Cut', 16, 'number'), ctl('High Cut', 17, 'number'), ctl('Lo Freq', 18, 'knob'), ctl('Hi Freq', 19, 'knob'))),
+      fixedPage('Dynamics', row(ctl('Comp', 21, 'knob'), ctl('Threshold', 22, 'knob')), row(ctl('Ratio', 23, 'knob'), ctl('Attack', 24, 'knob')), row(ctl('Release', 25, 'knob'))),
+      fixedPage('Advanced', row(ctl('Speaker Drive', 26, 'knob'), ctl('Speaker Comp', 27, 'knob'), ctl('Saturation', 28, 'knob')))
+    ]
+  }
+};
+
 export interface ParamWrite {
   pid: number;
   value: number;
@@ -240,6 +291,9 @@ export interface BlockEditorMockOptions {
   /** Serve the amp's layout with device positions (`AMP_PARAMS_POSITIONED`): an Authentic page with exact
    *  pixel positions, section titles and a mixer section. */
   positioned?: boolean;
+  /** Serve the amp's layout as a device editor that repeats a mixer, a parameter control and a page-level
+   *  control on every page (`AMP_PARAMS_FIXED`): the default board then has a fixed area. */
+  fixed?: boolean;
   /** The device's `blockState` capability (default true). `false`: a device without it (caps false, no
    *  tag on the params); `'absent'`: an older ForgeFX (no caps key, no tag). */
   blockState?: boolean | 'absent';
@@ -296,7 +350,7 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
   // the amp's enum values as the device holds them (the captured enum writes land here)
   const enumValues = new Map<number, number>();
   const ampParams = () => {
-    const base = opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS;
+    const base = opts.fixed ? AMP_PARAMS_FIXED : opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS;
     const enums = base.enums.map((e) => (enumValues.has(e.id) ? { ...e, value: enumValues.get(e.id)! } : e));
     const valueOf = (pid: number) => enums.find((e) => e.id === pid)?.value ?? 0;
     const bs = base.blockState as { sceneIgnore: { paramId: number }; bypassMode: { paramId: number } } | undefined;

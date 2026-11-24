@@ -7,16 +7,17 @@
 //   Edit modifier…      continuous controls only
 //   View ▸              the views of the control's kind (radio)
 //   Size ▸              the S / M / L presets of the current view (radio), plus the current size when custom
-//   Move to page ▸      the other pages; a page that already holds the control is disabled
+//   Move to page ▸      the other pages, and the fixed area when the board has one; a place that already holds
+//                       the control (or is too narrow for it) is disabled
 //   Grid swipe control  toggle (continuous parameters, where the editor keeps swipe controls), its own icon —
 //                       ⚡ means "pin" (F2)
-//   Remove from page
+//   Remove from page    ("Remove from the fixed area")
 //
 // View / Size / Move / Remove change the layout, so they are left out where Arrange is not offered (phones,
 // F12) and for a tile that is not on the board (the flat search results).
 
 import type { WorkbenchMenuItem } from '../workbench';
-import { BE_PRESETS, type BeSizeLabel, type BeView } from './boardModel';
+import { BE_PRESETS, BE_SPEC, FIXED_PAGE, pageInText, pageLabel, type BeSizeLabel, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
 
 export const VIEW_NAME: Readonly<Record<BeView, string>> = {
@@ -55,9 +56,11 @@ export interface ControlMenuState {
   ctl: Pick<BeCtl, 'key' | 'kind' | 'label' | 'views'>;
   /** The board item the menu is for; null for a tile that is not on the board (search results). */
   item: { id: string; view: BeView; w: number; h: number } | null;
-  /** Page the item sits on, and the board's pages in order. */
+  /** Page the item sits on (`FIXED_PAGE`: the fixed area), and the board's pages in order. */
   page: string;
   pageOrder: readonly string[];
+  /** Width of the board's fixed area in cells; null without one. */
+  fixedCols?: number | null;
   /** Pages that already hold the control's key (Move to page refuses them). */
   pagesWithKey: ReadonlySet<string>;
   /** Layout changes are offered (Arrange is allowed on this device class). */
@@ -182,18 +185,24 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
     if (s.ctl.views.length > 1) push(viewSubmenu(it.view, s.ctl.views, (v) => a.view(v), cls));
     push(sizeSubmenu(it.view, it.w, it.h, (w, h) => a.size(w, h), cls));
     const others = s.pageOrder.filter((pg) => pg !== s.page);
-    push({
-      id: 'move',
-      kind: 'submenu',
-      label: 'Move to page',
-      disabled: others.length === 0,
-      className: cls('move'),
-      run: noop,
-      items: others.map((pg) => {
-        const taken = s.pagesWithKey.has(pg);
-        return { id: `move.${pg}`, label: pg, hint: taken ? 'already there' : undefined, disabled: taken, className: cls('move-opt'), run: () => a.move(pg) };
-      })
+    const targets: WorkbenchMenuItem[] = others.map((pg) => {
+      const taken = s.pagesWithKey.has(pg);
+      return { id: `move.${pg}`, label: pg, hint: taken ? 'already there' : undefined, disabled: taken, className: cls('move-opt'), run: () => a.move(pg) };
     });
+    if (s.fixedCols != null && s.page !== FIXED_PAGE) {
+      const taken = s.pagesWithKey.has(FIXED_PAGE);
+      const wide = BE_SPEC[it.view].minW > s.fixedCols;
+      targets.push({
+        id: 'move-fixed', // user page ids always start with 'move.'
+        label: pageLabel(FIXED_PAGE),
+        hint: taken ? 'already there' : wide ? 'too wide' : undefined,
+        disabled: taken || wide,
+        separatorBefore: targets.length > 0,
+        className: cls('move-fixed'),
+        run: () => a.move(FIXED_PAGE)
+      });
+    }
+    push({ id: 'move', kind: 'submenu', label: 'Move to page', disabled: targets.length === 0, className: cls('move'), run: noop, items: targets });
   }
   section();
 
@@ -201,11 +210,11 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
   if (s.ctl.kind === 'cont' && s.canSwipe && s.swipeSupported) push(swipeRow(s.swipe, () => a.swipe(), cls));
   section();
 
-  if (layout && it) push({ id: 'remove', label: 'Remove from page', danger: true, className: cls('remove'), run: () => a.remove() });
+  if (layout && it) push({ id: 'remove', label: s.page === FIXED_PAGE ? `Remove from ${pageInText(FIXED_PAGE)}` : 'Remove from page', danger: true, className: cls('remove'), run: () => a.remove() });
 
   const notes = (s.notes ?? []).filter((n) => !!n);
   if (!rows.length && !notes.length) return [];
-  const head = `${s.ctl.label}${it && s.page ? ` · ${s.page}` : ''}`;
+  const head = `${s.ctl.label}${it && s.page ? ` · ${pageLabel(s.page)}` : ''}`;
   const noteRows: WorkbenchMenuItem[] = notes.map((n, i) => ({ id: `note.${i}`, kind: 'header', label: n, className: cls('note'), run: noop }));
   const body = noteRows.length && rows.length ? [{ ...rows[0]!, separatorBefore: true }, ...rows.slice(1)] : rows;
   return [{ id: 'head', kind: 'header', label: head, className: cls('head'), run: noop }, ...noteRows, ...body];

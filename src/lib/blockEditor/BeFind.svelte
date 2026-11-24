@@ -10,6 +10,7 @@
   import { effectiveZoom, resolveAnchoredMenuPlacement } from '../workbench';
   import type { FindFilter, FindGroup, FindRow } from './findControls';
   import { KIND_ICON, KIND_NAME } from './findControls';
+  import { FIXED_PAGE, pageLabel } from './boardModel';
   import { beLayer } from './overlayLayer';
 
   let {
@@ -284,7 +285,7 @@
                 {#if r.pages.length}
                   <div class="be-fchips">
                     {#each r.pages as pg (pg)}
-                      <button class="be-fchip" class:cur={pg === current} type="button" title="Show on {pg}" data-be-find-page={pg} onclick={() => jump(r, pg)}>{pg}</button>
+                      <button class="be-fchip" class:cur={pg === current} type="button" title={pg === FIXED_PAGE ? 'Show in the fixed area' : `Show on ${pg}`} data-be-find-page={pg === FIXED_PAGE ? 'fixed' : pg} onclick={() => jump(r, pg)}>{pageLabel(pg)}</button>
                     {/each}
                   </div>
                 {/if}

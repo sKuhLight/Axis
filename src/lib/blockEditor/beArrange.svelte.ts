@@ -1,6 +1,7 @@
 // Block Editor Arrange: the selection, the pointer gestures (move a tile — also onto another page of the
-// strip —, resize it at its corner, drag a control out of the "Add" library) with their teal / red drop
-// preview, the keyboard (arrows / Shift+arrows / Delete / Ctrl/⌘+Z / Escape) and the arrange operations —
+// strip or between a page and the fixed area —, resize it at its corner, drag a control out of the "Add"
+// library, drag the fixed area's edge) with their teal / red drop preview, the keyboard (arrows /
+// Shift+arrows / Delete / Ctrl/⌘+Z / Escape) and the arrange operations —
 // also the control menu's View / Size / Move / Remove, in both modes.
 //
 // Every change runs on the drawn items only (a kept, not drawn control blocks nothing), goes through
@@ -13,20 +14,27 @@
 import { effectiveZoom } from '../workbench';
 import {
   addDivider,
+  addFixed,
   addPage as addPageOp,
+  BE_SPEC,
   closeGaps,
   deletePage,
   duplicatePage,
+  FIXED_PAGE,
   locate,
-  MAXC,
   movePage,
   moveItem,
   moveToPage,
+  pageCols,
+  pageInText,
+  pageLabel,
+  removeFixed,
   removeItem,
   renamePage as renamePageOp,
   resizeItem,
   rotateDivider,
   setDividerLabel,
+  setFixedCols,
   setView,
   sizeItem,
   tidy,
@@ -91,10 +99,14 @@ export interface ArrangeEnv {
 
 type MoveGesture = { kind: 'move'; id: string; fromPage: string; w: number; h: number; grab: { cx: number; cy: number }; sx: number; sy: number; started: boolean };
 type LibGesture = { kind: 'lib'; key: string; view: BeView; w: number; h: number; grab: { cx: number; cy: number }; sx: number; sy: number; started: boolean };
+type ColsLimits = { min: number; max: number };
+/** The fixed area's edge: `dir` = −1 when a move to the left widens it (column), +1 to the right (band). */
+type ColsGesture = { sx: number; cols: number; step: number; z: number; dir: 1 | -1; limits: ColsLimits; before: BeBoard; changed: boolean };
 type ResizeGesture = { id: string; sx: number; sy: number; ow: number; oh: number; step: number; z: number; before: BeBoard; changed: boolean };
 /** A held arrow key: the board before its first press, the board its last repeat showed. */
 type KeyStep = { key: string; before: BeBoard; shown: BeBoard; timer: ReturnType<typeof setTimeout> | null };
 
+const limitCols = (cols: number, { min, max }: ColsLimits): number => Math.min(max, Math.max(min, cols));
 const OK_TONE = 'ok';
 /** A held key's step closes at its release; this is the fallback when the release never arrives (focus
  *  left the window) — longer than the keyboard's delay before it starts repeating. */
@@ -111,10 +123,16 @@ export class BeArrange {
   labelFocus = $state(0);
   /** The item being resized at its corner (its w×h shows meanwhile). */
   resizing = $state<string | null>(null);
+  /** The fixed area is the selected target: "+ Control", the library, the dividers, Close gaps and Tidy up act
+   *  there instead of on the current page (a press in the area selects it, one on a page the page). */
+  fixedTarget = $state(false);
+  /** The fixed area's edge is being dragged. */
+  sizingFixed = $state(false);
 
   #env: ArrangeEnv;
   #g: MoveGesture | LibGesture | null = null;
   #rz: ResizeGesture | null = null;
+  #fx: ColsGesture | null = null;
   #key: KeyStep | null = null;
   /** The pointer that owns the running drag / resize: another finger's moves, release and cancel never
    *  reach it, and its presses start nothing meanwhile. */
@@ -126,7 +144,13 @@ export class BeArrange {
 
   /** A drag or resize is running (the frozen cell stays meanwhile; undo waits). */
   get busy(): boolean {
-    return !!this.#g?.started || !!this.#rz;
+    return !!this.#g?.started || !!this.#rz || !!this.#fx;
+  }
+
+  /** The page (or the fixed area) the bar's tools and the library act on. */
+  get target(): string {
+    const b = this.#env.be.board;
+    return this.fixedTarget && b?.fixed ? FIXED_PAGE : (b?.page ?? '');
   }
 
   /** Back to a fresh state (entering / leaving Arrange, another block). */
@@ -135,10 +159,13 @@ export class BeArrange {
     this.#endKeyStep();
     this.sel = null;
     this.libOpen = false;
+    this.fixedTarget = false;
   }
 
-  select(id: string | null): void {
+  /** Select an item, or nothing: `fixed` = where the press was (it decides the target of the tools). */
+  select(id: string | null, fixed = false): void {
     this.sel = id;
+    this.fixedTarget = fixed;
   }
 
   // ── operations ─────────────────────────────────────────────────────────────────────────────────
@@ -177,6 +204,10 @@ export class BeArrange {
   #page(): string {
     return this.#env.be.board?.page ?? '';
   }
+  /** "No room" in words: an item the fixed area is too narrow for, or no free spot. */
+  #noRoom(name: string, page: string, reason: string | undefined): void {
+    this.#env.toast(reason === 'bounds' && page === FIXED_PAGE ? `${name} is too wide for ${pageInText(page)}` : 'No room for that control there', 'bad');
+  }
 
   /** Remove an item (the selection by default) — the bar, Delete / Backspace and the control menu. */
   remove(id: string | null = this.sel): void {
@@ -188,13 +219,14 @@ export class BeArrange {
     if (this.sel === id) this.sel = null;
     // outside Arrange there is no undo (the editor's undo lives in Arrange): the toast says how to get it back
     const back = this.#env.be.editMode ? `${UNDO_KEYS} brings it back` : 'Arrange → Add brings it back';
-    this.#env.toast(`Removed ${name} from ${f.page} — ${back}`, 'info');
+    this.#env.toast(`Removed ${name} from ${pageInText(f.page)} — ${back}`, 'info');
   }
 
   view(v: BeView, id: string | null = this.sel): void {
     if (!id) return;
     const r = this.run((d) => setView(d, id, v));
     if (r?.ok && r.moved) this.#env.toast('Moved to the next free spot to fit', 'info');
+    else if (r && !r.ok && r.reason === 'bounds') this.#env.toast('The fixed area is too narrow for that view', 'bad');
   }
 
   size(w: number, h: number, id: string | null = this.sel): void {
@@ -213,8 +245,14 @@ export class BeArrange {
     if (!f) return;
     const r = this.run((d) => moveToPage(d, id, page), [f.page, page]);
     const name = this.#name(f.item);
-    if (r?.ok && r.board !== b) this.#env.toast(`Moved ${name} to ${page}`, 'ok');
-    else if (r?.reason === 'duplicate') this.#env.toast(`${name} is already on ${page}`, 'bad');
+    if (r?.ok && r.board !== b) {
+      if (this.#env.be.editMode && (f.page === FIXED_PAGE || page === FIXED_PAGE)) {
+        this.#pick(id, page);
+        this.#reveal(id);
+      }
+      this.#env.toast(`Moved ${name} to ${pageInText(page)}`, 'ok');
+    } else if (r?.reason === 'duplicate') this.#env.toast(`${name} is already ${page === FIXED_PAGE ? 'in' : 'on'} ${pageInText(page)}`, 'bad');
+    else if (r && !r.ok) this.#noRoom(name, page, r.reason);
   }
 
   /** Set a divider's label (an empty text clears it) — the divider the field was opened for. */
@@ -231,9 +269,9 @@ export class BeArrange {
     if (r && !r.ok) this.#env.toast('Not enough room to rotate it here', 'bad');
   }
 
-  /** "+ Divider": a divider at the first free spot of the current page, selected, its label field focused. */
+  /** "+ Divider": a divider at the first free spot of the target, selected, its label field focused. */
   addDivider(kind: BeDividerKind): void {
-    const page = this.#page();
+    const page = this.target;
     if (!page) return;
     const r = this.run((d) => addDivider(d, page, kind), [page]);
     if (!r?.ok || !r.id) return;
@@ -242,10 +280,10 @@ export class BeArrange {
     this.#reveal(r.id);
   }
 
-  /** Add a control from the library to the current page: at `at` (a drop) or the first free spot (a
-   *  click). A control already there is pointed at instead. The board takes the keys afterwards (arrows /
-   *  Delete reach the new selection). */
-  add(key: string, at: { x: number; y: number } | null = null, page: string = this.#page()): boolean {
+  /** Add a control from the library to the target (the current page, or the fixed area while it is
+   *  selected): at `at` (a drop) or the first free spot (a click). A control already there is pointed at
+   *  instead. The board takes the keys afterwards (arrows / Delete reach the new selection). */
+  add(key: string, at: { x: number; y: number } | null = null, page: string = this.target): boolean {
     const c = this.#env.ctl(key);
     const b = this.#env.be.board;
     if (!c || !b || !page) return false;
@@ -255,39 +293,67 @@ export class BeArrange {
       if (r.reason === 'duplicate') {
         const there = itemIdOn(b, page, key);
         if (there) {
-          this.sel = there;
+          this.select(there, page === FIXED_PAGE);
           this.#reveal(there);
           this.#env.focusBoard();
         }
-        this.#env.toast(`${c.label} is already on ${page}`, 'info');
-      } else this.#env.toast('No room for that control there', 'bad');
+        this.#env.toast(`${c.label} is already ${page === FIXED_PAGE ? 'in' : 'on'} ${pageInText(page)}`, 'info');
+      } else this.#noRoom(c.label, page, r.reason);
       return false;
     }
     if (r.id) {
-      this.sel = r.id;
+      this.select(r.id, page === FIXED_PAGE);
       this.#reveal(r.id);
     }
     this.#env.focusBoard();
-    this.#env.toast(`Added ${c.label} to ${page}`, OK_TONE);
+    this.#env.toast(`Added ${c.label} to ${pageInText(page)}`, OK_TONE);
     return true;
   }
 
+  /** "Add fixed area": an empty one, selected as the target of the tools. */
+  addFixedArea(): void {
+    if (!this.run((d) => addFixed(d))?.ok) return;
+    this.select(null, true);
+    this.#focusFixedAction('[data-be-fixed-handle]');
+    this.#env.toast('Added a fixed area — drag controls into it', OK_TONE);
+  }
+
+  /** Take an emptied fixed area off the board (Undo brings it back). */
+  removeFixedArea(): void {
+    const b = this.#env.be.board;
+    if (!b?.fixed || b.fixed.items.length) return;
+    if (!this.run((d) => removeFixed(d))?.ok) return;
+    this.select(null);
+    this.#focusFixedAction('[data-be-ab="fixed"], [data-be-ab="more"]');
+    this.#env.toast(`Removed the fixed area — ${UNDO_KEYS} brings it back`, 'info');
+  }
+
+  #focusFixedAction(selector: string): void {
+    requestAnimationFrame(() => {
+      if (!this.#env.be.editMode) return;
+      const action = this.#env.root()?.querySelector<HTMLElement>(selector);
+      if (action) action.focus({ preventScroll: true });
+      else this.#env.focusBoard();
+    });
+  }
+
   closeGaps(): void {
-    const page = this.#page();
+    const page = this.target;
     const before = this.#env.be.board;
     if (!page || !before) return;
     this.run((d) => onPage(d, page, closeGaps));
     const changed = this.#env.be.board !== before;
-    this.#env.toast(changed ? `Closed the gaps on ${page}` : `No gaps on ${page}`, changed ? OK_TONE : 'info');
+    const where = `${page === FIXED_PAGE ? 'in' : 'on'} ${pageInText(page)}`;
+    this.#env.toast(changed ? `Closed the gaps ${where}` : `No gaps ${where}`, changed ? OK_TONE : 'info');
   }
 
   tidyUp(): void {
-    const page = this.#page();
+    const page = this.target;
     const before = this.#env.be.board;
     if (!page || !before) return;
     this.run((d) => onPage(d, page, tidy));
     const changed = this.#env.be.board !== before;
-    this.#env.toast(changed ? `Tidied ${page}` : `${page} is already tidy`, changed ? OK_TONE : 'info');
+    this.#env.toast(changed ? `Tidied ${pageInText(page)}` : `${pageLabel(page)} is already tidy`, changed ? OK_TONE : 'info');
   }
 
   /** Undo the last arrange step (saved once). A no-op while a drag or resize runs (it would change the
@@ -367,16 +433,17 @@ export class BeArrange {
   // ── gestures ───────────────────────────────────────────────────────────────────────────────────
 
   /** Select an item; a tile on another page of the strip makes that page the current one, so the page
-   *  tools (Page ▾, Close gaps, Tidy up, + Divider, the library) act where the selection is. */
+   *  tools (Page ▾, Close gaps, Tidy up, + Divider, the library) act where the selection is. A tile of the
+   *  fixed area makes the area the tools' target (never a page: Page ▾ keeps the current one). */
   #pick(id: string, page: string): void {
-    this.sel = id;
-    if (page && page !== this.#page()) this.#env.setPage(page);
+    this.select(id, page === FIXED_PAGE);
+    if (page && page !== FIXED_PAGE && page !== this.#page()) this.#env.setPage(page);
     this.#env.focusBoard();
   }
 
   /** Another pointer owns a running gesture. */
   #otherPointer(e: PointerEvent): boolean {
-    return (!!this.#g || !!this.#rz) && this.#pid != null && e.pointerId !== this.#pid;
+    return (!!this.#g || !!this.#rz || !!this.#fx) && this.#pid != null && e.pointerId !== this.#pid;
   }
 
   /** Press on a tile: select it and arm a move. */
@@ -415,6 +482,34 @@ export class BeArrange {
     this.resizing = id;
   }
 
+  /** Press on the fixed area's edge: drag it wider or narrower (`dir`: see ColsGesture; `step` = a cell and
+   *  its gap). */
+  colsDown(e: PointerEvent, el: HTMLElement, step: number, dir: 1 | -1, limits: ColsLimits): void {
+    const b = this.#env.be.board;
+    if (!b?.fixed || e.button !== 0 || this.#otherPointer(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.#endKeyStep();
+    this.select(null, true);
+    el.focus({ preventScroll: true });
+    const r = el.getBoundingClientRect();
+    this.#fx = { sx: e.clientX, cols: b.fixed.cols, step, z: effectiveZoom(r.width, el.offsetWidth) || 1, dir, limits, before: b, changed: false };
+    this.#pid = e.pointerId;
+    this.sizingFixed = true;
+  }
+
+  /** Arrow keys (Home / End: the limits) on the focused edge: one cell per press; a held key is one step. */
+  colsKey(e: KeyboardEvent, dir: 1 | -1, limits: ColsLimits): void {
+    const b = this.#env.be.board;
+    if (!b?.fixed || e.ctrlKey || e.metaKey || e.altKey) return;
+    const cols = b.fixed.cols;
+    const next = e.key === 'ArrowRight' ? cols + dir : e.key === 'ArrowLeft' ? cols - dir : e.key === 'Home' ? limits.min : e.key === 'End' ? limits.max : null;
+    if (next == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.#keyStep(e, (d) => setFixedCols(d, limitCols(next, limits)), []);
+  }
+
   /** Press on a library row: a drag past the threshold places the control at an exact spot (the click
    *  that follows a drag is swallowed; a plain click adds at the first free spot). */
   libPress(e: PointerEvent, key: string): void {
@@ -445,12 +540,17 @@ export class BeArrange {
     const page = d.page ?? '';
     const r = grid.getBoundingClientRect();
     const hit = { left: r.left, top: r.top, zoom: effectiveZoom(r.width, grid.offsetWidth), c: Number(d.c), g: Number(d.g), cols: Number(d.cols), rows: Number(d.rows) };
-    const { x, y } = dropCell(px, py, hit, m, m.grab);
+    // an item wider than the fixed area is narrowed to it when its view allows that
+    const moved = m.kind === 'move' ? locate(b, m.id)?.item : undefined;
+    const minW = moved ? BE_SPEC[isDivider(moved) ? moved.kind : moved.view].minW : m.kind === 'lib' ? BE_SPEC[m.view].minW : m.w;
+    const cols = pageCols(b, page);
+    const size = { w: m.w > cols && minW <= cols ? cols : m.w, h: m.h };
+    const { x, y } = dropCell(px, py, hit, size, { cx: Math.min(m.grab.cx, size.w - 1), cy: m.grab.cy });
     const valid =
       m.kind === 'move'
         ? this.#drawn(b, (dd) => moveItem(dd, m.id, page, x, y)).ok
         : this.#drawn(b, (dd) => libraryAdd(dd, page, { key: m.key, view: m.view }, { x, y }, () => '~probe')).ok;
-    return { page, x, y, w: m.w, h: m.h, valid };
+    return { page, x, y, w: Math.min(size.w, hit.cols), h: size.h, valid };
   }
 
   #onMove = (e: PointerEvent): void => {
@@ -466,6 +566,23 @@ export class BeArrange {
       this.#env.autoScroll(e.clientX, e.clientY);
       return;
     }
+    const fx = this.#fx;
+    if (fx) {
+      if (e.pointerType === 'mouse' && e.buttons === 0) {
+        this.#finishCols();
+        return;
+      }
+      e.preventDefault();
+      const cols = limitCols(fx.cols + fx.dir * Math.round((e.clientX - fx.sx) / fx.z / fx.step), fx.limits);
+      // always from the board the drag began with: narrowing and widening again restores the places
+      const r = this.#drawn(fx.before, (d) => setFixedCols(d, cols));
+      const be = this.#env.be;
+      if (r.ok && r.board.fixed?.cols !== be.board?.fixed?.cols) {
+        be.preview(r.board);
+        fx.changed = r.board !== fx.before;
+      }
+      return;
+    }
     const rz = this.#rz;
     if (rz) {
       e.preventDefault();
@@ -475,7 +592,7 @@ export class BeArrange {
       if (!b || !f) return;
       const s = resizeBy({ w: rz.ow, h: rz.oh }, e.clientX - rz.sx, e.clientY - rz.sy, rz.step, rz.z);
       const id = rz.id;
-      const r = this.#drawn(b, (d) => resizeItem(d, id, Math.min(s.w, MAXC - f.item.x), s.h));
+      const r = this.#drawn(b, (d) => resizeItem(d, id, Math.min(s.w, pageCols(b, f.page) - f.item.x), s.h));
       if (r.ok && r.board !== b) {
         be.preview(r.board);
         rz.changed = true;
@@ -496,11 +613,13 @@ export class BeArrange {
         if (t?.valid) {
           if (m.kind === 'move') {
             const id = m.id;
-            this.run((d) => moveItem(d, id, t.page, t.x, t.y), [m.fromPage, t.page]);
+            const r = this.run((d) => moveItem(d, id, t.page, t.x, t.y), [m.fromPage, t.page]);
+            if (r?.ok && t.page !== m.fromPage && (m.fromPage === FIXED_PAGE || t.page === FIXED_PAGE)) this.#pick(id, t.page);
           } else this.add(m.key, { x: t.x, y: t.y }, t.page);
         }
       }
     }
+    this.#finishCols();
     const rz = this.#rz;
     if (rz) {
       this.#rz = null;
@@ -520,6 +639,16 @@ export class BeArrange {
     }
   };
 
+  /** Save the current width if the release was missed or the window lost focus. */
+  #finishCols = (): void => {
+    const fx = this.#fx;
+    if (!fx) return;
+    this.#fx = null;
+    this.#pid = null;
+    this.sizingFixed = false;
+    if (fx.changed) this.#env.be.flush(fx.before);
+  };
+
   /** Stop every pointer gesture (pointercancel, Escape, a block switch); a resize preview goes back. */
   cancel(): void {
     this.#g = null;
@@ -529,6 +658,11 @@ export class BeArrange {
       if (this.#rz.changed) this.#env.be.preview(this.#rz.before);
       this.#rz = null;
       this.resizing = null;
+    }
+    if (this.#fx) {
+      if (this.#fx.changed) this.#env.be.preview(this.#fx.before);
+      this.#fx = null;
+      this.sizingFixed = false;
     }
   }
 
@@ -584,7 +718,7 @@ export class BeArrange {
   keydown(e: KeyboardEvent): void {
     if (!this.#env.be.editMode || e.defaultPrevented || !this.sel) return;
     const t = e.target as HTMLElement | null;
-    if (isEditableTarget(t) || typeof document === 'undefined') return;
+    if (isEditableTarget(t) || t?.closest?.('[data-be-fixed-handle]') || typeof document === 'undefined') return;
     if (!aimedAtEditor(t, this.#env.root(), null, document.body, document.documentElement)) return;
     const a = arrangeKeyAction(e);
     if (!a || a.kind === 'undo' || a.kind === 'redo') return;
@@ -668,12 +802,14 @@ export class BeArrange {
     window.addEventListener('pointermove', this.#onMove, { passive: false });
     window.addEventListener('pointerup', this.#onUp);
     window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', this.#finishCols);
     window.addEventListener('keydown', this.undoKey, true);
     window.addEventListener('keyup', this.#keyup);
     return () => {
       window.removeEventListener('pointermove', this.#onMove);
       window.removeEventListener('pointerup', this.#onUp);
       window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', this.#finishCols);
       window.removeEventListener('keydown', this.undoKey, true);
       window.removeEventListener('keyup', this.#keyup);
       this.#endKeyStep();

@@ -4,9 +4,7 @@
   import { catFor, familyLabel, shade } from './catalog';
   import BeSurface from './blockEditor/BeSurface.svelte';
   import { trackDeviceClass } from './blockEditor/deviceClass.svelte';
-  import { browserFlagStore, readGridMapShown, writeGridMapShown } from './blockEditor/gridMapPrefs';
   import { blockStateView, type BeBlockChrome } from './blockEditor/headerModel';
-  import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
   import type { CabState, CabSlot } from './types';
@@ -15,15 +13,11 @@
 
   let { embedded = false }: { embedded?: boolean } = $props();
 
-  // the editor's device class (workbench profile, else window width): phone chrome and the grid map's
-  // default fold follow it, the same value the board uses for its storage key
+  // the editor's device class (workbench profile, else window width): the phone chrome follows it, the same
+  // value the board uses for its storage key
   const dc = trackDeviceClass();
   const isPhone = $derived(dc.current === 'phone');
   const isTouch = $derived(dc.current !== 'desktop'); // phone and tablet: ≥ 40 px hit targets
-  // Grid map: folded by default in the workbench (every device class; its grid panel is right there) and
-  // on a phone in the monolith; unfolded by default only in the monolith on desktop / tablet. A stored
-  // fold state always wins. ⋯ "Grid map" shows / hides the whole strip (stored separately).
-  const gridMapFolded = $derived(embedded || dc.current === 'phone');
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
@@ -88,11 +82,6 @@
   // ── header: the type chip and block actions the surface's header shows ──
   // Scene Ignore and Bypass mode come from the device (ForgeFX tags them on the block params, cap
   // `blockState`) and write through the board's own enum write; unavailable = disabled with the reason.
-  let gridMapShown = $state(readGridMapShown(browserFlagStore()));
-  function setGridMapShown(show: boolean) {
-    gridMapShown = show;
-    writeGridMapShown(browserFlagStore(), show);
-  }
   const blockStateUi = $derived(
     blockStateView({
       live: !!editor.setBlockStateParam,
@@ -119,7 +108,6 @@
       channel: sel.channel,
       bypassed: !!sel.bypassed,
       blockState: bs,
-      gridMapShown,
       onType: () => (isCab ? editor.openCabPicker() : editor.openRetype()),
       onChannel: (ch) => void editor.setChannel(ch),
       onBypass: () => void editor.toggleBypass(),
@@ -129,8 +117,7 @@
       onBypassMode: (value) => {
         if (bs.bypassMode.enabled && bs.bypassMode.paramId != null) editor.setBlockStateParam?.(bs.bypassMode.paramId, value);
       },
-      onRemove: () => void editor.removeSelected(),
-      onGridMap: setGridMapShown
+      onRemove: () => void editor.removeSelected()
     };
   });
   const message = $derived(
@@ -143,7 +130,7 @@
           : ''
   );
   /** Identity of the block shown: another block (or effect) starts a fresh view of the surface; a reload
-   *  of the same block keeps its board. The surface itself stays mounted (so does the grid map). */
+   *  of the same block keeps its board. The surface itself stays mounted. */
   const surfaceKey = $derived(sel ? `${sel.effectId}@${sel.row},${sel.col}` : '');
 
   // ── docked resize (desktop) ──
@@ -193,10 +180,9 @@
         </div>
       {/if}
 
-      <!-- header (type chip · pages · search · Engaged | Bypass mode ▾ | Scene Ignore · ⋯), the grid map strip under
-           it (default fold above, so the board keeps the height where space is short; ⋯ shows / hides it),
-           then the block's control board (every page at once, always fitted; arrange mode). The no-pack /
-           reading / error states show in the board area while the header stays usable. -->
+      <!-- header (type chip · pages · search · Engaged | Bypass mode ▾ | Scene Ignore · ⋯), then the block's control
+           board (every page at once, always fitted; arrange mode). The no-pack / reading / error states show
+           in the board area while the header stays usable. -->
       <BeSurface
         slug={sel.pack ?? sel.display ?? 'block'}
         accent={cat.accent}
@@ -209,11 +195,7 @@
         {message}
         headerEnd={embedded ? undefined : closeButton}
         resetKey={surfaceKey}
-      >
-        {#snippet belowHeader()}
-          {#if gridMapShown}<div class="gridmap-wrap"><GridMap defaultCollapsed={gridMapFolded} /></div>{/if}
-        {/snippet}
-      </BeSurface>
+      />
     </div>
   </div>
 {/if}
@@ -247,12 +229,6 @@
     border-top: 0;
     box-shadow: none;
     z-index: 0;
-  }
-  .gridmap-wrap {
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    isolation: isolate;
   }
   .overlaybg {
     position: absolute;

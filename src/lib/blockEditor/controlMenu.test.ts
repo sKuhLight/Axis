@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkbenchMenuItem } from '../workbench';
-import { BE_PRESETS } from './boardModel';
+import { BE_PRESETS, FIXED_PAGE } from './boardModel';
 import { CONT_VIEWS, TOG_VIEWS } from './catalog';
 import {
   buildControlMenu,
@@ -256,6 +256,47 @@ describe('shared rows (the control menu and the Arrange bar’s ⋯)', () => {
     expect(s).toMatchObject({ hint: 'on', className: 'be-ab be-ab-swipe on' });
     s.run();
     expect(toggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the fixed area in the control menu', () => {
+  it('a page’s control: "Fixed area" after the pages, only when the board has one', () => {
+    expect(ids(row(buildControlMenu(knob(), actions()), 'move').items!)).toEqual(['move.Preamp', 'move.EQ']);
+    const a = actions();
+    const items = row(buildControlMenu(knob({ fixedCols: 4 }), a), 'move').items!;
+    expect(ids(items)).toEqual(['move.Preamp', 'move.EQ', 'move-fixed']);
+    expect(items[2]).toMatchObject({ label: 'Fixed area', disabled: false, separatorBefore: true, className: 'be-ci be-ci-move-fixed' });
+    items[2]!.run();
+    expect(a.move).toHaveBeenCalledWith(FIXED_PAGE);
+  });
+  it('a user page called fixed and the fixed area have distinct menu items', () => {
+    const a = actions();
+    const items = row(buildControlMenu(knob({ pageOrder: ['Authentic', 'fixed'], fixedCols: 4 }), a), 'move').items!;
+    expect(new Set(ids(items)).size).toBe(2);
+    expect(items.map((item) => item.label)).toEqual(['fixed', 'Fixed area']);
+    for (const item of items) item.run();
+    expect(a.move).toHaveBeenCalledTimes(2);
+    expect(a.move).toHaveBeenNthCalledWith(1, 'fixed');
+    expect(a.move).toHaveBeenNthCalledWith(2, FIXED_PAGE);
+  });
+  it('already there, or too wide for it: disabled with the reason; a board of one page can still move there', () => {
+    expect(row(buildControlMenu(knob({ fixedCols: 4, pagesWithKey: new Set(['Authentic', FIXED_PAGE]) }), actions()), 'move').items!.at(-1)).toMatchObject({ disabled: true, hint: 'already there' });
+    const eq = knob({ ctl: { key: 'eq', kind: 'eq', label: 'EQ', views: ['eq'] }, item: { id: 'q', view: 'eq', w: 8, h: 4 }, fixedCols: 4 });
+    expect(row(buildControlMenu(eq, actions()), 'move').items!.at(-1)).toMatchObject({ disabled: true, hint: 'too wide' });
+    expect(row(buildControlMenu({ ...eq, fixedCols: 6 }, actions()), 'move').items!.at(-1)).toMatchObject({ disabled: false });
+    const one = knob({ pageOrder: ['Authentic'], fixedCols: 4 });
+    expect(row(buildControlMenu(one, actions()), 'move')).toMatchObject({ disabled: false });
+    expect(row(buildControlMenu(one, actions()), 'move').items![0]!.separatorBefore).toBeFalsy();
+  });
+  it('a control in the area: every page is a target, the rows name the area', () => {
+    const rows = buildControlMenu(knob({ page: FIXED_PAGE, pagesWithKey: new Set([FIXED_PAGE, 'EQ']), fixedCols: 4 }), actions());
+    expect(ids(rows)).toEqual(['head', 'pin', 'modifier', 'view', 'size', 'move', 'swipe', 'remove']);
+    expect(row(rows, 'head').label).toBe('Bass · Fixed area');
+    expect(ids(row(rows, 'move').items!)).toEqual(['move.Authentic', 'move.Preamp', 'move.EQ']);
+    expect(row(rows, 'move').items!.map((r) => !!r.disabled)).toEqual([false, false, true]);
+    expect(row(rows, 'remove').label).toBe('Remove from the fixed area');
+    // outside the layout device classes it keeps pin and modifier only
+    expect(ids(buildControlMenu(knob({ page: FIXED_PAGE, canLayout: false, fixedCols: 4 }), actions()))).toEqual(['head', 'pin', 'modifier', 'swipe']);
   });
 });
 

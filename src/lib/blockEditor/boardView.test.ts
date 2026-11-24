@@ -42,6 +42,8 @@ import {
   meterText,
   meterTone,
   offsetInPage,
+  dwellScroll,
+  EDGE_DWELL_MS,
   onDrawnItems,
   pagePinIds,
   pxOf,
@@ -67,7 +69,7 @@ import {
   wheelToStrip
 } from './boardView';
 import { CMIN, DENSITY, PAD_Y, SEC_HEAD } from './boardGeometry';
-import { addControl, isDivider, MAXC, moveItem, normalizeBoard, tidy, type BeBoard, type BeControl, type BeItem } from './boardModel';
+import { addControl, FIXED_PAGE, isDivider, MAXC, moveItem, normalizeBoard, removeFixed, tidy, type BeBoard, type BeControl, type BeItem } from './boardModel';
 import { stepNorm } from './valueFormat';
 
 const knobs = (cols: number, rows: number, prefix = 'k'): BeItem[] => {
@@ -593,6 +595,15 @@ describe('arrange on drawn items only', () => {
     expect(onDrawnItems(b, shown, (x) => moveItem(x, 'k', 'A', 30, 0)).board).toBe(b);
     expect(onDrawnItems(b, () => true, (x) => moveItem(x, 'k', 'A', 0, 0)).board).toBe(b);
   });
+  it('the fixed area too: what is not drawn there neither blocks nor moves, and stays in the area', () => {
+    const inArea = { id: 'm', key: 'meter', view: 'meter' as const, x: 0, y: 0, w: 2, h: 4 };
+    const b: BeBoard = { ...board(), fixed: { cols: 4, items: [inArea] } };
+    const r = onDrawnItems(b, (it) => shown(it) && it.id !== 'm', (x) => moveItem(x, 'k', FIXED_PAGE, 0, 0));
+    expect(r.ok).toBe(true);
+    expect(r.board.fixed!.items.map((i) => i.id)).toEqual(['k', 'm']);
+    // the area itself removed meanwhile: what was hidden in it goes with it
+    expect(onDrawnItems(b, (it) => it.id !== 'm', (x) => removeFixed(x)).board.fixed).toBeUndefined();
+  });
 });
 
 describe('arrange helpers', () => {
@@ -726,5 +737,16 @@ describe('hover actions (⚡ / ∿) only where they leave the control free', () 
     expect(tileContentBox('button', { ...d, ctlH: touch }).h).toBe(40 + labelRowPx(lf));
     expect(hoverActionsFit('button', 2, pxW, pxH, hoverActionPx(c), tileContentBox('button', d))).toBe(true);
     expect(hoverActionsFit('button', 2, pxW, pxH, hoverActionPx(c), tileContentBox('button', { ...d, ctlH: touch }))).toBe(false);
+  });
+});
+
+describe('auto-scroll toward the fixed area', () => {
+  it('waits until the drag stayed at that edge; leaving it starts over; the other direction never waits', () => {
+    const a = dwellScroll(14, 0, 1000);
+    expect(a).toEqual({ delta: 0, since: 1000 });
+    expect(dwellScroll(14, a.since, 1000 + EDGE_DWELL_MS - 1)).toEqual({ delta: 0, since: 1000 });
+    expect(dwellScroll(14, a.since, 1000 + EDGE_DWELL_MS)).toEqual({ delta: 14, since: 1000 });
+    expect(dwellScroll(0, a.since, 1100)).toEqual({ delta: 0, since: 0 });
+    expect(dwellScroll(-14, a.since, 1100)).toEqual({ delta: -14, since: 0 });
   });
 });

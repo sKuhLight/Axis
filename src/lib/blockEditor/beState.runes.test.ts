@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BeState, emptyBoard, type BeSource, type BeStorage } from './beState.svelte';
 import { boardDiffersFromSeed, boardKey, legacyBoardKey, legacyMetaKey, legacySingleKey, metaKey, seedKey, type KeyValueStore } from './boardPersistence';
 import { buildCatalog, type BeCtl } from './catalog';
-import { addControl, moveItem, type BeBoard } from './boardModel';
+import { addControl, FIXED_PAGE, moveItem, moveToPage, setFixedCols, type BeBoard } from './boardModel';
 import { UNDO_CAP } from './arrangeHistory';
 
 function memStore() {
@@ -383,10 +383,10 @@ describe('BeState layout status, resets and the default for the type', () => {
     st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
     st.setPage('Two'); // unchanged page
     const writes = m.writes.length;
-    expect(st.resetPage()).toBe(false);
+    expect(st.resetPage()).toBeNull();
     expect(m.writes.length).toBe(writes);
     st.setPage('One');
-    expect(st.resetPage()).toBe(true);
+    expect(st.resetPage()).not.toBeNull();
   });
 
   it('a board loaded from the saved default: loading writes nothing; forgetting the default shows the device layout without writing', () => {
@@ -582,5 +582,90 @@ describe('BeState: the device default with positions (slice 6)', () => {
     st2.sync(source); // a stored (edited) Default board: compared once
     expect(built).toBe(1);
     expect(st2.source).toBe('desktop');
+  });
+});
+
+describe('BeState: the fixed area', () => {
+  const withArea = (cat: readonly BeCtl[]): BeBoard => ({ ...seedFrom(cat), fixed: { cols: 4, items: [{ id: 'wf.k9', key: 'k9', view: 'knob', x: 0, y: 0, w: 2, h: 2 }] } });
+  const cat = catalog(10);
+  const start = () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src({ catalog: cat, deviceSeed: () => withArea(cat) }));
+    return { m, st };
+  };
+
+  it('moves between page and area are saved with the board and undone in one step', () => {
+    const { m, st } = start();
+    st.setEditMode(true);
+    st.commit(moveToPage(st.board!, 'w0.k0', FIXED_PAGE).board);
+    const saved = JSON.parse(m.data.get(boardKey('Amp', 'Default', 'desktop'))!) as BeBoard;
+    expect(saved.fixed!.items.map((i) => i.id)).toEqual(['wf.k9', 'w0.k0']);
+    expect(saved.boards.One!.map((i) => i.id)).not.toContain('w0.k0');
+    expect(st.undo()).toBe(true);
+    expect(st.board!.fixed!.items.map((i) => i.id)).toEqual(['wf.k9']);
+    expect(find(st.board, 'One', 'w0.k0')).toBeTruthy();
+    // the width too
+    st.commit(setFixedCols(st.board!, 6).board);
+    expect(st.board!.fixed!.cols).toBe(6);
+    st.undo();
+    expect(st.board!.fixed!.cols).toBe(4);
+  });
+
+  it('Reset fixed area: back to the seed’s (the pages stay); no write when it already is', () => {
+    const { m, st } = start();
+    expect(st.resetFixed()).toBe(false);
+    expect(m.writes).toEqual([]);
+    st.commit(moveToPage(setFixedCols(st.board!, 8).board, 'w0.k0', FIXED_PAGE).board);
+    const pages = st.board!.boards;
+    expect(st.resetFixed()).toBe(true);
+    expect(st.board!.fixed).toEqual(withArea(cat).fixed);
+    expect(st.board!.boards).toEqual(pages);
+    // and the whole-layout resets bring it back as well
+    st.commit({ ...st.board!, fixed: { cols: 2, items: [] } });
+    st.resetAll();
+    expect(st.board!.fixed).toEqual(withArea(cat).fixed);
+    st.commit({ ...st.board!, fixed: { cols: 2, items: [] } });
+    st.resetToDevice();
+    expect(st.board!.fixed).toEqual(withArea(cat).fixed);
+  });
+
+  it('a seed without an area: the reset takes it away', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src({ catalog: cat }));
+    st.commit({ ...st.board!, fixed: { cols: 4, items: [] } });
+    expect(st.resetFixed()).toBe(true);
+    expect('fixed' in st.board!).toBe(false);
+    expect('fixed' in (JSON.parse(m.data.get(boardKey('Amp', 'Default', 'desktop'))!) as object)).toBe(false);
+  });
+
+  it('New copy, "Save as default" and the Blank profile', () => {
+    const { m, st } = start();
+    st.commit(setFixedCols(st.board!, 6).board);
+    const name = st.addProfile()!;
+    expect(st.board!.fixed!.cols).toBe(6);
+    st.commit(setFixedCols(st.board!, 8).board);
+    expect(JSON.parse(m.data.get(boardKey('Amp', name, 'desktop'))!).fixed.cols).toBe(8);
+    st.setProfile('Default');
+    expect(st.board!.fixed!.cols).toBe(6);
+    st.setProfile('Blank');
+    expect(st.board!.fixed).toBeUndefined();
+    st.setProfile(name);
+    st.saveAsDefault();
+    expect(JSON.parse(m.data.get(seedKey('Amp'))!).fixed.cols).toBe(8);
+    expect(st.seed!.fixed!.cols).toBe(8);
+    st.deleteProfile(name);
+    expect(m.data.has(boardKey('Amp', name, 'desktop'))).toBe(false);
+    expect(st.board!.fixed!.cols).toBe(6); // Default has its own board
+  });
+
+  it('what the header shows is part of the source: a change re-seeds, without a write', () => {
+    const { m, st } = start();
+    const over = { catalog: cat, deviceSeed: () => seedFrom(cat), header: 'true:7:8' };
+    expect(st.sync(src(over))).toBe(true);
+    expect(st.board!.fixed).toBeUndefined();
+    expect(st.sync(src(over))).toBe(false);
+    expect(m.writes).toEqual([]);
   });
 });

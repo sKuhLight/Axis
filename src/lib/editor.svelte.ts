@@ -1875,9 +1875,9 @@ class EditorStore {
     }
   };
 
-  // ── tap-to-connect link mode (shared by the SignalGrid and the GridMap) ──
+  // ── tap-to-connect link mode (SignalGrid) ──
   // Arming lives here (not in a component) so it survives mobile page swipes and works across surfaces:
-  // arm on the grid, complete on the map — or vice versa. `connect()` below spans ANY later column
+  // arm on one grid view, complete on another. `connect()` below spans ANY later column
   // (shunts through the gaps), so a completed link is never restricted to the adjacent column.
   linkFrom = $state<Cell | null>(null);
   /** Arm link mode from a cell's output; arming the same cell again cancels (tap the port twice). */
@@ -2309,7 +2309,7 @@ export const editor = new EditorStore();
 export { baseName, packFor };
 
 // Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
-// editor-backed grid components (SignalGrid / GridMap / BlockEditor / BeSurface / EQGraph /
+// editor-backed grid components (SignalGrid / BlockEditor / BeSurface / EQGraph /
 // CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
 // (the interface is a subset the singleton satisfies) — never the reverse.
 export const _editorSatisfiesSurface: EditorSurface = editor;

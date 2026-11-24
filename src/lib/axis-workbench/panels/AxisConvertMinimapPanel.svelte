@@ -2,7 +2,7 @@
   // Cross-device converter — read-only SOURCE-device grid + drag source (M4 · META-24 · AXIS-52).
   //
   // Renders the fully-decoded SOURCE preset (e.g. FM3) as a compact, read-only grid — all source blocks
-  // + cables — adapting GridMap's visuals (NOT GridMap itself; that's shared with the live editor). Each
+  // + cables. Each
   // source block is a pointer-drag handle: drag it onto a cell of the CONVERTED TARGET grid (the main
   // SignalGrid, tagged `data-screen="Signal Grid"`) to place/move its converted equivalent there. The
   // auto-conversion of the target is unchanged; this panel is a reference + drag source only.
@@ -49,7 +49,7 @@
     return m;
   });
 
-  // SVG wire overlay from the source routing (fromRows) — same technique GridMap uses.
+  // SVG wire overlay from the source routing (fromRows).
   const wires = $derived.by(() => {
     const cx = (col: number) => col * (CELL + GAP);
     const cy = (row: number) => row * (CELL + GAP);

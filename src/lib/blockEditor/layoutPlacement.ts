@@ -52,6 +52,12 @@
 //      parameters → mixer) starts with a horizontal divider labelled with the section name, as wide as
 //      the page's controls. On a positioned page gaps before the first flowing control of a row don't
 //      count (the positioned controls of that row left them).
+//   4. Controls that are not on the page (the header's, and those the fixed area holds — `skip`) leave no
+//      slot: no gap for them, nor for a gap left of the first control of their row. A title keeps heading what
+//      is left of its group (nothing left: no title).
+//   5. Page-level controls (`pageControls`: placed on the page itself, outside its rows) are one more row
+//      after the parameter rows, before the mixer: positioned with the page when it is positioned, else in
+//      row flow there. Entries without a param are not used.
 // Options let a page drop height (`fitLayoutPage`, the height budget of the default board): titles only
 // on a line that is free anyway (no inserted title lines), a section divider only in a free row (else
 // just the new line), positions off (rows).
@@ -61,7 +67,7 @@
 // Pure (layoutPlacement.test.ts).
 
 import { isForeignControl, resolveControl, type LayoutOwner } from '../deviceLayoutBoard';
-import type { LayoutControl, LayoutRow } from '../types';
+import type { LayoutControl, LayoutPage, LayoutRow } from '../types';
 import {
   bbox,
   BE_SPEC,
@@ -80,6 +86,7 @@ import {
   type BeView
 } from './boardModel';
 import type { BeCtl } from './catalog';
+import { namedAfterOther } from './headerControls';
 
 export interface PxPoint {
   x: number;
@@ -157,7 +164,8 @@ export function readPlacement(ctl: Pick<LayoutControl, 'placement'>): ParsedPlac
 
 // ── entries ──────────────────────────────────────────────────────────────────────────────────────
 
-export type EntryKind = 'tile' | 'label' | 'sep' | 'gap';
+/** `gone`: a control that is shown elsewhere (the header, the fixed area): it leaves no slot. */
+export type EntryKind = 'tile' | 'label' | 'sep' | 'gap' | 'gone';
 
 /** One layout control, resolved against the catalog. */
 export interface LayoutEntry extends ParsedPlacement {
@@ -173,6 +181,30 @@ export interface LayoutEntry extends ParsedPlacement {
   view?: BeView;
   /** label: the title text. */
   text?: string;
+  /** The control sits on the page itself (`pageControls`), outside its rows. */
+  pageLevel?: boolean;
+  /** tile: the control is named after another block (headerControls `namedAfterOther`). */
+  other?: boolean;
+}
+
+/** One row of a page as it is laid out: a layout row, or the page-level controls as a row of their own. */
+export interface PlacedRow extends LayoutRow {
+  pageLevel?: boolean;
+}
+
+/** A page's rows, with its page-level controls (those with a param; titles and separators are not used) as a
+ *  row of their own after the last row that is not the mixer's, in that row's section. */
+export function pageRows(pg: LayoutPage | null | undefined): PlacedRow[] {
+  const rows: PlacedRow[] = Array.isArray(pg?.rows) ? pg.rows : [];
+  const extra = (Array.isArray(pg?.pageControls) ? pg.pageControls : []).filter(
+    (c) => !!c && typeof c === 'object' && typeof c.paramId === 'number' && !/^label(sep|bold)|^sectionlabel/i.test(c.rawWidget ?? '')
+  );
+  if (!extra.length) return rows;
+  const mixer = (r: PlacedRow): boolean => /^mixer$/i.test((r?.section ?? '').trim());
+  let at = rows.length;
+  while (at > 0 && mixer(rows[at - 1]!)) at--;
+  const section = rows[at - 1]?.section ?? 'parameters';
+  return [...rows.slice(0, at), { section, controls: extra, pageLevel: true }, ...rows.slice(at)];
 }
 
 /** A label widget bound to a live parameter of the block (it then stays a control). A control of another
@@ -191,17 +223,42 @@ const titleText = (s: string): string => s.replace(/\s+/g, ' ').trim();
 /** Longer label text is a note, not a title (a divider label is one short line). */
 export const MAX_TITLE_CHARS = 24;
 
+/** Keys a page's own rows place (a page-level control of such a key is left out: the row's comes first). Empty
+ *  on a page without page-level controls. */
+export function rowKeys(rows: readonly PlacedRow[], byKey: ReadonlyMap<string, BeCtl>, owner: LayoutOwner): Set<string> {
+  const out = new Set<string>();
+  if (!rows.some((r) => r?.pageLevel)) return out;
+  for (const row of rows) {
+    if (!row || row.pageLevel) continue;
+    for (const ctl of Array.isArray(row.controls) ? row.controls : []) {
+      const r = ctl && typeof ctl === 'object' ? resolveControl(ctl, byKey, owner) : 'gap';
+      if (r !== 'gap') out.add(r.key);
+    }
+  }
+  return out;
+}
+
+const NONE: ReadonlySet<string> = new Set();
+
 /** Resolve one page's rows: tiles (a catalog key + view; a key appears once per page, a repeat is a
  *  gap), titles, separators and gaps. `owner` = the open block, for the cross-block guard (a control
- *  of another block is a gap). */
-export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: ReadonlyMap<string, BeCtl>, owner: LayoutOwner = {}): LayoutEntry[] {
+ *  of another block is a gap). A control whose key is in `skip` is `gone`; a page-level control that
+ *  resolves to nothing (or to a control the page already has) is left out. */
+export function pageEntries(
+  rows: readonly PlacedRow[] | undefined,
+  byKey: ReadonlyMap<string, BeCtl>,
+  owner: LayoutOwner = {},
+  skip: ReadonlySet<string> = NONE
+): LayoutEntry[] {
   const out: LayoutEntry[] = [];
   const seen = new Set<string>();
-  (Array.isArray(rows) ? rows : []).forEach((row, rowIndex) => {
+  const list = Array.isArray(rows) ? rows : [];
+  const own = rowKeys(list, byKey, owner);
+  list.forEach((row, rowIndex) => {
     const section = typeof row?.section === 'string' ? row.section.trim() : '';
     for (const ctl of Array.isArray(row?.controls) ? row.controls : []) {
       if (!ctl || typeof ctl !== 'object') continue;
-      const base = { ...readPlacement(ctl), row: rowIndex, section, index: out.length };
+      const base: Omit<LayoutEntry, 'kind'> = { ...readPlacement(ctl), row: rowIndex, section, index: out.length, ...(row.pageLevel ? { pageLevel: true } : {}) };
       if (isTitleLabel(ctl, byKey, owner)) {
         const text = titleText(typeof ctl.label === 'string' ? ctl.label : '');
         out.push(text && text.length <= MAX_TITLE_CHARS ? { ...base, kind: 'label', text } : { ...base, kind: 'gap' });
@@ -213,13 +270,17 @@ export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: Reado
       }
       const r = resolveControl(ctl, byKey, owner);
       const cat = r === 'gap' ? undefined : byKey.get(r.key);
-      if (r === 'gap' || !cat || seen.has(r.key)) {
-        out.push({ ...base, kind: 'gap' });
+      if (r !== 'gap' && skip.has(r.key)) {
+        out.push({ ...base, kind: 'gone' });
+        continue;
+      }
+      if (r === 'gap' || !cat || seen.has(r.key) || (row.pageLevel && own.has(r.key))) {
+        if (!row.pageLevel) out.push({ ...base, kind: 'gap' });
         continue;
       }
       seen.add(r.key);
       const view: BeView = isBeView(r.view) && cat.views.includes(r.view) ? r.view : cat.view;
-      out.push({ ...base, kind: 'tile', key: r.key, view });
+      out.push({ ...base, kind: 'tile', key: r.key, view, ...(namedAfterOther(ctl.paramName, owner.family) ? { other: true } : {}) });
     }
   });
   return out;
@@ -560,8 +621,17 @@ class PagePlacer {
   private get firstTileSection(): string {
     return this.entries.find((e) => e.kind === 'tile')?.section ?? '';
   }
+  /** A page that lost its left-most controls (`gone`) starts at the left edge again. */
+  private closeIndent(): void {
+    if (!this.entries.some((e) => e.kind === 'gone')) return;
+    const moving = this.placed.filter((it) => !(isDivider(it) && this.sectionDividers.includes(it)));
+    const dx = Math.min(...moving.map((it) => it.x));
+    if (!moving.length || dx <= 0) return;
+    for (const it of moving) it.x -= dx;
+  }
   /** Section dividers span the controls' width (as far as their line is free). */
   private finish(): BeItem[] {
+    this.closeIndent();
     if (this.sectionDividers.length) {
       const C = clamp(bbox(this.placed.filter(isControl)).C, BE_SPEC.hdiv.minW, MAXC);
       for (const d of this.sectionDividers) {
@@ -634,15 +704,25 @@ class PagePlacer {
     const spill: LayoutEntry[] = [];
     let cursor = 0;
     const nudge = (px: number, slot: number): number => clamp(Math.round((px / slot) * SLOT), -SLOT, SLOT);
+    const someGone = row.some((e) => e.kind === 'gone');
+    /** The last title's group lost a control (and has shown none yet). */
+    let groupGone = false;
     for (const e of row) {
+      if (e.kind === 'gone') {
+        groupGone = true;
+        continue;
+      }
       if (e.kind === 'gap' || e.kind === 'sep') {
         // a positioned page's remainder: the gaps before its first flowing control belonged to the
-        // positioned controls of the row
-        if (positioned && !plan.length) continue;
+        // positioned controls of the row; beside controls that are gone, they belonged to those
+        if ((positioned || someGone) && !plan.length) continue;
         cursor = (e.col != null ? e.col * SLOT : cursor) + GAP_CELLS;
         continue;
       }
       if (e.kind === 'label') {
+        // a title whose whole group is gone heads nothing
+        if (groupGone && titles.length && !titles[titles.length - 1]!.nextAny) titles.pop();
+        groupGone = false;
         titles.push({ text: e.text!, colX: e.col != null ? e.col * SLOT : null, next: null, nextAny: null });
         continue;
       }
@@ -659,6 +739,7 @@ class PagePlacer {
       plan.push({ e, x, dx, dy });
       cursor = x + dx + w;
     }
+    if (groupGone && titles.length && !titles[titles.length - 1]!.nextAny) titles.pop();
     const titleLine = titles.some((t) => t.next ?? t.nextAny) && this.titles === 'insert';
     const top = this.line + (titleLine ? 1 : 0);
     // target spots: wrap at 24 cells (a wrapped line keeps the row's later columns in step)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BeBoard } from './boardModel';
+import { FIXED_PAGE, type BeBoard } from './boardModel';
 import { buildCatalog } from './catalog';
 import { findGroups, firstRow, flatMatches, itemIdOn, jumpPage, matchesQuery, pagesOf } from './findControls';
 
@@ -84,5 +84,27 @@ describe('flatMatches', () => {
     expect(flatMatches(catalog, '', 'unused', board).map((c) => c.key)).toEqual(['k2', 'e11', 'bypass', 'meter']);
     expect(flatMatches(catalog, 'b', 'unused', board).map((c) => c.key)).toEqual(['bypass']);
     expect(flatMatches(catalog, 'b', 'all', board).map((c) => c.key)).toEqual(['k1', 'e10', 'bypass']);
+  });
+});
+
+describe('controls in the fixed area', () => {
+  const withArea: BeBoard = { ...board, fixed: { cols: 4, items: [{ id: 'f', key: 'k2', view: 'knob', x: 0, y: 0, w: 2, h: 2 }, { id: 'f1', key: 'k1', view: 'knob', x: 2, y: 0, w: 2, h: 2 }] } };
+  it('are on a "page" of their own, listed last; they are not unused', () => {
+    expect(pagesOf(withArea, 'k2')).toEqual([FIXED_PAGE]);
+    expect(pagesOf(withArea, 'k1')).toEqual(['Main', 'Tone', FIXED_PAGE]);
+    expect(findGroups(catalog, withArea, '', 'unused').flatMap((g) => g.rows.map((r) => r.key))).not.toContain('k2');
+    expect(itemIdOn(withArea, FIXED_PAGE, 'k2')).toBe('f');
+  });
+  it('a jump stays on the current page when the control is there, else shows the area before another page', () => {
+    expect(jumpPage(withArea, 'k2')).toBe(FIXED_PAGE);
+    expect(jumpPage(withArea, 'k1')).toBe('Tone'); // the current page
+    expect(jumpPage({ ...withArea, page: 'Empty' }, 'k1')).toBe(FIXED_PAGE);
+    expect(jumpPage(withArea, 'k1', 'Main')).toBe('Main');
+    expect(jumpPage(withArea, 'k1', FIXED_PAGE)).toBe(FIXED_PAGE);
+  });
+  it('the library marks what is already where a click adds', () => {
+    const here = (current?: string) => findGroups(catalog, withArea, 'master', 'all', current)[0]!.rows[0]!.onCurrent;
+    expect(here()).toBe(false);
+    expect(here(FIXED_PAGE)).toBe(true);
   });
 });

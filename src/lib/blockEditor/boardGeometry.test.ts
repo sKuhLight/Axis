@@ -135,6 +135,18 @@ describe('layoutForPage across viewports', () => {
   });
 });
 
+describe('beside a fixed area', () => {
+  const list = [{ id: 'a', key: 'k1', view: 'knob' as const, x: 0, y: 0, w: 2, h: 2 }];
+  const inp = { bodyW: 628, bodyH: 900, nav: 'side' as const, density: 'l' as const, editMode: false };
+  it('the width is measured against fewer cells, and the cell can be capped', () => {
+    expect(layoutForPage(inp, list).c).toBe(Math.floor((600 - 23 * 5) / 24));
+    expect(layoutForPage({ ...inp, refCols: 12 }, list).c).toBe(Math.floor((600 - 11 * 5) / 12));
+    expect(layoutForPage({ ...inp, refCols: 12, maxCell: 33 }, list).c).toBe(33);
+    expect(layoutForPage({ ...inp, refCols: 0 }, list)).toEqual(layoutForPage(inp, list));
+    expect(layoutForPage({ ...inp, refCols: 99 }, list)).toEqual(layoutForPage(inp, list));
+  });
+});
+
 describe('phone layout (8 cells wide, cell = width / 8)', () => {
   const row12 = knobs(12, 1); // one 12-knob row
   const phone = (bodyW: number, extra: Partial<PageLayoutInput> = {}) => input(bodyW, 600, { nav: 'side', phone: true, ...extra });

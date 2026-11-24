@@ -89,6 +89,18 @@
   // dispatches the returned commands through the controller (so persistence/undo
   // stay coherent). Memory is component-local, NOT persisted on the document.
   let flowMemory: AxisMobileBlockFlowMemory = createAxisMobileBlockFlowMemory();
+  let workspaceHeightPx = $state(0);
+  let heightPx = $state(0);
+
+  onMount(() => {
+    const workspace = document.querySelector<HTMLElement>('.aw-workspace');
+    if (!workspace) return;
+    const measure = () => { workspaceHeightPx = workspace.clientHeight; };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(workspace);
+    return () => observer.disconnect();
+  });
 
   const profileIsPhone = $derived($axisWorkbenchController.activeProfile?.breakpoint === 'phone');
   // A block is "open" for flow purposes when its editor is open on a real selection.
@@ -100,10 +112,8 @@
     const open = blockOpen;
     // Touch the document so a profile/layout swap also re-evaluates.
     const doc = $axisWorkbenchController.document;
-    const heightPx = typeof window !== 'undefined' ? window.innerHeight : 0;
-
     const decision = decideAxisMobileBlockFlow(
-      { profileIsPhone: isPhone, blockOpen: open, workbenchHeightPx: heightPx, doc },
+      { profileIsPhone: isPhone, blockOpen: open, workbenchHeightPx: heightPx, workspaceHeightPx, doc },
       flowMemory
     );
     flowMemory = decision.memory;
@@ -112,6 +122,8 @@
     }
   });
 </script>
+
+<svelte:window bind:innerHeight={heightPx} />
 
 <WorkbenchHost
   controller={axisWorkbenchController}

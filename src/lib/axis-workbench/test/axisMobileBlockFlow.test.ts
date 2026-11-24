@@ -59,6 +59,17 @@ describe('computeExpandedBottomPx', () => {
     expect(computeExpandedBottomPx(0)).toBe(240);
     expect(computeExpandedBottomPx(100)).toBe(240);
   });
+  it('never reaches under the bottom bar: the main region keeps its 90 px of the workspace', () => {
+    // a short phone: the bars leave 554 px of 664, 75% (498) would not fit beside the grid
+    expect(computeExpandedBottomPx(664, 554)).toBe(464);
+    // a tall one: 75% fits
+    expect(computeExpandedBottomPx(844, 734)).toBe(633);
+    expect(computeExpandedBottomPx(800, 690)).toBe(600);
+    // a workspace too low for both keeps a usable editor; unknown heights change nothing
+    expect(computeExpandedBottomPx(360, 150)).toBe(120);
+    expect(computeExpandedBottomPx(664, 0)).toBe(498);
+    expect(computeExpandedBottomPx(664, Number.NaN)).toBe(498);
+  });
 });
 
 describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
@@ -88,6 +99,13 @@ describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
     expect(g.state?.mode).toBe('map');
   });
 
+  it('expands to what the workspace has room for and restores the previous size', () => {
+    const doc = docFromPreset('mobile');
+    const { commands, memory } = decideAxisMobileBlockFlow(input({ doc, blockOpen: true, workbenchHeightPx: 664, workspaceHeightPx: 554 }), createAxisMobileBlockFlowMemory());
+    expect(commands[0]).toMatchObject({ type: 'region.resize', region: 'bottom', sizePx: 464 });
+    expect(memory.appliedBottomSizePx).toBe(464);
+  });
+
   it('is idempotent while already expanded (no re-snap, no commands)', () => {
     const doc = docFromPreset('mobile');
     const first = decideAxisMobileBlockFlow(input({ doc, blockOpen: true }), createAxisMobileBlockFlowMemory());
@@ -95,6 +113,19 @@ describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
     const second = decideAxisMobileBlockFlow(input({ doc: expanded, blockOpen: true }), first.memory);
     expect(second.commands).toEqual([]);
     expect(second.memory).toEqual(first.memory);
+  });
+
+  it('fits a shorter workspace while open and still restores its original size', () => {
+    const doc = docFromPreset('mobile');
+    const first = decideAxisMobileBlockFlow(input({ doc, blockOpen: true }), createAxisMobileBlockFlowMemory());
+    const expanded = apply(doc, first.commands);
+    const shorter = decideAxisMobileBlockFlow(input({ doc: expanded, blockOpen: true, workspaceHeightPx: 530 }), first.memory);
+    expect(shorter.commands).toEqual([{ type: 'region.resize', region: 'bottom', sizePx: 440 }]);
+    const fitted = apply(expanded, shorter.commands);
+    const unchanged = decideAxisMobileBlockFlow(input({ doc: fitted, blockOpen: true, workspaceHeightPx: 530 }), shorter.memory);
+    expect(unchanged.commands).toEqual([]);
+    const closed = decideAxisMobileBlockFlow(input({ doc: fitted, blockOpen: false, workspaceHeightPx: 530 }), shorter.memory);
+    expect(activeDock(apply(fitted, closed.commands)).regions.bottom.sizePx).toBe(activeDock(doc).regions.bottom.sizePx);
   });
 
   it('is a no-op when no block editor panel is docked', () => {

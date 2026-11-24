@@ -42,6 +42,32 @@ tabs) or stacked (side list) — always fitted to the panel; **Arrange** moves, 
 controls. On a phone every page is shown re-wrapped to 8 cells (at most four knobs a row) and the pages
 scroll vertically; reading that view never changes the stored board.
 
+**Fixed area (AXIS-94).** Beside the pages a board may have a fixed area: controls that stay in view whichever
+page shows (`fixed: { cols, items }` of the stored board, 2..8 cells wide, coordinates of its own). On desktop and
+tablet it is a column at the far right, outside the pages' scroller, with the pages' cell size (pages and
+column share the 24-cell reference); on a phone, and where a column would leave the pages less than 240 px, a
+band at the bottom with at most four knobs a row, the first line always shown and the rest behind a toggle.
+Arrange edits it like a page: drag within it and from / to the pages, the library (a click adds there while
+it is the selected target), arrow keys, and a handle on its edge for its width; a board without one gets it
+through "Add fixed area", an emptied one shows only in Arrange and can be removed there. It is saved with the
+board (copies, "default for this type" and the resets included; "Reset fixed area" in ⋯). A control may be on
+a page and in the area when the user put it there.
+
+**What the default board puts there.** The device editors repeat a mixer, and sometimes a control beside the
+pages, on every page. Over the served pages that show at least one control: a control on *every* page
+moves to the fixed area (page-level ones first, then the mixer, then shared parameters; parameter controls
+stay when a page would be left empty); with exactly one page its mixer moves, unless the page would be
+left empty. Everything else stays on its page; nothing repeated = no fixed area. The EQ graph, graph
+displays and the loop waveform never move. Page-level controls come from the optional `pageControls` of a
+served page (controls placed on the page itself, outside its rows); one that is not on every page takes
+its exact position on its page, or flows after the parameter rows. Curated boards have no fixed area.
+
+**Header controls are in no default board.** Bypass, Bypass Mode and Scene Ignore are in the header; the
+default pages, the fixed area, "More" and the curated board leave them out
+([`headerControls.ts`](../src/lib/blockEditor/headerControls.ts): the block's bypass, the params the server
+tags as the block state, else the layout's own controls and labels of that name — a bypass of a part of the
+block is not one). The Arrange library and the search still offer them, and a tile the user placed stays.
+
 The **Default** layout profile is seeded from the served `layout` (device pages, rows and, where they
 hold up, the device editor's exact control positions, section titles and dividers); without a served
 layout a curated fallback (from [`src/lib/layouts.ts`](../src/lib/layouts.ts)) is used. **Blank** and
@@ -65,10 +91,12 @@ accessible description and, on touch, the head of its control menu (long-press).
 anchor (the PEQ / GEQ slot stays the interactive EQ graph; a slot of another block never anchors);
 a visual no slot anchors (a gate, a delay without a layout) is not placed — no page just for a graph —
 and is offered by the Arrange library under "Graphs · meters · actions". A stored Default board that is
-still exactly the earlier rows-only built-in default follows the current one and so picks up its
-anchored graphs — unless that earlier default is also the current one minus its graphs (such a board
-may just as well be one whose graphs the user removed, and is kept). A board the user changed — a
-removed graph included — is never rewritten; "Reset to device layout" brings the anchored graphs back. On the phone a graph is always one full-width row. Without the cap (older server, other
+still exactly an earlier built-in default (rows only; or every control on its pages, before the fixed
+area; or the curated one with the header's controls) follows the current one, without a write, and so
+picks up its anchored graphs and its fixed area — unless that earlier default is also the current (or
+another earlier) one minus its graphs (such a board may just as well be one whose graphs the user
+removed, and is kept). A board the user changed — a removed graph included — is never rewritten, and no
+fixed area is put into it; "Reset to device layout" brings the anchored graphs back. On the phone a graph is always one full-width row. Without the cap (older server, other
 devices) there are no graph tiles.
 
 ## Axis-Layouts (layout profiles)

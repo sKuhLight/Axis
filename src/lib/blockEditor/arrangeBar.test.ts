@@ -21,7 +21,8 @@ const actions = (): BarActions & Record<string, ReturnType<typeof vi.fn>> =>
     divider: vi.fn(),
     closeGaps: vi.fn(),
     tidy: vi.fn(),
-    autoPack: vi.fn()
+    autoPack: vi.fn(),
+    addFixed: vi.fn()
   }) as never;
 
 describe('arrangeSelection', () => {
@@ -54,6 +55,22 @@ describe('barParts', () => {
     expect(barParts(one).slice(0, 4)).toEqual(['tag', 'sel-name', 'sel-size', 'sel-remove']);
     const d = arrangeSelection({ item: hdiv, ctl: undefined, canPin: false, canSwipe: false, swipe: false });
     expect(barParts(d).slice(0, 6)).toEqual(['tag', 'sel-name', 'div-label', 'div-rotate', 'sel-remove', 'undo']);
+  });
+  it('"Add fixed area" only while the board has none', () => {
+    expect(barParts(null, true)).toEqual(['tag', 'hint', 'undo', 'add', 'divider', 'close-gaps', 'tidy', 'autopack', 'fixed', 'page', 'done']);
+    expect(barParts(null, false)).not.toContain('fixed');
+    expect(BAR_DROP.fixed.menu).toBe(true);
+    const a = actions();
+    const rows = buildBarOverflow(['close-gaps', 'tidy', 'fixed'], { sel: null, canUndo: false, autoPack: false, pageItems: [], page: 'P', target: 'Fixed area', selFixed: false }, a);
+    expect(rows.map((r) => [r.id, r.hint])).toEqual([['close-gaps', 'Fixed area'], ['tidy', 'Fixed area'], ['fixed', undefined]]);
+    rows[2]!.run();
+    expect(a.addFixed).toHaveBeenCalled();
+  });
+  it('a selection in the fixed area: Remove names it', () => {
+    const sel = arrangeSelection({ item: knob, ctl, canPin: false, canSwipe: false, swipe: false });
+    const label = (selFixed: boolean) => buildBarOverflow(['sel-remove'], { sel, canUndo: false, autoPack: false, pageItems: [], page: 'P', target: 'P', selFixed }, actions())[0]!.label;
+    expect(label(true)).toBe('Remove from the fixed area');
+    expect(label(false)).toBe('Remove from page');
   });
 });
 
@@ -93,7 +110,7 @@ describe('buildBarOverflow', () => {
     const a = actions();
     const sel = arrangeSelection({ item: knob, ctl, canPin: true, canSwipe: true, swipe: true });
     const pageItems = [{ id: 'head', label: 'P', run: () => {} }];
-    const rows = buildBarOverflow(['sel-view', 'sel-size', 'sel-pin', 'sel-swipe', 'sel-remove', 'undo', 'add', 'divider', 'close-gaps', 'tidy', 'autopack', 'page'], { sel, canUndo: false, autoPack: true, pageItems, page: 'P' }, a);
+    const rows = buildBarOverflow(['sel-view', 'sel-size', 'sel-pin', 'sel-swipe', 'sel-remove', 'undo', 'add', 'divider', 'close-gaps', 'tidy', 'autopack', 'page'], { sel, canUndo: false, autoPack: true, pageItems, page: 'P', target: 'P', selFixed: false }, a);
     expect(rows.map((r) => r.id)).toEqual(['view', 'size', 'pin', 'swipe', 'remove', 'undo', 'add', 'hdiv', 'vdiv', 'close-gaps', 'tidy', 'autopack', 'page']);
     expect(rows.find((r) => r.id === 'undo')).toMatchObject({ disabled: true, separatorBefore: true });
     expect(rows.find((r) => r.id === 'swipe')).toMatchObject({ hint: 'on' });
@@ -113,7 +130,7 @@ describe('buildBarOverflow', () => {
   it('a divider: its label as an inline field and Rotate', () => {
     const a = actions();
     const sel = arrangeSelection({ item: hdiv, ctl: undefined, canPin: false, canSwipe: false, swipe: false });
-    const rows = buildBarOverflow(['div-label', 'div-rotate', 'sel-remove'], { sel, canUndo: true, autoPack: false, pageItems: [], page: 'P' }, a);
+    const rows = buildBarOverflow(['div-label', 'div-rotate', 'sel-remove'], { sel, canUndo: true, autoPack: false, pageItems: [], page: 'P', target: 'P', selFixed: false }, a);
     expect(rows.map((r) => r.id)).toEqual(['label', 'rotate', 'remove']);
     expect(rows[0]).toMatchObject({ kind: 'input', value: 'Tone' });
     rows[0]!.onSubmit!('Character');

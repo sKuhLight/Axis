@@ -537,7 +537,7 @@
         dragTarget = null;
         document.body.style.cursor = '';
         // a barely-moved pointerup on the port = a TAP → arm link mode (tap-to-connect: pick the
-        // destination with a second tap, on this grid or on the Grid Map — survives page swipes).
+        // destination with a second tap on any grid view — survives page swipes).
         // A real drag keeps the classic drag-a-cable connect.
         if (Math.hypot(e.clientX - portStart.x, e.clientY - portStart.y) < TAP_PX) {
           editor.armLink(src);

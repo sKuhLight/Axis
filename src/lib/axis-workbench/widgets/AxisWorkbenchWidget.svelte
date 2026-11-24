@@ -590,7 +590,7 @@
     class="axis-widget map"
     data-size={size}
     type="button"
-    title="Grid map · show the Block Editor navigator"
+    title="Show the Block Editor"
     onclick={() => dispatch({ type: 'panel.activate', panelId: 'axis.blockEditor' })}
   >
     <span class="map-dots">

@@ -21,7 +21,7 @@
 // back on a revert).
 
 import { isGraphKey } from '../blockVisuals';
-import { isBlockLevelKey, isDivider, normalizeBoard, pageItems, type BeBoard, type BeItem, type BeView } from './boardModel';
+import { FIXED_PAGE, isBlockLevelKey, isDivider, normalizeBoard, pageItems, regions, type BeBoard, type BeItem, type BeView } from './boardModel';
 import { parseStoredBoard, parseStoredMeta, type BePrefs } from './boardSchema';
 
 export type DeviceClass = 'desktop' | 'tablet' | 'phone';
@@ -149,12 +149,14 @@ export interface LoadBoardInput {
   /** Current device-layout variant; defaults to `seed.variantSig`. */
   variantSig?: string;
   viewsByKey?: ReadonlyMap<string, readonly BeView[]>;
-  /** `Default` only: the built-in seed as earlier versions built it (the device layout by rows only,
-   *  before positions, dividers and graph displays were used), one board or several, or a function
+  /** `Default` only: the built-in seed as earlier versions built it (the device layout by rows only, before
+   *  positions, dividers and graph displays were used; the one with every control on its pages, before the
+   *  fixed area; the curated one with the header's controls), one board or several, or a function
    *  building them — called only when a stored Default board has to be compared with them. A stored board
    *  that is still exactly one of them was never changed by the user, so it follows the current built-in
-   *  seed instead (nothing is written) — unless that previous seed is also the current seed minus its
-   *  graph displays (then the stored board may be the user's "graph removed", which is kept). */
+   *  seed instead (nothing is written) — unless that previous seed is also the current seed, or another
+   *  previous one, minus its graph displays (then the stored board may be the user's "graph removed",
+   *  which is kept). */
   previousSeed?: PreviousSeeds | (() => PreviousSeeds);
 }
 
@@ -166,13 +168,14 @@ export type PreviousSeeds = BeBoard | null | readonly (BeBoard | null)[];
  *  seed (not for `Blank`) → `seed`.
  *  For `Default`, a stored board seeded from a different, non-empty device-layout variant is skipped,
  *  so a block type change re-seeds it; a `Default` board taken from a seed adopts the current variant
- *  so it survives its first save. A stored `Default` board that is still exactly `previousSeed` (the
- *  device layout as earlier versions laid it out, by rows only) was never changed by the user: it loads
- *  as the current built-in seed instead (source `seed`, nothing written), so the device positions show
+ *  so it survives its first save. A stored `Default` board that is still exactly a `previousSeed` (the
+ *  default as earlier versions laid it out) was never changed by the user: it loads as the current
+ *  built-in seed instead (source `seed`, nothing written), so the device positions and the fixed area show
  *  and the layout is not reported as changed — but only while the family has no saved "default for this
  *  type" (that one is the reference then) and only when every control of the stored board is in the
  *  catalog right now (a board that also holds a not-yet-listed meter / EQ graph / waveform is not known
- *  to be untouched). Any other stored board keeps its content. Copies are never upgraded.
+ *  to be untouched). Any other stored board keeps its content: no fixed area is put into it. Copies are
+ *  never upgraded.
  *  Every result is schema-checked and normalized; block-level controls
  *  (`meter`, `wave`, `eq`, `bypass`) are kept even while the catalog does not list them yet, because
  *  their data can arrive after the parameters — the renderer draws only keys present in the catalog. */
@@ -199,20 +202,20 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
     if (!isDefault || !prevs.length || hasUserSeed(storage, slug)) return upgrade;
     const current = norm(stamp(input.seed));
     const currentShape = boardShape(current, keys);
-    // A previous seed that is exactly the current one without its graph displays is ambiguous: a stored
-    // board of that shape may just as well be the current seed with its graphs removed by the user. The
-    // user's removal wins (no upgrade; "Reset to device layout" brings the graphs back).
-    const currentNoGraphs = boardShape(current, new Set([...keys].filter((k) => !isGraphKey(k))));
-    const prevShapes = new Set(
-      prevs.map((b) => boardShape(norm(stamp(b)), keys)).filter((s) => s !== currentShape && s !== currentNoGraphs)
-    );
+    const previous = prevs.map((b) => norm(stamp(b)));
+    // A previous seed that is exactly the current one — or another previous one — without its graph displays
+    // is ambiguous: a stored board of that shape may just as well be that seed with its graphs removed by
+    // the user. The user's removal wins (no upgrade; "Reset to device layout" brings the graphs back).
+    const noGraphs = new Set([...keys].filter((k) => !isGraphKey(k)));
+    const graphsRemoved = new Set([current, ...previous].filter(hasGraph).map((b) => boardShape(b, noGraphs)));
+    const prevShapes = new Set(previous.map((b) => boardShape(b, keys)).filter((s) => s !== currentShape && !graphsRemoved.has(s)));
     if (prevShapes.size) upgrade = { prevShapes, current };
     return upgrade;
   };
   const untouched = (b: BeBoard): boolean => {
     if (!isDefault || !input.previousSeed) return false;
     // every stored control must be one the catalog lists now (kept, not drawn controls make it unknown)
-    if (!b.pageOrder.every((pg) => pageItems(b, pg).every((it) => isDivider(it) || keys.has(it.key)))) return false;
+    if (!regions(b).every((pg) => pageItems(b, pg).every((it) => isDivider(it) || keys.has(it.key)))) return false;
     const u = upgradeInfo();
     return !!u && u.prevShapes.has(boardShape(b, keys));
   };
@@ -307,9 +310,12 @@ export function clearUserSeed(storage: KeyValueStore & { remove?(key: string): v
   else storage.set(seedKey(slug), '');
 }
 
-/** Structural fingerprint of a board: page order plus each page's items, ignoring ids, item order,
- *  the current page, the variant fingerprint and source rows. With `keys`, controls whose key is not in
- *  it are left out (kept, not drawn block-level controls). */
+/** The board holds a graph display. */
+const hasGraph = (b: BeBoard): boolean => regions(b).some((pg) => pageItems(b, pg).some((it) => !isDivider(it) && isGraphKey(it.key)));
+
+/** Structural fingerprint of a board: page order plus each page's items, and the fixed area's width and
+ *  items, ignoring ids, item order, the current page, the variant fingerprint and source rows. With `keys`,
+ *  controls whose key is not in it are left out (kept, not drawn block-level controls). */
 function pageShape(b: BeBoard, pg: string, keys?: ReadonlySet<string>): string[] {
   return pageItems(b, pg)
     .filter((it: BeItem) => isDivider(it) || !keys || keys.has(it.key))
@@ -319,13 +325,22 @@ function pageShape(b: BeBoard, pg: string, keys?: ReadonlySet<string>): string[]
     .sort();
 }
 function boardShape(b: BeBoard, keys?: ReadonlySet<string>): string {
-  return JSON.stringify(b.pageOrder.map((pg) => [pg, pageShape(b, pg, keys)]));
+  return JSON.stringify([b.pageOrder.map((pg) => [pg, pageShape(b, pg, keys)]), fixedShape(b, keys)]);
+}
+function fixedShape(b: BeBoard, keys?: ReadonlySet<string>): unknown {
+  return b.fixed ? [b.fixed.cols, pageShape(b, FIXED_PAGE, keys)] : null;
 }
 
-/** True when one page differs from the seed's page of the same name (a page the seed does not have
- *  counts as empty there), with the same catalog-key filter as boardDiffersFromSeed. */
+/** True when one page (`FIXED_PAGE`: the fixed area) differs from the seed's page of the same name (a page the
+ *  seed does not have counts as empty there), with the same catalog-key filter as boardDiffersFromSeed. */
 export function pageDiffersFromSeed(board: BeBoard, seed: BeBoard, page: string, keys?: ReadonlySet<string>): boolean {
+  if (page === FIXED_PAGE) return fixedDiffersFromSeed(board, seed, keys);
   return JSON.stringify(pageShape(board, page, keys)) !== JSON.stringify(seed.pageOrder.includes(page) ? pageShape(seed, page, keys) : []);
+}
+
+/** True when the fixed area differs from the seed's (one of them has none, another width, other items). */
+export function fixedDiffersFromSeed(board: BeBoard, seed: BeBoard, keys?: ReadonlySet<string>): boolean {
+  return JSON.stringify(fixedShape(board, keys)) !== JSON.stringify(fixedShape(seed, keys));
 }
 
 /** True when a board differs from its seed (layout status "Custom" rather than "Default"). Pass the

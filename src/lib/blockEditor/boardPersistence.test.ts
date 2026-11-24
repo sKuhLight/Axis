@@ -5,7 +5,9 @@ import {
   carryLegacyBoards,
   clearUserSeed,
   DEFAULT_PREFS,
+  DEVICE_CLASSES,
   deviceClassFrom,
+  fixedDiffersFromSeed,
   hasUserSeed,
   isFamilyMigrated,
   legacyBoardKey,
@@ -25,9 +27,11 @@ import {
   withPrefs,
   type KeyValueStore
 } from './boardPersistence';
-import type { BeBoard } from './boardModel';
+import { FIXED_PAGE, moveToPage, normalizeBoard, type BeBoard, type BeFixedArea } from './boardModel';
+import { builtInSeed, previousSeeds } from './boardSeeds';
 import { buildCatalog } from './catalog';
-import { buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
+import { buildCuratedBoardV2, buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
+import { layoutVariantSig } from '../deviceLayoutBoard';
 import type { DeviceLayout } from '../types';
 
 const memory = (init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string>; writes: string[] } => {
@@ -319,14 +323,25 @@ describe('graph displays: an untouched legacy Default picks up its anchored grap
     const tail: DeviceLayout = { ...layout, pages: [{ name: 'Basic', rows: [{ section: 'parameters', controls: [k(0), k(1), k(2), slot] }] }] };
     const seedT = buildDeviceLayoutBoardV2(tail, cat)!;
     const legacyT = buildDeviceLayoutBoardV2(tail, noGraphs, { rowFlowOnly: true, legacyUnguarded: true })!;
-    const removed: BeBoard = { ...seedT, boards: { ...seedT.boards, Basic: seedT.boards.Basic!.filter((i) => !('key' in i && i.key === 'graph:dynamics')) } };
+    const without = (b: BeBoard): BeBoard => ({ ...b, boards: { ...b.boards, Basic: b.boards.Basic!.filter((i) => !('key' in i && i.key === 'graph:dynamics')) } });
+    // the default before the fixed area, its graph removed: the same shape as the rows-only one, so the stored
+    // board cannot tell "untouched legacy" from "graph removed"
+    const beforeFixed = buildDeviceLayoutBoardV2(tail, cat, { withoutFixed: true })!;
+    const removed = without(beforeFixed);
+    expect(boardDiffersFromSeed(removed, legacyT)).toBe(false);
     const st = memory();
     saveBoard({ storage: st, slug: 'comp', profile: 'Default', deviceClass: 'desktop', board: removed });
-    const r = loadBoard({ ...input(st), seed: seedT, previousSeed: () => legacyT });
-    // the two are the same shape, so the stored board cannot tell "untouched legacy" from "graph removed"
-    expect(boardDiffersFromSeed(removed, legacyT)).toBe(false);
+    const r = loadBoard({ ...input(st), seed: seedT, previousSeed: () => [legacyT, beforeFixed] });
     expect(r.source).toBe('desktop');
     expect(hasGraph(r.board)).toBe(false);
+    // the current default without its graph is the user's as well
+    const now2 = memory();
+    saveBoard({ storage: now2, slug: 'comp', profile: 'Default', deviceClass: 'desktop', board: without(seedT) });
+    expect(loadBoard({ ...input(now2), seed: seedT, previousSeed: () => [legacyT, beforeFixed] }).source).toBe('desktop');
+    // and the untouched default before the fixed area (graph in place) follows the current one
+    const untouched = memory({ [boardKey('comp', 'Default', 'desktop')]: JSON.stringify(beforeFixed) });
+    expect(loadBoard({ ...input(untouched), seed: seedT, previousSeed: () => [legacyT, beforeFixed] }).source).toBe('seed');
+    expect(untouched.writes).toEqual([]);
   });
 
   it('a stored board the user changed is never rewritten (no graph added)', () => {
@@ -703,5 +718,196 @@ describe('meta', () => {
     expect(prefsFor(m, 'tablet')).toEqual({ nav: 'side', density: 's' });
     expect(prefsFor(withPrefs(m, 'phone', { nav: 'top', density: 'l' }), 'phone')).toEqual({ nav: 'top', density: 'l' });
     expect(prefsFor(loadMeta(memory(), 'amp'), 'phone')).toEqual(DEFAULT_PREFS);
+  });
+});
+
+// ── the fixed area (AXIS-94) ──
+describe('fixed area: stored, compared, reset', () => {
+  const fixed: BeFixedArea = { cols: 6, items: [{ id: 'f', key: 'k2', view: 'knob', x: 0, y: 0, w: 2, h: 2 }] };
+  const mine: BeBoard = { ...mk('Mine', 'v1sig'), fixed };
+
+  it('round-trips per profile and device class', () => {
+    const st = memory();
+    saveBoard({ storage: st, slug: 'amp', profile: 'Default', deviceClass: 'tablet', board: mine });
+    saveBoard({ storage: st, slug: 'amp', profile: 'Copy', deviceClass: 'desktop', board: { ...mine, fixed: { ...fixed, cols: 2 } } });
+    const at = (profile: string, deviceClass: 'desktop' | 'tablet') => loadBoard({ ...base, storage: st, profile, deviceClass }).board.fixed;
+    expect(at('Default', 'tablet')).toEqual(fixed);
+    expect(at('Default', 'desktop')).toBeUndefined(); // its own class only; the seed has none
+    expect(at('Copy', 'tablet')!.cols).toBe(2); // inherited from the desktop board
+  });
+
+  it('the family seed ("Save as default") carries it', () => {
+    const st = memory();
+    saveUserSeed(st, 'amp', mine);
+    expect(loadSeed({ ...base, storage: st, profile: 'Default' }).board.fixed).toEqual(fixed);
+    expect(loadSeed({ ...base, storage: st, profile: 'Blank' }).board.fixed).toBeUndefined();
+  });
+
+  it('a board with a broken area loads without it; a key that is gone is dropped from it', () => {
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify({ ...mine, fixed: { cols: 'x' } }) });
+    expect(loadBoard({ ...base, storage: st, profile: 'Default', deviceClass: 'desktop' })).toMatchObject({ source: 'desktop', board: { pageOrder: ['Mine'] } });
+    const gone = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify({ ...mine, fixed: { cols: 4, items: [...fixed.items, { id: 'x', key: 'k99', view: 'knob', x: 2, y: 0, w: 2, h: 2 }] } }) });
+    expect(loadBoard({ ...base, storage: gone, profile: 'Default', deviceClass: 'desktop' }).board.fixed!.items.map((i) => i.id)).toEqual(['f']);
+  });
+
+  it('a board differs from its seed when its area does: other items, another width, one of them without', () => {
+    const plain = mk('Mine');
+    expect(boardDiffersFromSeed(mine, { ...mk('Mine'), fixed })).toBe(false);
+    expect(fixedDiffersFromSeed(mine, { ...plain, fixed: { ...fixed, items: [{ ...fixed.items[0]!, id: 'other' }] } })).toBe(false); // ids don't count
+    for (const other of [plain, { ...plain, fixed: { ...fixed, cols: 4 } }, { ...plain, fixed: { ...fixed, items: [] } }]) {
+      expect(fixedDiffersFromSeed(mine, other)).toBe(true);
+      expect(boardDiffersFromSeed(mine, other)).toBe(true);
+      expect(pageDiffersFromSeed(mine, other, 'Mine')).toBe(false); // the page itself is the same
+      expect(pageDiffersFromSeed(mine, other, FIXED_PAGE)).toBe(true);
+    }
+    expect(fixedDiffersFromSeed(plain, plain)).toBe(false);
+    // what the catalog does not list right now is left out
+    expect(fixedDiffersFromSeed(mine, { ...plain, fixed: { cols: 6, items: [] } }, new Set(['k1']))).toBe(false);
+  });
+});
+
+describe('migration to the fixed area: an untouched earlier default follows the new one, an edited board never changes', () => {
+  const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ value: i, label: `o${i}` }));
+  const visuals = [{ key: 'lfo', kind: 'lfo' as const, title: 'LFO', roles: { rate: 0 } }];
+  const cat = buildCatalog({
+    params: [0, 1, 2, 10, 11].map((id) => ({ id, name: `P${id}` })),
+    enums: [{ id: 20, name: 'Bypass Mode', options: opts(3) }, { id: 21, name: 'Scene Ignore', options: opts(2) }],
+    visuals
+  });
+  const noGraphs = cat.filter((c) => c.kind !== 'graph');
+  const ckeys = cat.map((c) => c.key);
+  const k = (id: number, xy?: string) => ({ label: `P${id}`, paramName: `P${id}`, paramId: id, widget: 'knob' as const, rawWidget: 'knob', ...(xy ? { placement: { positionExact: xy } } : {}) });
+  const en = (id: number, name: string, rawWidget: string) => ({ label: name, paramName: `X_${name.replace(/ /g, '').toUpperCase()}`, paramId: id, widget: 'dropdown' as const, rawWidget });
+  const mixer = { section: 'mixer', controls: [k(10), k(11), en(20, 'Bypass Mode', 'dropdown1'), { label: 'Bypass', paramName: 'X_BYPASS', paramId: 15, widget: 'button' as const, rawWidget: 'btnBypass' }, en(21, 'Scene Ignore', 'btnIgnoreScene')] };
+  const ref = { ...k(2), crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'GLOBAL_X', paramId: 2 } };
+  const slot = { label: '', paramName: null, paramId: null, widget: 'graph' as const, rawWidget: 'graph', graphKey: 'lfo' };
+  const layout: DeviceLayout = {
+    family: 'CHORUS',
+    variantName: 'Chorus',
+    pages: [
+      { name: 'Basic', rows: [{ section: 'parameters', controls: [k(0, '300,50'), k(1, '392,50'), { ...slot, placement: { positionExact: '500,50' } }, ref] }, mixer], pageControls: [k(2)] },
+      { name: 'Expert', rows: [{ section: 'parameters', controls: [k(1)] }, mixer] }
+    ]
+  };
+  const seedInput = { layout, catalog: cat, mainParamIds: new Set([0, 1]) };
+  const now = builtInSeed(seedInput);
+  const flavours = {
+    'rows only (released: unguarded refs, no graphs)': buildDeviceLayoutBoardV2(layout, noGraphs, { rowFlowOnly: true, legacyUnguarded: true })!,
+    'positions and graphs, before the fixed area': buildDeviceLayoutBoardV2(layout, cat, { withoutFixed: true })!,
+    'current default on an older server': buildDeviceLayoutBoardV2({ ...layout, pages: layout.pages.map(({ pageControls: _pageControls, ...page }) => page) }, cat)!
+  };
+  const previous = () => previousSeeds(seedInput);
+  const input = (st: KeyValueStore, deviceClass: 'desktop' | 'tablet' | 'phone' = 'desktop') => ({ storage: st, slug: 'chorus', profile: 'Default', deviceClass, catalogKeys: ckeys, seed: now, variantSig: layoutVariantSig(layout), previousSeed: previous });
+  const stored = (b: BeBoard, cls: 'desktop' | 'tablet' | 'phone' = 'desktop') => memory({ [boardKey('chorus', 'Default', cls)]: JSON.stringify(b) });
+
+  it('distinguishes each previous default from the current seed', () => {
+    expect(now.fixed!.items.map((i) => ('key' in i ? i.key : ''))).toEqual(['k10', 'k11']);
+    for (const b of [flavours['rows only (released: unguarded refs, no graphs)'], flavours['positions and graphs, before the fixed area']]) {
+      expect(b.fixed).toBeUndefined();
+      expect(b.pageOrder.some((p) => b.boards[p]!.some((i) => 'key' in i && i.key === 'e20'))).toBe(true);
+    }
+    expect(flavours['current default on an older server'].fixed).toBeDefined();
+    const before = Object.values(flavours);
+    expect(new Set([...before, now].map((b) => JSON.stringify(b.boards))).size).toBe(4);
+    expect(previous()).toEqual(before);
+  });
+
+  for (const [name, old] of Object.entries(flavours)) {
+    for (const cls of DEVICE_CLASSES) {
+      it(`untouched — ${name}, ${cls}: loads the new default, writes nothing`, () => {
+        const st = stored(normalizeBoard(old, ckeys), cls);
+        const r = loadBoard(input(st, cls));
+        expect(r.source).toBe('seed');
+        expect(r.board.fixed).toEqual(now.fixed);
+        expect(boardDiffersFromSeed(r.board, now)).toBe(false);
+        expect(st.writes).toEqual([]);
+      });
+    }
+
+    it(`edited - ${name}: keeps its placement and fixed area`, () => {
+      const edited: BeBoard = { ...old, boards: { ...old.boards, Basic: old.boards.Basic!.map((i) => ('key' in i && i.key === 'k0' ? { ...i, x: 20, y: 20 } : i)) } };
+      const st = stored(edited);
+      const before = { ...st.data };
+      const r = loadBoard(input(st));
+      expect(r.source).toBe('desktop');
+      expect(r.board).toEqual(normalizeBoard(edited, ckeys));
+      expect(r.board.fixed).toEqual(edited.fixed);
+      expect(st.data).toEqual(before); // byte for byte, nothing written
+    });
+
+    it(`one control removed, one page renamed, one added — ${name}: all of those are the user’s`, () => {
+      const removed: BeBoard = { ...old, boards: { ...old.boards, Expert: old.boards.Expert!.filter((i) => !('key' in i && i.key === 'k1')) } };
+      const renamed: BeBoard = { ...old, pageOrder: ['Basic', 'Mine', ...old.pageOrder.slice(2)], boards: { ...old.boards, Mine: old.boards.Expert! } };
+      delete renamed.boards.Expert;
+      const added: BeBoard = { ...old, boards: { ...old.boards, Expert: [...old.boards.Expert!, { id: 'n', key: 'k0', view: 'knob', x: 20, y: 20, w: 2, h: 2 }] } };
+      for (const b of [removed, renamed, added]) expect(loadBoard(input(stored(b))).source).toBe('desktop');
+    });
+  }
+
+  it('treats a width or control edit in the fixed area as a user edit during migration', () => {
+    const old = flavours['current default on an older server'];
+    const fixed = old.fixed!;
+    for (const area of [{ ...fixed, cols: fixed.cols + 2 }, { ...fixed, items: fixed.items.slice(1) }]) {
+      const edited = { ...old, fixed: area };
+      const r = loadBoard(input(stored(edited)));
+      expect(r.source).toBe('desktop');
+      expect(r.board.fixed).toEqual(area);
+    }
+  });
+
+  it('preserves an earlier board with a fixed-area control awaiting catalog data', () => {
+    const old = flavours['current default on an older server'];
+    const fixed = old.fixed!;
+    const edited = { ...old, fixed: { ...fixed, items: [...fixed.items, { id: 'pending', key: 'meter', view: 'meter' as const, x: 0, y: 16, w: 2, h: 4 }] } };
+    const r = loadBoard(input(stored(edited)));
+    expect(r.source).toBe('desktop');
+    expect(r.board.fixed).toEqual(edited.fixed);
+  });
+
+  it('a graph the user removed from the earlier default stays removed (kept as it is)', () => {
+    const old = flavours['positions and graphs, before the fixed area'];
+    const removed: BeBoard = { ...old, boards: { ...old.boards, Basic: old.boards.Basic!.filter((i) => !('key' in i && i.key === 'graph:lfo')) } };
+    expect(loadBoard(input(stored(removed)))).toMatchObject({ source: 'desktop' });
+  });
+
+  it('a copy and a board under a saved "default for this type" are never upgraded', () => {
+    const old = flavours['positions and graphs, before the fixed area'];
+    const copy = memory({ [boardKey('chorus', 'Layout 1', 'desktop')]: JSON.stringify(old) });
+    expect(loadBoard({ ...input(copy), profile: 'Layout 1' })).toMatchObject({ source: 'desktop' });
+    const st = stored(old);
+    saveUserSeed(st, 'chorus', old);
+    expect(loadBoard(input(st)).source).toBe('desktop');
+  });
+
+  it('the tablet inherits an untouched desktop board as the new default, and its own edited one as it is', () => {
+    const old = flavours['positions and graphs, before the fixed area'];
+    const st = stored(old);
+    expect(loadBoard(input(st, 'tablet'))).toMatchObject({ source: 'seed' });
+    const own = moveToPage(now, 'w0.k0', FIXED_PAGE).board;
+    st.data[boardKey('chorus', 'Default', 'tablet')] = JSON.stringify(own);
+    const r = loadBoard(input(st, 'tablet'));
+    expect(r.source).toBe('own');
+    expect(r.board.fixed!.items.map((i) => ('key' in i ? i.key : ''))).toEqual(['k10', 'k11', 'k0']);
+  });
+
+  it('the new default itself, saved ("Reset to device layout"), loads as what it is', () => {
+    const r = loadBoard(input(stored(now)));
+    expect(r.source).toBe('desktop');
+    expect(r.board).toEqual(normalizeBoard(now, ckeys));
+  });
+
+  it('without a device layout: the untouched curated board with the header’s controls follows the new curated one', () => {
+    const main = new Set([0, 1]);
+    const old = buildCuratedBoardV2(cat, main, { withHeader: true });
+    const seedC = buildCuratedBoardV2(cat, main);
+    const inC = (st: KeyValueStore) => ({ storage: st, slug: 'chorus', profile: 'Default', deviceClass: 'desktop' as const, catalogKeys: ckeys, seed: seedC, previousSeed: () => previousSeeds({ layout: null, catalog: cat, mainParamIds: main }) });
+    const st = stored(old);
+    const r = loadBoard(inC(st));
+    expect(r.source).toBe('seed');
+    expect(r.board.pageOrder.flatMap((p) => r.board.boards[p]!.flatMap((i) => ('key' in i ? [i.key] : [])))).not.toContain('bypass');
+    expect(r.board.fixed).toBeUndefined();
+    expect(st.writes).toEqual([]);
+    const edited: BeBoard = { ...old, boards: { ...old.boards, Main: old.boards.Main!.slice(1) } };
+    expect(loadBoard(inC(stored(edited))).source).toBe('desktop');
   });
 });

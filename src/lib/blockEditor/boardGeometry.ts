@@ -1,7 +1,8 @@
 // Block Editor board geometry ("always fit"): how big one grid cell is for a page in a given panel.
 //
 // The reference width is ONE full page of 24 cells, so the cell size (and therefore the knob size) is
-// the same on every page; the height still fits per page. Density caps the cell size. Below the minimum
+// the same on every page (beside a fixed area: of the cells that leaves, fixedLayout.ts); the height still
+// fits per page. Density caps the cell size. Below the minimum
 // cell the top navigation (pages side by side) scrolls sideways, the side navigation (pages stacked)
 // reflows the page into fewer columns. In arrange mode the cell is frozen per page while dragging. On the
 // phone layout every page is re-wrapped to PHONE_COLS (8) cells — at most four knobs a row — and the cell
@@ -61,6 +62,10 @@ export interface PageLayoutInput {
   /** Arrange mode: empty rows kept below the content, so the tallest item can be dropped under it
    *  (default 1). */
   spareRows?: number;
+  /** Cells the width is measured against (default: a full page, MAXC). Fewer beside a fixed area. */
+  refCols?: number;
+  /** Upper limit of the cell (beside a fixed area: the cell that area is drawn with). */
+  maxCell?: number;
   /** Phone layout (device class `phone`, never while arranging): the page re-wrapped to PHONE_COLS cells,
    *  the cell from the width alone. */
   phone?: boolean;
@@ -110,9 +115,10 @@ export function layoutForPage(input: PageLayoutInput, list: readonly BeItem[]): 
   }
   const bb = bbox(list);
   const strip = input.nav === 'top';
-  const ref = (A.Wa - (MAXC - 1) * g) / MAXC;
+  const refCols = input.refCols && input.refCols > 0 ? Math.min(MAXC, input.refCols) : MAXC;
+  const ref = (A.Wa - (refCols - 1) * g) / refCols;
   const fh = (A.Ha - (bb.R - 1) * g) / bb.R;
-  let c = Math.floor(Math.min(d.cmax, ref, fh));
+  let c = Math.floor(Math.min(d.cmax, input.maxCell ?? d.cmax, ref, fh));
   let reflow = false;
   let pos: Record<string, BeRect> | undefined;
   if (input.editMode) c = input.frozenCell && input.frozenCell > 0 ? input.frozenCell : Math.max(CMIN, c);

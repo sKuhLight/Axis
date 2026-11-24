@@ -746,10 +746,15 @@ test.describe('Block Editor Arrange (slice 5): review fixes', () => {
     await startArranging(page, { maximize: true });
     const lib = await openLibrary(page);
     const lb = (await lib.boundingBox())!;
-    // right-click Treble near its right edge: the menu opens there, reaching over the library
-    const treble = onPage(page, 'Authentic', 'k3');
-    const t = (await treble.boundingBox())!;
-    await treble.click({ button: 'right', position: { x: t.width - 6, y: 16 } });
+    // right-click the knob just left of the library near its right edge: the menu opens there, reaching over it
+    let key = 'k0';
+    for (const k of ['k1', 'k2', 'k3']) {
+      const b = (await onPage(page, 'Authentic', k).boundingBox())!;
+      if (b.x + b.width < lb.x) key = k;
+    }
+    const knob = onPage(page, 'Authentic', key);
+    const t = (await knob.boundingBox())!;
+    await knob.click({ button: 'right', position: { x: t.width - 6, y: 16 } });
     const menu = page.getByRole('menu', { name: /^Control options/ });
     await expect(menu).toBeVisible();
     const m = (await menu.boundingBox())!;

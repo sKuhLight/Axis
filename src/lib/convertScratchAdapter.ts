@@ -1,5 +1,5 @@
 // Pure bridge from the OFFLINE convert scratch model (convertScratch.ts) to the REAL editor grid
-// `Layout` (grid.ts) — the shape SignalGrid / GridMap render. This lets the genuine grid draw a
+// `Layout` (grid.ts) — the shape SignalGrid renders. This lets the genuine grid draw a
 // cross-device conversion result with ZERO device I/O: `convertEditor.svelte.ts` (the offline
 // EditorSurface) reads `scratchToLayout(state)` for its `layout` getter, and the two reverse lookups
 // map a grid coordinate / effectId back to a ScratchBlock key for the mutators.

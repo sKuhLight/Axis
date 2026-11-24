@@ -138,13 +138,14 @@ test.describe('Block Editor touch (tablet profile)', () => {
     await expect(head).toHaveClass(/\btouch\b/);
     for (const sel of ['[data-be-engaged]', '[data-be-bypass-mode]', '[data-be-scene]', '[data-be-more]', '[data-be-channel-toggle]']) {
       const b = (await page.locator(sel).first().boundingBox())!;
-      expect(Math.min(b.width, b.height), sel).toBeGreaterThanOrEqual(40);
+      expect(Math.min(b.width, b.height), sel).toBeGreaterThanOrEqual(39.99);
     }
     // the unfolded channel letters too
     await page.locator('[data-be-channel-toggle]').click();
     for (const ch of ['A', 'B', 'C', 'D']) {
       const b = (await page.locator(`[data-be-channel="${ch}"]`).boundingBox())!;
-      expect(Math.min(b.width, b.height), ch).toBeGreaterThanOrEqual(40);
+      // Chromium can report a 40 px target as 39.99998 px in viewport coordinates.
+      expect(Math.min(b.width, b.height), ch).toBeGreaterThanOrEqual(39.99);
     }
     await page.keyboard.press('Escape');
     // chip · state · ⋯ on row one
@@ -171,7 +172,9 @@ test.describe('Block Editor touch (tablet profile)', () => {
     expect(writesOf(mock, 1)).toEqual([]);
 
     // back to the start, then a vertical drag on the same knob
-    await board(page).evaluate((el) => (el.scrollLeft = 0));
+    await settle(page);
+    await page.locator('[data-be-tab="Authentic"]').click();
+    await expect.poll(() => board(page).evaluate((el) => el.scrollLeft)).toBe(0);
     await settle(page);
     const bass2 = await centre(tile(page, 'k1').locator('.be-dial'));
     await swipe(cdp, bass2, { x: bass2.x + 3, y: bass2.y - 60 });
@@ -295,17 +298,15 @@ test.describe('Block Editor touch (tablet profile)', () => {
     await expect(page.locator('[data-screen-label="Modifier Editor"].flyout')).toHaveClass(/\bopen\b/);
   });
 
-  test('Arrange at 1024×768: the grid map steps aside and the panel maximizes for three rows; Done restores it', async ({ page }) => {
+  test('Arrange at 1024×768: the panel maximizes for three rows; Done restores it', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
     const maximize = page.getByRole('button', { name: 'Maximize Block Editor' });
     const restore = page.getByRole('button', { name: 'Restore Block Editor' });
     await expect(maximize).toBeVisible();
-    await expect(page.locator('.gridmap-wrap')).toBeVisible();
     await pickMore(page, 'arrange');
     await expect(page.locator('[data-be-arrange-bar]')).toBeVisible();
-    await expect(page.locator('.gridmap-wrap')).toHaveCount(0); // the strip makes room for the arrange bar
     await expect(restore).toBeVisible(); // the editor maximized its panel
     const grid = page.locator('[data-be-grid][data-page="Authentic"]');
     const c = Number(await grid.getAttribute('data-c'));
@@ -314,7 +315,6 @@ test.describe('Block Editor touch (tablet profile)', () => {
     await page.locator('[data-be-arrange-done]').click();
     await expect(page.locator('[data-be-arrange-bar]')).toHaveCount(0);
     await expect(maximize).toBeVisible(); // restored: the editor had maximized it
-    await expect(page.locator('.gridmap-wrap')).toBeVisible();
 
     // a panel the user maximized stays maximized after Done
     await maximize.click();

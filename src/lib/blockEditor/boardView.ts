@@ -10,7 +10,7 @@
 // Pure numbers in, numbers out — no DOM (boardView.test.ts).
 
 import { availableArea, layoutForPage, PAD_Y, SEC_HEAD, visiblePages, type BeNav, type BeSection, type PageLayout, type PageLayoutInput } from './boardGeometry';
-import { hasOwn, pageItems, type BeBoard, type BeItem } from './boardModel';
+import { hasPage, pageItems, regions, writePage, type BeBoard, type BeItem } from './boardModel';
 
 // ── strip chrome (top navigation) ────────────────────────────────────────────────────────────────
 
@@ -563,30 +563,27 @@ export function resizeBy(start: { w: number; h: number }, dx: number, dy: number
 }
 
 /** Run an arrange operation on the drawn items only. Controls whose key the catalog does not list right
- *  now (kept block-level entries such as a meter while metering is off) are taken off their pages first,
- *  so they neither block cells nor get moved, and are put back at the end of their pages afterwards.
+ *  now (kept block-level entries such as a meter while metering is off) are taken off their pages — and the
+ *  fixed area — first, so they neither block cells nor get moved, and are put back at the end of their pages afterwards.
  *  They may then overlap a drawn item; `normalizeBoard` moves them to the nearest free spot (they come
  *  last on the page) the next time the board loads — at the latest when their key is listed again.
  *  A failed or no-op operation returns the input board unchanged (same reference). */
 export function onDrawnItems<R extends { board: BeBoard; ok: boolean }>(board: BeBoard, shown: (it: BeItem) => boolean, op: (b: BeBoard) => R): R {
-  const hidden: Record<string, BeItem[]> = {};
-  const drawn: Record<string, BeItem[]> = { ...board.boards };
-  let any = false;
-  for (const pg of board.pageOrder) {
+  const hidden = new Map<string, BeItem[]>();
+  let input: BeBoard = board;
+  for (const pg of regions(board)) {
     const list = pageItems(board, pg);
     const off = list.filter((it) => !shown(it));
     if (!off.length) continue;
-    any = true;
-    hidden[pg] = off;
-    drawn[pg] = list.filter(shown);
+    hidden.set(pg, off);
+    input = writePage(input, pg, list.filter(shown));
   }
-  if (!any) return op(board);
-  const input: BeBoard = { ...board, boards: drawn };
+  if (!hidden.size) return op(board);
   const r = op(input);
   if (!r.ok || r.board === input) return { ...r, board };
-  const boards = { ...r.board.boards };
-  for (const pg of Object.keys(hidden)) if (hasOwn(boards, pg)) boards[pg] = [...(boards[pg] ?? []), ...hidden[pg]!];
-  return { ...r, board: { ...r.board, boards } };
+  let out = r.board;
+  for (const [pg, off] of hidden) if (hasPage(out, pg)) out = writePage(out, pg, [...pageItems(out, pg), ...off]);
+  return { ...r, board: out };
 }
 
 /** Knob rows (2 cells + gap each) a tablet board should show while arranging. */
@@ -622,6 +619,16 @@ export function autoScrollDelta(p: number, lo: number, hi: number): number {
   if (p < lo + edge) return -AUTOSCROLL_STEP;
   if (p > hi - edge) return AUTOSCROLL_STEP;
   return 0;
+}
+
+/** Toward the fixed area (the right edge beside a column, the bottom one over a band) a drag scrolls the pages
+ *  only after it stayed at the edge this long: one that just crosses the edge leaves them where they are. */
+export const EDGE_DWELL_MS = 220;
+/** Auto-scroll delta at an edge with a dwell, and when the pointer came to it (0 = it is not there). */
+export function dwellScroll(delta: number, since: number, now: number): { delta: number; since: number } {
+  if (delta <= 0) return { delta, since: 0 };
+  const from = since || now;
+  return { delta: now - from < EDGE_DWELL_MS ? 0 : delta, since: from };
 }
 
 /** Parameter ids of a page's pinnable controls (unique, in page order) — "Pin page". */

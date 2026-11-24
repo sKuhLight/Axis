@@ -118,6 +118,10 @@ export interface LayoutPage {
   pageNum?: number;
   fw?: unknown;
   rows: LayoutRow[];
+  /** Controls placed directly on the page, outside its rows (document order; placement.positionExact, fw as
+   *  for row controls). Absent on servers that do not serve them. Entries without a param (section titles,
+   *  separators) are not used. */
+  pageControls?: LayoutControl[];
 }
 /** Device-authentic UI layout for a block/virtual effect. The server has ALREADY selected the variant
  *  matching the block's current type, so `pages` are the arrangement to render as-is. */

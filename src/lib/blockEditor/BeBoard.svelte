@@ -8,15 +8,15 @@
   //          document; the header tabs navigate.
   // Scrollbars are hidden; a mouse / pen drag on empty board area pans (touch scrolls natively). The
   // pages at least half in view are reported up (tab highlight, active page).
-  import BeControl from './BeControl.svelte';
+  import BeGrid from './BeGrid.svelte';
   import type { BeNav, PageLayout } from './boardGeometry';
   import { PAD_X, PAD_Y, PHONE_END_PAD, PHONE_PAD_X, SEC_HEAD } from './boardGeometry';
-  import { isDivider, type BeItem } from './boardModel';
   import type { BeCtl } from './catalog';
   import { untrack } from 'svelte';
   import {
     anchorKey,
     autoScrollDelta,
+    dwellScroll,
     itemScrollTarget,
     offsetInPage,
     scrollAtOffset,
@@ -47,6 +47,9 @@
     dragging = false,
     canArrange = true,
     phone = false,
+    endPad = PHONE_END_PAD,
+    anchorWidth,
+    preserveStripOffset = false,
     onMeasure,
     onVisible,
     onScroll,
@@ -70,6 +73,12 @@
     canArrange?: boolean;
     /** Phone layout: stacked pages (`nav` is 'side') of their own height, no snapping. */
     phone?: boolean;
+    /** Phone: the room after the last page (less above a band that already takes the corner). */
+    endPad?: number;
+    /** Use the host width while Arrange resizes the column alongside the strip. */
+    anchorWidth?: number;
+    /** If an expanding band changes the cell size, keep the strip's place within its active page. */
+    preserveStripOffset?: boolean;
     onMeasure: (w: number, h: number) => void;
     onVisible: (pages: string[]) => void;
     onScroll: () => void;
@@ -93,7 +102,6 @@
   const anyOverflowX = $derived(Object.values(layouts).some((L) => L.overflowX));
   const anyOverflowY = $derived(Object.values(layouts).some((L) => L.overflowY));
   const anyReflow = $derived(Object.values(layouts).some((L) => L.reflow));
-  const drawn = (p: BoardPage): BeItem[] => p.items as BeItem[];
 
   function viewport(): { start: number; size: number } {
     if (!el) return { start: 0, size: 0 };
@@ -181,12 +189,27 @@
     return el?.clientHeight ?? 0;
   }
 
-  /** Scroll a little while an arrange drag nears an edge of the board. */
-  export function autoScroll(px: number, py: number): void {
+  /** Scroll a little while an arrange drag nears an edge of the board. `toward` = the side the fixed area is on:
+   *  that edge waits (dwellScroll), so a drag into the area does not push the pages along. */
+  let edgeSince = 0;
+  export function resetEdgeDwell(): void {
+    edgeSince = 0;
+  }
+  $effect(() => {
+    if (!dragging) resetEdgeDwell();
+  });
+
+  export function autoScroll(px: number, py: number, toward: 'right' | 'bottom' | null = null): void {
     if (!el) return;
     const r = el.getBoundingClientRect();
-    el.scrollLeft += autoScrollDelta(px, r.left, r.right);
-    el.scrollTop += autoScrollDelta(py, r.top, r.bottom);
+    let dx = autoScrollDelta(px, r.left, r.right);
+    let dy = autoScrollDelta(py, r.top, r.bottom);
+    const w = dwellScroll(toward === 'right' ? dx : toward === 'bottom' ? dy : 0, edgeSince, Date.now());
+    edgeSince = w.since;
+    if (toward === 'right') dx = w.delta;
+    if (toward === 'bottom') dy = w.delta;
+    el.scrollLeft += dx;
+    el.scrollTop += dy;
   }
 
   // measure the board (layout px: client sizes are unaffected by an ancestor zoom)
@@ -217,14 +240,25 @@
   // old offset lands between pages and the active tab drifts to a neighbour. Not while a pan or an
   // arrange drag runs.
   let anchor = '';
+  let previousSections: typeof sections = [];
+  let previousNav: BeNav | undefined;
   $effect(() => {
-    void sections;
-    // the phone's stacked pages do not depend on the board height (the on-screen keyboard, the grid map
-    // folding): a height change keeps the scroll position instead of jumping to the page start
-    const key = anchorKey(nav, bodyW, phone ? 0 : bodyH, layouts);
+    const nextSections = sections;
+    const nextNav = nav;
+    const keepOffset = preserveStripOffset && nextNav === 'top';
+    // the phone's stacked pages do not depend on the board height (the on-screen keyboard): a height change
+    // keeps the scroll position instead of jumping to the page start
+    const key = anchorKey(nextNav, anchorWidth ?? bodyW, phone ? 0 : bodyH, layouts);
     untrack(() => {
-      if (positioned && anchor && key !== anchor && !pan && !dragging) scrollToPage(active, false);
+      if (positioned && anchor && key !== anchor && !pan && !dragging) {
+        const offset = el && keepOffset && previousNav === nextNav ? offsetInPage(previousSections, active, el.scrollLeft) : null;
+        const restored = offset == null ? null : scrollAtOffset(nextSections, active, offset);
+        if (el && restored != null) el.scrollLeft = restored;
+        else scrollToPage(active, false);
+      }
       anchor = key;
+      previousSections = nextSections;
+      previousNav = nextNav;
       report();
     });
   });
@@ -343,33 +377,7 @@
               {#if canArrange}<button type="button" class="be-empty-btn" onclick={onArrange}>✥ Arrange</button>{/if}
             </div>
           {:else}
-          <div
-            class="be-grid"
-            class:arrange={editMode}
-            data-be-grid
-            data-page={p.page}
-            data-c={L.c}
-            data-g={L.g}
-            data-cols={L.cols}
-            data-rows={L.rows}
-            style:grid-template-columns="repeat({L.cols}, {L.c}px)"
-            style:grid-template-rows="repeat({L.rows}, {L.c}px)"
-            style:gap="{L.g}px"
-            style:width="{L.W}px"
-            style:height="{L.H}px"
-            style:--st="{L.c + L.g}px"
-            style:--ctr="{(L.c + L.g / 2).toFixed(1)}px"
-          >
-            {#each drawn(p) as it (it.id)}
-              {@const pos = L.pos ? L.pos[it.id] : it}
-              {#if pos}
-                <BeControl item={it} ctl={isDivider(it) ? undefined : catalog.get(it.key)} {pos} c={L.c} g={L.g} page={p.page} />
-              {/if}
-            {/each}
-            {#if ghost && ghost.page === p.page}
-              <div class="be-ghost" class:bad={!ghost.valid} style:grid-column="{ghost.x + 1} / span {ghost.w}" style:grid-row="{ghost.y + 1} / span {ghost.h}"></div>
-            {/if}
-          </div>
+          <BeGrid page={p.page} items={p.items} layout={L} {editMode} {catalog} {ghost} />
           {#if !p.items.length}<div class="be-empty arr">Empty page — “+ Control” adds one, or drag one in from the library</div>{/if}
           {/if}
         </div>
@@ -378,7 +386,7 @@
   {/each}
   {#if phone && nav === 'side'}
     <!-- phone: the last row can scroll clear of the dock opener / collapse button over the corner -->
-    <div class="be-endpad" style:height="{PHONE_END_PAD}px" aria-hidden="true"></div>
+    <div class="be-endpad" style:height="{endPad}px" aria-hidden="true"></div>
   {/if}
 </div>
 {#if anyReflow && !editMode}
@@ -529,29 +537,6 @@
   }
   .be-inner.empty .be-empty {
     align-self: center;
-  }
-  .be-grid {
-    position: relative;
-    display: grid;
-    flex: none;
-  }
-  .be-grid.arrange {
-    background-image: radial-gradient(circle at var(--ctr) var(--ctr), color-mix(in srgb, var(--accent) 30%, transparent) 1.2px, transparent 1.7px);
-    background-size: var(--st) var(--st);
-    outline: 1px dashed color-mix(in srgb, var(--accent) 22%, transparent);
-    outline-offset: 5px;
-    border-radius: 2px;
-  }
-  .be-ghost {
-    z-index: 9;
-    pointer-events: none;
-    border-radius: 8px;
-    border: 2px dashed var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-  }
-  .be-ghost.bad {
-    border-color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
   }
   .be-empty {
     display: flex;

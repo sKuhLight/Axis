@@ -1,8 +1,7 @@
 // The device class the Block Editor runs as, tracked live: inside the workbench the active profile's
 // breakpoint (a profile without one counts as desktop, as in the workbench), in the monolith shell the
 // window width (deviceClassFrom). Every phone / desktop decision of the editor reads this one value —
-// which board key loads, the phone chrome, whether Arrange is offered, the grid map's default fold — so
-// a phone profile at a desktop window size (a large UI scale, a pinned profile preview) is a phone
+// which board key loads, the phone chrome, whether Arrange is offered — so a phone profile at a desktop window size (a large UI scale, a pinned profile preview) is a phone
 // everywhere, and a desktop profile in a narrow window is a desktop everywhere.
 
 import { get } from 'svelte/store';

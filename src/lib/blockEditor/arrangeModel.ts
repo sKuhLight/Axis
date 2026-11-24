@@ -5,6 +5,7 @@
 import {
   addControl,
   defaultIdGen,
+  hasPage,
   locate,
   moveItem,
   pageItems,
@@ -132,9 +133,9 @@ export function arrangeEscape(c: ArrangeEscapeContext): 'library' | 'drag' | 'le
 // ── page-wide operations ─────────────────────────────────────────────────────────────────────────
 
 /** Run a page-wide rearrangement (`closeGaps` — "Close gaps": remove the empty rows and columns —, or
- *  `tidy` — "Tidy up": gravity) on one page. Same board when nothing moves. */
+ *  `tidy` — "Tidy up": gravity) on one page or the fixed area. Same board when nothing moves. */
 export function onPage(board: BeBoard, page: string, fn: (list: readonly BeItem[]) => BeItem[]): BeOpResult {
-  if (!board.pageOrder.includes(page)) return { board, ok: false, reason: 'missing' };
+  if (!hasPage(board, page)) return { board, ok: false, reason: 'missing' };
   const list = pageItems(board, page);
   const next = fn(list);
   return { board: next === list ? board : writePage(board, page, next), ok: true };
@@ -144,7 +145,7 @@ export function onPage(board: BeBoard, page: string, fn: (list: readonly BeItem[
 export function tidyPages(board: BeBoard, pages: readonly string[]): BeBoard {
   let out = board;
   for (const pg of new Set(pages)) {
-    if (!out.pageOrder.includes(pg)) continue;
+    if (!hasPage(out, pg)) continue;
     out = onPage(out, pg, tidy).board;
   }
   return out;

@@ -41,7 +41,7 @@ const GRID = {
 // Drive block params + a v2 DeviceLayout:
 //   row 0: Gain (knob), Tone (knob), <spacer>, Gain meter (dropped — no live monitor → gap)
 //   row 1: Mode (dropdown → select), Bright (toggle), Level (slider)
-//   row 2: Bypass (button → bypass action)
+//   row 2 (mixer): Bypass (a header control: on no default board)
 const knob = (id: number, name: string) => ({ id, name, value: 0, norm: 0.5, min: 0, max: 10 });
 const BLOCK_PARAMS = {
   block: 'Drive',
@@ -144,12 +144,11 @@ test.describe('Block Editor device-layout board (AXIS-36, board v2)', () => {
     expect(ly).toBeTruthy();
     expect(gy!.y).toBeLessThan(ly!.y);
 
-    // The section change (parameters → mixer) starts a new line for Bypass. This page is the block's
-    // tallest, so it keeps the rows-only height (height budget): no divider row of its own, and no free
-    // row to put one in.
+    // The mixer row holds only the bypass, which the header shows: no tile, no divider for an empty row, and
+    // no fixed area.
     await expect(page.locator('section[data-be-page="Drive"] [data-be-view="hdiv"]')).toHaveCount(0);
-    const by = await page.locator('section[data-be-page="Drive"] [data-be-key="bypass"]').boundingBox();
-    expect(by!.y).toBeGreaterThan(ly!.y);
+    await expect(page.locator('[data-be-item][data-be-key="bypass"]')).toHaveCount(0);
+    await expect(page.locator('[data-be-fixed]')).toHaveCount(0);
   });
 });
 

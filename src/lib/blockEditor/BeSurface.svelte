@@ -1,8 +1,10 @@
 <script lang="ts">
   // Block Editor surface (board model v2): the header (type chip, page tabs, "Find a control…",
-  // Engaged | Mute | Scene Ignore, the ⋯ menu — or, without a block, the compact row of the virtual-effect
+  // Engaged | Bypass mode | Scene Ignore, the ⋯ menu — or, without a block, the compact row of the virtual-effect
   // screens), the side page list, and the board of a block's controls with every page at once (top strip
-  // or side stack), always fitted to the panel; Arrange (the arrange bar, the "Add" library, the page
+  // or side stack), always fitted to the panel, beside the fixed area (the controls that stay in view: a
+  // column at the far right, a band at the bottom of a phone or a very narrow editor); Arrange (the arrange
+  // bar, the "Add" library, the page
   // menu — beArrange.svelte.ts drives selection, gestures, keys and undo), value bubble, select popover,
   // flat search results, modifier flyout, the control menu (right-click / long-press / Shift+F10) and the
   // workbench pin paths (⚡ click / press-drag, 380 ms hold-drag).
@@ -43,6 +45,7 @@
   import BeBoard from './BeBoard.svelte';
   import BeControl from './BeControl.svelte';
   import BeFind from './BeFind.svelte';
+  import BeFixed from './BeFixed.svelte';
   import BeHeader from './BeHeader.svelte';
   import BeLibrary from './BeLibrary.svelte';
   import BeMenu from './BeMenu.svelte';
@@ -69,20 +72,28 @@
   import { buildPageMenu } from './pageMenu';
   import { BeState } from './beState.svelte';
   import { trackDeviceClass } from './deviceClass.svelte';
-  import { effectiveNav, SIDE_NAV_MIN_W, type BeDensity, type BeNav } from './boardGeometry';
+  import { effectiveNav, PHONE_END_PAD, SIDE_NAV_MIN_W, type BeDensity, type BeNav } from './boardGeometry';
   import {
     BE_SPEC,
+    FIXED_MAX_COLS,
+    FIXED_PAGE,
     isDivider,
     locate,
+    pageInText,
     pageItems,
+    pageLabel,
+    regions,
     type BeBoard as BoardModel,
     type BeControl as BeControlItem,
     type BeItem,
     type BeView
   } from './boardModel';
-  import { boardDiffersFromSeed, pageDiffersFromSeed, type PreviousSeeds } from './boardPersistence';
+  import { boardDiffersFromSeed, fixedDiffersFromSeed, pageDiffersFromSeed, type PreviousSeeds } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
-  import { buildCuratedBoardV2, buildDeviceLayoutBoardV2, hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
+  import { builtInSeed, previousSeeds, type SeedInput } from './boardSeeds';
+  import { hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
+  import { endPadOver, fixedColumnMax, layoutEditor, type FixedLayout } from './fixedLayout';
+  import { headerKeys, type HeaderBlockState } from './headerControls';
   import {
     edgeDropArgs,
     editorTabTarget,
@@ -101,7 +112,6 @@
     highlightedPages,
     isPinnableKind,
     keySteps,
-    layoutBoardPages,
     NUDGE_STEP,
     pagePinIds,
     revealScroll,
@@ -123,7 +133,6 @@
     typeName = '',
     status = 'ready',
     message = '',
-    belowHeader = undefined,
     headerEnd = undefined,
     resetKey = ''
   }: {
@@ -141,8 +150,6 @@
      *  board area (while reloading a block that already has a board, the board stays). */
     status?: 'ready' | 'loading' | 'error' | 'nopack';
     message?: string;
-    /** Under the header (the grid map strip). */
-    belowHeader?: Snippet;
     /** End of the header row (the monolith's close button). */
     headerEnd?: Snippet;
     /** Identity of the block shown (another block = a fresh editor view: no search, no arrange, …). */
@@ -270,26 +277,23 @@
   /** The open block, for the cross-block guard: a layout control of another block never binds to this
    *  block's param with the same id (deviceLayoutBoard `isForeignControl`). */
   const layoutOwnerEid = $derived(editor.selected?.effectId ?? null);
-  function deviceSeed(): BoardModel {
-    return (
-      buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { effectId: layoutOwnerEid }) ??
-      buildCuratedBoardV2(catalog, new Set(idealIds(editor.params)))
-    );
-  }
+  // the params the server tags as the block state: the header shows them, no default board does. Their ids
+  // only (the tag's values change with every edit).
+  const bsTagged = $derived(!!editor.blockState);
+  const bsScene = $derived(editor.blockState?.sceneIgnore?.paramId ?? null);
+  const bsMode = $derived(editor.blockState?.bypassMode?.paramId ?? null);
+  const headerState = $derived<HeaderBlockState | null>(
+    bsTagged ? { sceneIgnore: bsScene == null ? null : { paramId: bsScene }, bypassMode: bsMode == null ? null : { paramId: bsMode } } : null
+  );
+  const seedInput = (): SeedInput => ({ layout: editor.blockLayout, catalog, effectId: layoutOwnerEid, blockState: headerState, mainParamIds: new Set(idealIds(editor.params)) });
+  const deviceSeed = (): BoardModel => builtInSeed(seedInput());
+  /** The defaults of earlier versions and servers (boardSeeds.ts; built only when a stored board needs them). */
+  const previousSeed = (): PreviousSeeds => previousSeeds(seedInput());
   /** The built-in seed comes from the device layout (else the curated fallback; the ⋯ wording follows). */
-  const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog, { effectId: layoutOwnerEid }));
-  /** The device default as earlier, released versions built it: rows only, before positions, cross-block
-   *  refs bound by their bare paramId and no graph displays (those versions had neither the guard nor graph
-   *  tiles). A stored Default board still equal to it was never changed by the user and follows the current
-   *  default (boardPersistence `previousSeed`; built only when such a board is found). The positioned
-   *  default never shipped before graph tiles, so a positioned board without them is a user's choice (a
-   *  removed graph) and stays; "Reset to device layout" brings the graphs back. */
-  function previousSeed(): PreviousSeeds {
-    const noGraphs = catalog.filter((c) => c.kind !== 'graph');
-    return buildDeviceLayoutBoardV2(editor.blockLayout, noGraphs, { rowFlowOnly: true, legacyUnguarded: true });
-  }
+  const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog, { effectId: layoutOwnerEid, blockState: headerState }));
   $effect(() => {
-    const src = { slug, deviceClass, catalog, variantSig, owner: layoutOwnerEid, deviceSeed, previousSeed, rev: surfRev() };
+    const header = `${bsTagged}:${bsScene ?? ''}:${bsMode ?? ''}`;
+    const src = { slug, deviceClass, catalog, variantSig, owner: layoutOwnerEid, header, deviceSeed, previousSeed, rev: surfRev() };
     if (status !== 'ready') return; // the parameters of another block / channel may still be in place
     untrack(() => {
       // a (re)load can swap the board under the scroll position: keep its stored page active until the
@@ -301,6 +305,9 @@
   // ── layout ──
   let bodyW = $state(0);
   let bodyH = $state(0);
+  /** The board area: the pages and the fixed area together. */
+  let mainW = $state(0);
+  let mainH = $state(0);
   /** Editor width (the side navigation and the header row break depend on it, not on the board's). */
   let rootW = $state(0);
   const prefs = $derived(be.prefs);
@@ -329,15 +336,40 @@
     if (!b) return [];
     return b.pageOrder.map((page) => ({ page, items: pageItems(b, page).filter((it) => isDivider(it) || catByKey.has(it.key)) }));
   });
-  const layoutBase = $derived({ bodyW, bodyH, nav: boardNav, density: prefs.density, phone: phoneBoard });
-  const layouts = $derived(layoutBoardPages(pages, { ...layoutBase, editMode: be.editMode, frozenCell: be.frozenCell ?? undefined }));
-  const liveCell = (): number | null => sharedCell(layoutBoardPages(pages, { ...layoutBase, editMode: false }));
+  /** The fixed area's drawn items. An emptied area shows only while arranging. */
+  const fixedItems = $derived((board?.fixed?.items ?? []).filter((it) => isDivider(it) || catByKey.has(it.key)));
+  const fixedArea = $derived(board?.fixed && (be.editMode || fixedItems.length) ? { cols: board.fixed.cols, items: fixedItems } : null);
+  const inWorkbench = !!workbench;
+  let arrangePlace = $state<FixedLayout['place']>();
+  const layoutBase = $derived({
+    bodyW, bodyH, mainW, nav: boardNav, density: prefs.density, phone: phoneBoard,
+    clearCorner: deviceClass !== 'desktop' && inWorkbench,
+    dockGutter: inWorkbench
+  });
+  const laidOut = $derived(layoutEditor(pages, fixedArea, { ...layoutBase, arrangePlace, editMode: be.editMode, frozenCell: be.frozenCell ?? undefined }));
+  const layouts = $derived(laidOut.layouts);
+  const fixedLay = $derived(laidOut.fixed);
+  const fixedMaxCols = $derived(fixedLay?.place === 'column' ? fixedColumnMax(mainW, fixedLay.c, fixedLay.g, boardNav, inWorkbench) : FIXED_MAX_COLS);
+  $effect(() => {
+    if (be.editMode && !arrangePlace && fixedLay) arrangePlace = fixedLay.place;
+  });
+  const liveCell = (): number | null => sharedCell(layoutEditor(pages, fixedItems.length ? fixedArea : null, { ...layoutBase, editMode: false }).layouts);
   const layoutSig = $derived(
-    boardNav + '|' + prefs.density + '|' + pages.map((p) => (layouts[p.page] ? `${layouts[p.page]!.c}:${layouts[p.page]!.W}:${layouts[p.page]!.H}` : '')).join(',')
+    boardNav +
+      '|' +
+      prefs.density +
+      '|' +
+      pages.map((p) => (layouts[p.page] ? `${layouts[p.page]!.c}:${layouts[p.page]!.W}:${layouts[p.page]!.H}` : '')).join(',') +
+      (fixedLay ? `|${fixedLay.place}:${fixedLay.c}:${fixedLay.W}:${fixedLay.H}` : '')
   );
+  /** Rendered height of a band at the bottom (0 without one). */
+  let fixedH = $state(0);
+  let fixedOverflows = $state(false);
+  const bandH = $derived(fixedLay?.place === 'band' ? fixedH : 0);
 
   // ── visible / active page ──
   let boardRef = $state<ReturnType<typeof BeBoard> | null>(null);
+  let fixedRef = $state<ReturnType<typeof BeFixed> | null>(null);
   let visible = $state<string[]>([]);
   let lockUntil = 0;
   /** Keep the active page for a moment: scroll reports meanwhile do not move it. Set synchronously
@@ -369,6 +401,7 @@
   function goPage(pg: string, itemId: string | null = null) {
     resultsOpen = false; // the board is what a page tab points at
     be.setPage(pg);
+    if (be.editMode) arr.fixedTarget = false; // and what the arrange tools act on
     sel = null;
     editingId = null;
     if (itemId) {
@@ -405,7 +438,11 @@
     layer: () => layerEl,
     isDrawn: (it) => isDrawn(it),
     ctl: (key) => catByKey.get(key),
-    autoScroll: (x, y) => boardRef?.autoScroll(x, y),
+    autoScroll: (x, y) => {
+      // over the fixed area only the area scrolls, never the pages beside it; on the way there the pages wait
+      if (fixedRef?.autoScroll(x, y)) boardRef?.resetEdgeDwell();
+      else boardRef?.autoScroll(x, y, fixedLay ? (fixedLay.place === 'column' ? 'right' : 'bottom') : null);
+    },
     holdPage: () => {
       const pg = be.board?.page;
       holdActive(600);
@@ -414,7 +451,9 @@
     showPage: (pg) => scrollSoon(pg, true, 800),
     setPage: (pg) => be.setPage(pg),
     focusBoard: () => boardRef?.focusBoard(),
-    reveal: (id) => boardRef?.revealItem(id),
+    reveal: (id) => {
+      if (!fixedRef?.revealItem(id)) boardRef?.revealItem(id);
+    },
     toast: (text, tone) => editor.showToast(text, TONE[tone]),
     leave: () => setEdit(false)
   });
@@ -432,6 +471,7 @@
     // arranging widens every page to the full 24 cells: keep the current page in view across the switch
     const pg = be.board?.page;
     if (pg) scrollSoon(pg, false, 400);
+    arrangePlace = on ? fixedLay?.place : undefined;
     be.setEditMode(on, on ? liveCell() : null);
     arr.reset();
     barMenu = null;
@@ -448,9 +488,9 @@
   /** The panel the editor maximized itself for Arrange (restored on Done only then). */
   let autoMaximized: string | null = null;
   /** Tablet: Arrange in a board shorter than three knob rows maximizes the hosting workbench panel (the
-   *  arrange bar and the hidden grid map strip measured first). A panel the user maximized stays as it is. */
+   *  arrange bar measured first). A panel the user maximized stays as it is. */
   async function roomForArrange() {
-    await tick(); // the arrange bar is in, the grid map strip out
+    await tick(); // the arrange bar is in
     const ctl = workbench?.controller;
     const panel = hostPanelId();
     const L = be.board ? layouts[be.board.page] : undefined;
@@ -467,13 +507,14 @@
     if (ctl && panel && ctl.maximizedPanelId === panel) ctl.setMaximizedPanel(null);
   }
   // The cell is frozen while arranging (a drag never sees the grid change under it); a new panel width
-  // (maximize, a split resize) freezes it again at the new fitted size between gestures — a width change
-  // during a drag or resize is picked up when the gesture ends (the effect re-runs on its end).
+  // (maximize, a split resize — not the fixed area taking its share of it) freezes it again at the new fitted
+  // size between gestures — a width change during a drag or resize is picked up when the gesture ends (the
+  // effect re-runs on its end).
   let frozenW = 0;
   $effect(() => {
     const on = be.editMode;
-    const w = bodyW;
-    const gesture = !!arr.drag || !!arr.resizing;
+    const w = mainW;
+    const gesture = !!arr.drag || !!arr.resizing || arr.sizingFixed;
     untrack(() => {
       if (!on) {
         frozenW = 0;
@@ -536,7 +577,12 @@
     }
     resultsOpen = false;
     const id = itemIdOn(b, pg, key);
-    goPage(pg, id);
+    if (pg === FIXED_PAGE) {
+      // in view on every page: no page changes; the area shows the control (an open band, a scrolled column)
+      sel = null;
+      editingId = null;
+      if (id) void tick().then(() => fixedRef?.revealItem(id));
+    } else goPage(pg, id);
     flashId = id;
     if (flashItemTimer) clearTimeout(flashItemTimer);
     flashItemTimer = setTimeout(() => (flashId = null), 1400);
@@ -550,7 +596,7 @@
   const viewByKey = $derived.by(() => {
     const m = new Map<string, BeControlItem['view']>();
     const b = board;
-    if (b) for (const pg of b.pageOrder) for (const it of pageItems(b, pg)) if (!isDivider(it) && !m.has(it.key)) m.set(it.key, it.view);
+    if (b) for (const pg of regions(b)) for (const it of pageItems(b, pg)) if (!isDivider(it) && !m.has(it.key)) m.set(it.key, it.view);
     return m;
   });
   function resultItem(c: BeCtl): BeControlItem {
@@ -583,6 +629,11 @@
   /** The text the input was opened with: committing it unchanged writes nothing. */
   let editInit = '';
   let tip = $state<{ pid: number; cx: number; cy: number } | null>(null);
+  let tipWidth = $state(0);
+  const popupMargin = 8;
+  const popupLeft = (left: number, width: number, z: number) =>
+    Math.max(popupMargin, Math.min(left, window.innerWidth / z - width - popupMargin));
+  const tipLeft = $derived(tip ? popupLeft(tip.cx - tipWidth / 2, tipWidth, zoom()) : 0);
   let adjusting = false;
   function tipAt(el: HTMLElement, pid: number) {
     const r = el.getBoundingClientRect();
@@ -661,8 +712,9 @@
     e.stopPropagation();
     const target = e.target as HTMLElement | null;
     const trackEl = direct ? target?.closest?.<HTMLElement>('.be-vtrack, .be-htrack') : null;
-    // tiles of the flat search results scroll with their list (vertically), the board's with the board
-    const scroll: Axis = tile.closest('[data-be-results]') ? 'y' : scrollAxisOf(boardNav);
+    // tiles of the flat search results scroll with their list (vertically), the board's with the board, the
+    // fixed area's with the area when it scrolls
+    const scroll: Axis = tile.closest('[data-be-results]') ? 'y' : page === FIXED_PAGE ? fixedAxis : scrollAxisOf(boardNav);
     const n = knobById.get(ctl.id)?.norm ?? 0;
     vd = {
       pointerId: e.pointerId,
@@ -744,6 +796,9 @@
     e.stopPropagation();
     setNorm(ctl.id, stepNorm(p, steps, e.shiftKey));
   }
+
+  /** The axis the fixed area's tiles leave to scrolling (touch): the board's, or the area's own. */
+  const fixedAxis = $derived<Axis>(fixedOverflows ? 'y' : scrollAxisOf(boardNav));
 
   /** Items drawn right now: dividers, and controls whose key the catalog lists. */
   const isDrawn = (it: BeItem): boolean => isDivider(it) || catByKey.has(it.key);
@@ -868,9 +923,25 @@
   const custom = $derived(!!board && !!be.seed && boardDiffersFromSeed(board, be.seed, catKeys));
   const pageCustom = $derived(!!board && !!be.seed && pageDiffersFromSeed(board, be.seed, board.page, catKeys));
   const pageInSeed = $derived(!!board && !!be.seed && be.seed.pageOrder.includes(board.page));
+  const fixedStatus = $derived.by(() => {
+    if (!board || !be.seed || (!board.fixed && !be.seed.fixed)) return null;
+    const custom = fixedDiffersFromSeed(board, be.seed, catKeys);
+    return { inSeed: !!be.seed.fixed, custom, lost: moreOpen && custom ? lostNames(be.lostByFixedReset()) : [] };
+  });
+  /** What the page reset of the ⋯ menu does beside the page (worked out while the menu is open). */
+  const pageReset = $derived.by(() => {
+    const plan = moreOpen && pageCustom && pageInSeed ? be.planResetPage() : null;
+    return plan && { toFixed: plan.toFixed.map(ctlName), addsFixed: plan.addsFixed, lost: lostNames(plan.lost) };
+  });
   const saveName = $derived(block?.family || typeName || slug || 'this block');
+  /** Names of the controls a reset takes off the board (the header shows its own controls anyway). */
+  function lostNames(keys: readonly string[]): string[] {
+    const header = headerKeys(catalog, { layout: editor.blockLayout, blockState: headerState, effectId: layoutOwnerEid });
+    return keys.filter((k) => !header.has(k)).map(ctlName);
+  }
+  const ctlName = (key: string): string => (catByKey.get(key)?.label ?? key).replace(/\s+/g, ' ').trim();
 
-  // another block: a fresh view of the editor (the surface and the grid map strip stay mounted)
+  // another block: a fresh view of the editor (the surface stays mounted)
   let lastResetKey = untrack(() => resetKey);
   $effect(() => {
     const k = resetKey;
@@ -925,6 +996,8 @@
             page: board?.page ?? '',
             pageCustom,
             pageInSeed,
+            pageReset,
+            fixed: fixedStatus,
             hasBoard: !!board,
             hasUserSeed: be.userSeed,
             hasDeviceLayout,
@@ -933,7 +1006,6 @@
               ? {
                   isCab: block.isCab,
                   canRetype: !!block.pack,
-                  gridMapShown: block.gridMapShown,
                   bypassMode: bmInMore
                     ? {
                         label: block.blockState.bypassMode.label,
@@ -953,7 +1025,13 @@
             resetPage: () => {
               holdActive(400);
               const pg = be.board?.page ?? 'Page';
-              if (be.resetPage()) editor.showToast(`“${pg}” reset`, 'var(--accent)');
+              const done = be.resetPage();
+              if (done) editor.showToast(`“${pg}” reset${done.addsFixed ? ', fixed area added' : ''}`, 'var(--accent)');
+            },
+            resetFixed: () => {
+              holdActive(400);
+              const back = !!be.seed?.fixed;
+              if (be.resetFixed()) editor.showToast(back ? 'Fixed area reset' : 'Fixed area removed', 'var(--accent)');
             },
             resetAll: () => {
               holdActive(400);
@@ -976,7 +1054,6 @@
               editor.showToast(`${saveName} starts from ${builtInName(hasDeviceLayout)} again`, 'var(--accent)');
             },
             changeType: () => block?.onType(),
-            gridMap: (show) => block?.onGridMap(show),
             remove: () => block?.onRemove()
           }
         )
@@ -1003,8 +1080,9 @@
     const z = zoom();
     const below = window.innerHeight - t.bottom;
     const up = below < 240 && t.top > below;
+    const width = Math.min(Math.max(t.width / z, 160), Math.max(0, window.innerWidth / z - 2 * popupMargin));
     selFocus = null;
-    sel = { id: itemId, enumId: ctl.id, left: t.left / z, top: (up ? t.top - 2 : t.bottom + 2) / z, width: Math.max(t.width / z, 160), up, trigger };
+    sel = { id: itemId, enumId: ctl.id, left: popupLeft(t.left / z, width, z), top: (up ? t.top - 2 : t.bottom + 2) / z, width, up, trigger };
   }
   function closeSelect(focusField: boolean) {
     const t = sel?.trigger;
@@ -1298,6 +1376,7 @@
         page: f?.page ?? '',
         pageOrder: b?.pageOrder ?? [],
         pagesWithKey: new Set(pagesOf(b, c.key)),
+        fixedCols: b?.fixed?.cols ?? null,
         canLayout: canArrangeOn(deviceClass),
         pinTargets: canPinIt && workbench ? pinTargetsFor(workbench.controller.document, c) : null,
         newTab: canPinIt && !!tab,
@@ -1444,8 +1523,12 @@
     divider: (kind) => arr.addDivider(kind),
     closeGaps: () => arr.closeGaps(),
     tidy: () => arr.tidyUp(),
-    autoPack: (on) => be.setAutoPack(on)
+    autoPack: (on) => be.setAutoPack(on),
+    addFixed: () => arr.addFixedArea()
   };
+  /** Where the bar's tools and the library act: the current page, or the fixed area while it is selected. */
+  const barTarget = $derived(arr.target || (board?.page ?? ''));
+  const selFixed = $derived(!!arr.sel && !!board && locate(board, arr.sel)?.page === FIXED_PAGE);
   const pageMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
     const b = board;
     if (!be.editMode || !b) return [];
@@ -1468,13 +1551,13 @@
   let barMoreAnchor = $state<HTMLElement | null>(null);
   let barOverflow = $state<BarPart[]>([]);
   const barMoreItems = $derived(
-    barMenu === 'more' && be.editMode ? buildBarOverflow(barOverflow, { sel: arrSel, canUndo: be.canUndo, autoPack: be.autoPack, pageItems: pageMenuItems, page: board?.page ?? '' }, barActions) : []
+    barMenu === 'more' && be.editMode ? buildBarOverflow(barOverflow, { sel: arrSel, canUndo: be.canUndo, autoPack: be.autoPack, pageItems: pageMenuItems, page: board?.page ?? '', target: pageLabel(barTarget), selFixed }, barActions) : []
   );
   let libQuery = $state('');
   let libFilter = $state<FindFilter>('all');
   let libAnchor = $state<HTMLElement | null>(null);
   let barEl = $state<HTMLElement | null>(null);
-  const libGroups = $derived(arr.libOpen && be.editMode ? findGroups(catalog, board, libQuery, libFilter) : []);
+  const libGroups = $derived(arr.libOpen && be.editMode ? findGroups(catalog, board, libQuery, libFilter, barTarget) : []);
   function libMeta(key: string): string {
     const c = catByKey.get(key);
     return c ? `${VIEW_NAME[c.view]} ${c.w}×${c.h}` : '';
@@ -1529,6 +1612,9 @@
     },
     get scrollAxis() {
       return scrollAxisOf(boardNav);
+    },
+    get fixedScrollAxis() {
+      return fixedAxis;
     },
     get canPin() {
       return workbenchCanPin;
@@ -1668,9 +1754,6 @@
     />
   {/snippet}
 
-  <!-- the grid map strip makes room for the arrange bar while arranging -->
-  {#if !be.editMode}{@render belowHeader?.()}{/if}
-
   {#if showMessage}
     <div class="be-msg" data-be-message><p>{message}</p></div>
   {:else if resultsOpen}
@@ -1695,6 +1778,9 @@
         canUndo={be.canUndo}
         autoPack={be.autoPack}
         page={board?.page ?? ''}
+        target={pageInText(barTarget)}
+        {selFixed}
+        canAddFixed={!!board && !board.fixed}
         touch={deviceClass === 'tablet'}
         libOpen={arr.libOpen}
         labelFocus={arr.labelFocus}
@@ -1726,32 +1812,72 @@
           onAdd={addPage}
         />
       {/if}
-      <BeBoard
-        bind:this={boardRef}
-        {pages}
-        {layouts}
-        nav={boardNav}
-        phone={phoneBoard}
-        editMode={be.editMode}
-        {highlight}
-        {active}
-        {flashPage}
-        catalog={catByKey}
-        ghost={arr.drag?.target ?? null}
-        dragging={!!arr.drag}
-        canArrange={!isPhone}
-        onMeasure={(w, h) => {
-          bodyW = w;
-          bodyH = h;
-        }}
-        {onVisible}
-        onScroll={onBoardScroll}
-        onBackgroundDown={() => {
-          if (tip && !adjusting) tip = null;
-          if (be.editMode) arr.select(null); // a press on empty grid clears the selection
-        }}
-        onArrange={arrangeAndAdd}
-      />
+      <!-- pages and fixed area: the area sits outside the pages' scroller (never scrolls with them) -->
+      <div class="be-main" class:band={fixedLay?.place === 'band'} bind:clientWidth={mainW} bind:clientHeight={mainH}>
+        <div class="be-pages">
+          <BeBoard
+            bind:this={boardRef}
+            {pages}
+            {layouts}
+            nav={boardNav}
+            phone={phoneBoard}
+            endPad={endPadOver(PHONE_END_PAD, bandH)}
+            anchorWidth={fixedLay?.place === 'column' && be.editMode ? mainW : undefined}
+            preserveStripOffset={fixedLay?.place === 'band'}
+            editMode={be.editMode}
+            {highlight}
+            {active}
+            {flashPage}
+            catalog={catByKey}
+            ghost={arr.drag?.target ?? null}
+            dragging={!!arr.drag || arr.sizingFixed}
+            canArrange={!isPhone}
+            onMeasure={(w, h) => {
+              bodyW = w;
+              bodyH = h;
+            }}
+            {onVisible}
+            onScroll={onBoardScroll}
+            onBackgroundDown={() => {
+              if (tip && !adjusting) tip = null;
+              if (be.editMode) arr.select(null); // a press on empty grid clears the selection
+            }}
+            onArrange={arrangeAndAdd}
+          />
+        </div>
+        {#if fixedLay && board?.fixed}
+          <BeFixed
+            bind:this={fixedRef}
+            bind:height={fixedH}
+            bind:overflowY={fixedOverflows}
+            layout={fixedLay}
+            items={fixedItems}
+            cols={board.fixed.cols}
+            allItems={board.fixed.items}
+            nav={boardNav}
+            editMode={be.editMode}
+            target={barTarget === FIXED_PAGE}
+            catalog={catByKey}
+            ghost={arr.drag?.target ?? null}
+            sizing={arr.sizingFixed}
+            touch={deviceClass === 'tablet'}
+            dockGutter={inWorkbench}
+            avoidDockOpener={deviceClass === 'tablet' && inWorkbench}
+            safeBottom={isPhone && !inWorkbench}
+            maxCols={fixedMaxCols}
+            {mainH}
+            {resetKey}
+            onScroll={onBoardScroll}
+            onBackgroundDown={() => {
+              if (tip && !adjusting) tip = null;
+              if (be.editMode) arr.select(null, true); // the area becomes the target of the tools
+            }}
+            onColsDown={(e, el, limits) => fixedLay && arr.colsDown(e, el, fixedLay.c + fixedLay.g, fixedLay.place === 'column' ? -1 : 1, limits)}
+            onColsKey={(e, limits) => arr.colsKey(e, fixedLay?.place === 'band' ? 1 : -1, limits)}
+            onRemove={() => arr.removeFixedArea()}
+          />
+        {/if}
+      </div>
     </div>
 
   {/if}
@@ -1769,7 +1895,7 @@
         anchor={libAnchor}
         floor={barEl}
         groups={libGroups}
-        page={board?.page ?? ''}
+        page={barTarget}
         bind:query={libQuery}
         bind:filter={libFilter}
         touch={deviceClass === 'tablet'}
@@ -1794,7 +1920,13 @@
 
     <!-- value bubble: full value with unit, above the other floating parts -->
     {#if tip}
-      <div class="be-tip" style:left="{tip.cx}px" style:top="{tip.cy}px">{tipValue ? formatFull(tipValue) : '–'}</div>
+      <div
+        class="be-tip"
+        bind:offsetWidth={tipWidth}
+        style:left="{tipLeft}px"
+        style:top="{tip.cy}px"
+        style:--be-tip-arrow="{Math.max(8, Math.min(tipWidth - 8, tip.cx - tipLeft))}px"
+      >{tipValue ? formatFull(tipValue) : '-'}</div>
     {/if}
 
     <!-- select popover -->
@@ -1889,6 +2021,23 @@
     /* in-panel z-indexes (tiles, reflow hint) stay local to the board */
     isolation: isolate;
   }
+  .be-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+  }
+  .be-main.band {
+    flex-direction: column;
+  }
+  .be-pages {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+  }
   .be-layer-src {
     display: contents;
   }
@@ -1977,7 +2126,7 @@
   .be-tip {
     position: fixed;
     z-index: 3;
-    transform: translate(-50%, calc(-100% - 11px));
+    transform: translateY(calc(-100% - 11px));
     padding: 7px 12px;
     border-radius: 10px;
     background: var(--input);
@@ -1992,7 +2141,7 @@
     content: '';
     position: absolute;
     top: 100%;
-    left: 50%;
+    left: var(--be-tip-arrow, 50%);
     transform: translateX(-50%);
     border: 6px solid transparent;
     border-top-color: var(--input);
@@ -2006,6 +2155,7 @@
   }
   .be-selmenu {
     position: fixed;
+    box-sizing: border-box;
     z-index: 2;
     max-height: 230px;
     overflow-y: auto;

@@ -92,6 +92,29 @@ describe('parseStoredBoard', () => {
   });
 });
 
+describe('parseStoredBoard: the fixed area', () => {
+  const item = { id: 'a', key: 'k1', view: 'knob', x: 0, y: 0, w: 2, h: 2 };
+  const base = { v: 2, pageOrder: ['A'], page: 'A', boards: { A: [item] } };
+  it('round-trips, with its dividers', () => {
+    const fixed = { cols: 6, items: [{ ...item, id: 'f' }, { id: 'd', kind: 'hdiv', x: 0, y: 2, w: 6, h: 1, label: 'Mix' }] };
+    const b = parseStoredBoard(JSON.stringify({ ...base, fixed, variantSig: 's' }))!;
+    expect(b.fixed).toEqual(fixed);
+    expect(parseStoredBoard(JSON.stringify(b))).toEqual(b);
+  });
+  it('absent stays absent; a bad one counts as absent and the board stays', () => {
+    expect('fixed' in parseStoredBoard(base)!).toBe(false);
+    for (const bad of [null, 7, 'x', [], {}, { cols: 'x', items: [] }, { cols: 4 }, { cols: 4, items: {} }]) {
+      const b = parseStoredBoard({ ...base, fixed: bad })!;
+      expect(b, JSON.stringify(bad)).not.toBeNull();
+      expect(b.fixed, JSON.stringify(bad)).toBeUndefined();
+      expect(b.boards.A).toHaveLength(1);
+    }
+  });
+  it('bad items are dropped', () => {
+    expect(parseStoredBoard({ ...base, fixed: { cols: 4, items: [item, null, 5, { id: 'x' }, { ...item, view: 'nope' }] } })!.fixed!.items).toEqual([{ ...item, row: undefined }]);
+  });
+});
+
 describe('parseStoredMeta', () => {
   it('accepts the new and the previous meta shape', () => {
     expect(parseStoredMeta('{"active":"Default","names":["Default","Blank"]}')).toEqual({ active: 'Default', names: ['Default', 'Blank'] });

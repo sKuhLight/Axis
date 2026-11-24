@@ -15,7 +15,7 @@ export const AXIS_WORKBENCH_BASE_PANEL_TYPES = [
   'axis.virtualScreen',
   'axis.placeholder',
   // Cross-device preset converter page panels (M4 · META-24). Each sets the OFFLINE editor surface
-  // (convertEditor) into context so the embedded SignalGrid/BlockEditor/GridMap render the converted
+  // (convertEditor) into context so the embedded SignalGrid/BlockEditor render the converted
   // scratch buffer with zero device I/O.
   'axis.convertGrid',
   'axis.convertBlockEditor',

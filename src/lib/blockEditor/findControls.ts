@@ -1,7 +1,7 @@
 // "Find a control…" (F5): the popover groups the block's controls ("jump to" + pin rows); Enter or
 // "Show all" opens the flat, directly operable results in the board. Pure (findControls.test.ts).
 
-import { isDivider, pageItems, type BeBoard } from './boardModel';
+import { FIXED_PAGE, isDivider, pageItems, regions, type BeBoard } from './boardModel';
 import { isPinnableKind } from './boardView';
 import type { BeCtl, BeKind } from './catalog';
 
@@ -11,9 +11,9 @@ export interface FindRow {
   key: string;
   label: string;
   kind: BeKind;
-  /** Pages the control is on, in page order. */
+  /** Pages the control is on, in page order (`FIXED_PAGE` last when it is in the fixed area). */
   pages: string[];
-  /** It is on the current page. */
+  /** It is on the current page (the library: on the page or area a click adds to). */
   onCurrent: boolean;
   /** It can be pinned to a workbench panel. */
   pinnable: boolean;
@@ -63,15 +63,15 @@ export const matchesQuery = (label: string, query: string): boolean => {
   return !q || label.toLowerCase().includes(q);
 };
 
-/** Pages a control key sits on, in page order. */
+/** Pages a control key sits on, in page order; the fixed area (`FIXED_PAGE`) last. */
 export function pagesOf(board: BeBoard | null, key: string): string[] {
   if (!board) return [];
-  return board.pageOrder.filter((pg) => pageItems(board, pg).some((it) => !isDivider(it) && it.key === key));
+  return regions(board).filter((pg) => pageItems(board, pg).some((it) => !isDivider(it) && it.key === key));
 }
 
-/** The popover's groups: matching controls (all, or only those on no page), in catalog order. */
-export function findGroups(catalog: readonly BeCtl[], board: BeBoard | null, query: string, filter: FindFilter = 'all'): FindGroup[] {
-  const current = board?.page ?? '';
+/** The popover's groups: matching controls (all, or only those on no page), in catalog order. `current` =
+ *  the page `onCurrent` speaks of (default: the board's current page). */
+export function findGroups(catalog: readonly BeCtl[], board: BeBoard | null, query: string, filter: FindFilter = 'all', current: string = board?.page ?? ''): FindGroup[] {
   const rows = new Map<FindGroup['id'], FindRow[]>();
   for (const c of catalog) {
     if (!matchesQuery(c.label, query)) continue;
@@ -88,13 +88,14 @@ export function findGroups(catalog: readonly BeCtl[], board: BeBoard | null, que
 /** First row of the groups (keyboard default), or null. */
 export const firstRow = (groups: readonly FindGroup[]): FindRow | null => groups[0]?.rows[0] ?? null;
 
-/** Page to jump to for a control: the current page when it is there, else its first page; null when the
- *  control is on no page. */
+/** Page to jump to for a control: the current page when it is there, else the fixed area (it is in view
+ *  already), else its first page; null when the control is on no page. */
 export function jumpPage(board: BeBoard | null, key: string, preferred?: string): string | null {
   const pages = pagesOf(board, key);
   if (!pages.length) return null;
   if (preferred && pages.includes(preferred)) return preferred;
-  return board && pages.includes(board.page) ? board.page : pages[0]!;
+  if (board && pages.includes(board.page)) return board.page;
+  return pages.includes(FIXED_PAGE) ? FIXED_PAGE : pages[0]!;
 }
 
 /** Id of a control's tile on a page (for the jump highlight). */

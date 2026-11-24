@@ -9,6 +9,7 @@ const actions = (): MoreMenuActions & Record<string, ReturnType<typeof vi.fn>> =
     density: vi.fn(),
     profile: vi.fn(),
     resetPage: vi.fn(),
+    resetFixed: vi.fn(),
     resetAll: vi.fn(),
     resetDevice: vi.fn(),
     newCopy: vi.fn(),
@@ -16,7 +17,6 @@ const actions = (): MoreMenuActions & Record<string, ReturnType<typeof vi.fn>> =
     saveDefault: vi.fn(),
     forgetDefault: vi.fn(),
     changeType: vi.fn(),
-    gridMap: vi.fn(),
     remove: vi.fn()
   }) as never;
 
@@ -36,7 +36,7 @@ const state = (over: Partial<MoreMenuState> = {}): MoreMenuState => ({
   hasUserSeed: false,
   hasDeviceLayout: true,
   typeName: 'Amp',
-  block: { isCab: false, canRetype: true, gridMapShown: true },
+  block: { isCab: false, canRetype: true },
   ...over
 });
 
@@ -63,7 +63,6 @@ describe('buildMoreMenu', () => {
       'new-copy',
       'save-default',
       'change-type',
-      'grid-map',
       'remove'
     ]);
     // each section starts with a separator (not the first row)
@@ -140,6 +139,26 @@ describe('buildMoreMenu', () => {
     expect(saved.confirm?.prompt).toBe('Reset “Preamp” to your saved default?');
   });
 
+  it('Reset fixed area: next to "Reset this page", only where the board or its seed has one, only when it differs', () => {
+    expect(ids(buildMoreMenu(state(), actions()))).not.toContain('reset-fixed');
+    const a = actions();
+    const same = buildMoreMenu(state({ fixed: { inSeed: true, custom: false } }), a);
+    expect(ids(same).slice(ids(same).indexOf('reset-page'), ids(same).indexOf('reset-all') + 1)).toEqual(['reset-page', 'reset-fixed', 'reset-all']);
+    expect(byId(same, 'reset-fixed')).toMatchObject({ label: 'Reset fixed area', disabled: true });
+    const changed = byId(buildMoreMenu(state({ custom: true, fixed: { inSeed: true, custom: true } }), a), 'reset-fixed');
+    expect(changed).toMatchObject({ disabled: false, confirm: { prompt: 'Reset the fixed area to the device layout?', confirmLabel: 'Reset' } });
+    changed.run();
+    expect(a.resetFixed).toHaveBeenCalled();
+    expect(byId(buildMoreMenu(state({ custom: true, hasUserSeed: true, fixed: { inSeed: true, custom: true } }), a), 'reset-fixed').confirm?.prompt).toBe('Reset the fixed area to your saved default?');
+    // the seed has none: the reset takes it away, and says so
+    const own = byId(buildMoreMenu(state({ custom: true, fixed: { inSeed: false, custom: true } }), a), 'reset-fixed');
+    expect(own).toMatchObject({ label: 'Remove fixed area', confirm: { prompt: 'The device layout has no fixed area — remove it?', confirmLabel: 'Remove' } });
+    expect(byId(buildMoreMenu(state({ custom: true, hasDeviceLayout: false, fixed: { inSeed: false, custom: true } }), a), 'reset-fixed').confirm?.prompt).toBe('The default layout has no fixed area — remove it?');
+    expect(byId(buildMoreMenu(state({ profile: 'Blank', custom: true, fixed: { inSeed: false, custom: true } }), a), 'reset-fixed')).toMatchObject({ label: 'Remove fixed area', confirm: { confirmLabel: 'Remove' } });
+    // without a board it is disabled like the other layout rows
+    expect(byId(buildMoreMenu(state({ hasBoard: false, custom: true, fixed: { inSeed: true, custom: true } }), a), 'reset-fixed').disabled).toBe(true);
+  });
+
   it('Blank: resets clear, and no device-layout / saved-default rows', () => {
     const items = buildMoreMenu(state({ profile: 'Blank', custom: true, pageCustom: true, hasUserSeed: true, page: 'Page 1' }), actions());
     expect(byId(items, 'reset-all')).toMatchObject({ label: 'Clear all pages', confirm: { prompt: 'Clear every page?', confirmLabel: 'Clear' } });
@@ -205,6 +224,9 @@ describe('buildMoreMenu', () => {
     const items = buildMoreMenu(state({ hasDeviceLayout: false, custom: true, pageCustom: true, page: 'Main' }), actions());
     expect(byId(items, 'reset-all')).toMatchObject({ label: 'Reset all pages', confirm: { prompt: 'Reset every page to the default layout?' } });
     expect(byId(items, 'reset-page').confirm?.prompt).toBe('Reset “Main” to the default layout?');
+    const withFixed = buildMoreMenu(state({ custom: true, pageCustom: true, page: 'Main', pageReset: { toFixed: ['Mix'], addsFixed: true, lost: ['Drive'] } }), actions());
+    expect(byId(withFixed, 'reset-page').confirm?.prompt).toContain('Mix moves to the fixed area, which is added.');
+    expect(byId(withFixed, 'reset-page').confirm?.prompt).toContain('Drive');
     expect(byId(items, 'profile:Default').hint).toBe('built-in');
     // with a saved default the extra row names the default layout too
     const saved = buildMoreMenu(state({ hasDeviceLayout: false, hasUserSeed: true, custom: true }), actions());
@@ -215,23 +237,20 @@ describe('buildMoreMenu', () => {
     expect(builtInName(true)).toBe('the device layout');
   });
 
-  it('cab: "Choose cab…"; no palette to open disables it; grid map label follows its state', () => {
+  it('cab: "Choose cab…"; no palette to open disables it; there is no grid map row', () => {
     const a = actions();
-    const cab = buildMoreMenu(state({ block: { isCab: true, canRetype: true, gridMapShown: false } }), a);
+    const cab = buildMoreMenu(state({ block: { isCab: true, canRetype: true } }), a);
     expect(byId(cab, 'change-type').label).toBe('Choose cab…');
-    expect(byId(cab, 'grid-map').label).toBe('Show grid map');
-    byId(cab, 'grid-map').run();
-    expect(a.gridMap).toHaveBeenCalledWith(true);
-    const none = buildMoreMenu(state({ block: { isCab: false, canRetype: false, gridMapShown: true } }), a);
+    expect(ids(cab)).not.toContain('grid-map');
+    const none = buildMoreMenu(state({ block: { isCab: false, canRetype: false } }), a);
     expect(byId(none, 'change-type')).toMatchObject({ label: 'Change type…', disabled: true });
-    expect(byId(none, 'grid-map').label).toBe('Hide grid map');
+    expect(ids(none)).not.toContain('grid-map');
     expect(byId(none, 'remove')).toMatchObject({ danger: true, confirm: { confirmLabel: 'Remove' } });
   });
 
-  it('virtual screens (no block): no type, grid map or remove rows', () => {
+  it('virtual screens (no block): no type or remove rows', () => {
     const items = buildMoreMenu(state({ block: null, typeName: 'Setup' }), actions());
     expect(ids(items)).not.toContain('change-type');
-    expect(ids(items)).not.toContain('grid-map');
     expect(ids(items)).not.toContain('remove');
     expect(items[items.length - 1]!.id).toBe('save-default');
     expect(byId(items, 'save-default').label).toBe('Save as default for Setup');
@@ -241,7 +260,7 @@ describe('buildMoreMenu', () => {
     const items = buildMoreMenu(state({ hasBoard: false, custom: true, pageCustom: true, profiles: ['Default', 'Blank', 'Mine'], profile: 'Mine', hasUserSeed: true }), actions());
     for (const id of ['arrange', 'nav-top', 'nav-side', 'size-s', 'size-m', 'size-l', 'profile:Default', 'profile:Blank', 'profile:Mine', 'reset-page', 'reset-all', 'reset-device', 'new-copy', 'delete-copy', 'save-default', 'forget-default'])
       expect(byId(items, id).disabled, id).toBe(true);
-    for (const id of ['change-type', 'grid-map', 'remove']) expect(byId(items, id).disabled, id).toBeFalsy();
+    for (const id of ['change-type', 'remove']) expect(byId(items, id).disabled, id).toBeFalsy();
   });
 
   it('a missing type name reads "this block"', () => {
@@ -250,14 +269,14 @@ describe('buildMoreMenu', () => {
 
   it('a phone-width header moves Bypass mode in here: a submenu first in the block rows (disabled with its reason)', () => {
     const rows: WorkbenchMenuItem[] = [{ id: 'bm:0', kind: 'radio', label: 'Thru', checked: true, run: () => {} }];
-    const items = buildMoreMenu(state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: 'Thru', reason: null, muting: false, rows } } }), actions());
-    expect(ids(items).slice(-4)).toEqual(['bypass-mode', 'change-type', 'grid-map', 'remove']);
+    const items = buildMoreMenu(state({ block: { isCab: false, canRetype: true, bypassMode: { label: 'Thru', reason: null, muting: false, rows } } }), actions());
+    expect(ids(items).slice(-3)).toEqual(['bypass-mode', 'change-type', 'remove']);
     expect(byId(items, 'bypass-mode')).toMatchObject({ kind: 'submenu', label: 'Bypass mode', hint: 'Thru', disabled: false, items: rows, separatorBefore: true });
     expect(byId(items, 'change-type').separatorBefore).toBeFalsy();
-    const muting = buildMoreMenu(state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: 'Mute Out', reason: null, muting: true, rows } } }), actions());
+    const muting = buildMoreMenu(state({ block: { isCab: false, canRetype: true, bypassMode: { label: 'Mute Out', reason: null, muting: true, rows } } }), actions());
     expect(byId(muting, 'bypass-mode').className).toBe('be-mi be-mi-bypass-mode muting');
     const off = buildMoreMenu(
-      state({ block: { isCab: false, canRetype: true, gridMapShown: true, bypassMode: { label: '', reason: 'Not available on VP4', muting: false, rows: [] } } }),
+      state({ block: { isCab: false, canRetype: true, bypassMode: { label: '', reason: 'Not available on VP4', muting: false, rows: [] } } }),
       actions()
     );
     expect(byId(off, 'bypass-mode')).toMatchObject({ disabled: true, hint: 'Not available on VP4', items: [] });

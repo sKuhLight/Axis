@@ -9,6 +9,7 @@ import {
   measurePitch,
   neighbourDistances,
   pageEntries,
+  pageRows,
   parsePositionExact,
   pitchSamples,
   placeLayoutPage,
@@ -578,5 +579,92 @@ describe('determinism', () => {
   });
   it('LayoutEntry indexes follow the layout order', () => {
     expect(entriesOf(page).map((e: LayoutEntry) => e.index)).toEqual(entriesOf(page).map((_, i) => i));
+  });
+});
+
+// ── controls shown elsewhere and page-level controls (AXIS-94) ──
+describe('controls that are gone (the header’s, the fixed area’s)', () => {
+  const without = (rows: LayoutRow[], keys: string[], o: Partial<Parameters<typeof placeLayoutPage>[1]> = {}) =>
+    placeLayoutPage(pageEntries(rows, byKey, {}, new Set(keys)), { pageIndex: 0, ...o });
+
+  it('leave no slot, nor the gaps left of the first control of their row; other rows keep theirs', () => {
+    const spacer = () => ctl('spacer', null);
+    const items = without([row([spacer(), knob(0), spacer(), knob(1), spacer(), knob(2)]), row([spacer(), knob(3)])], ['k0']);
+    expect(pos(items, 'k1')).toEqual({ x: 0, y: 0 });
+    expect(pos(items, 'k2')).toEqual({ x: 4, y: 0 }); // the gap after the first control stays
+    expect(pos(items, 'k3')).toEqual({ x: 2, y: 2 });
+    expect(items.some((i) => !isDivider(i) && i.key === 'k0')).toBe(false);
+  });
+
+  it('a whole row of them is no row; its section starts no divider', () => {
+    const items = without([row([knob(0)]), row([knob(1), knob(2)], 'mixer')], ['k1', 'k2']);
+    expect(items.map((i) => (isDivider(i) ? i.kind : i.key))).toEqual(['k0']);
+    const some = without([row([knob(0)]), row([knob(1), knob(2)], 'mixer')], ['k1']);
+    expect(dividers(some).map((d) => d.label)).toEqual(['Mixer']);
+    expect(pos(some, 'k2')).toEqual({ x: 0, y: 3 });
+  });
+
+  it('a title heads what is left of its group; with nothing left it goes', () => {
+    const rows = [row([title('A'), knob(0), knob(1), title('B'), knob(2), title('C'), knob(3)])];
+    const labels = (keys: string[]) => dividers(without(rows, keys)).map((d) => [d.label, d.x]);
+    expect(labels([])).toEqual([['A', 0], ['B', 4], ['C', 6]]);
+    expect(labels(['k0'])).toEqual([['A', 0], ['B', 2], ['C', 4]]);
+    expect(labels(['k0', 'k1'])).toEqual([['B', 0], ['C', 2]]);
+    expect(labels(['k2'])).toEqual([['A', 0], ['C', 4]]);
+    expect(labels(['k3'])).toEqual([['A', 0], ['B', 4]]);
+    expect(labels(['k0', 'k1', 'k2', 'k3'])).toEqual([]);
+  });
+
+  it('a page that lost its left column starts at the left edge again; one that did not keeps its columns', () => {
+    const rows = [row([knob(0, col(0)), knob(1, col(1))]), row([knob(2, col(0)), knob(3, col(2))])];
+    const items = without(rows, ['k0', 'k2']);
+    expect([pos(items, 'k1'), pos(items, 'k3')]).toEqual([{ x: 0, y: 0 }, { x: 2, y: 2 }]);
+    expect(pos(place([row([knob(1, col(1))])]), 'k1')).toEqual({ x: 2, y: 0 }); // nothing gone: as laid out
+  });
+
+  it('exact positions: the rest keeps its places to each other, from the left edge', () => {
+    const rows = [row([knob(0, at(100, 50)), knob(1, at(305, 50)), knob(2, at(397, 50)), knob(3, at(489, 50)), knob(4, at(305, 160))])];
+    const items = without(rows, ['k0']);
+    expect([1, 2, 3, 4].map((i) => pos(items, `k${i}`))).toEqual([{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 2 }]);
+  });
+
+  it('an empty skip set changes nothing', () => {
+    const rows = [row([title('A'), knob(0), ctl('spacer', null), knob(1, col(3))]), row([drop(41), knob(2)], 'mixer')];
+    expect(without(rows, [])).toEqual(place(rows));
+  });
+});
+
+describe('page-level controls', () => {
+  const page = (rows: LayoutRow[], pageControls: LayoutControl[]) => ({ name: 'P', rows, pageControls });
+
+  it('are one more row after the last row that is not the mixer’s, in its section', () => {
+    const rows = [row([knob(0)]), row([knob(1)], 'extra'), row([knob(2)], 'mixer')];
+    const out = pageRows(page(rows, [drop(41, at(10, 10))]));
+    expect(out.map((r) => [r.section, !!r.pageLevel])).toEqual([['parameters', false], ['extra', false], ['extra', true], ['mixer', false]]);
+    expect(pageRows(page([row([knob(2)], 'mixer')], [drop(41)])).map((r) => r.section)).toEqual(['parameters', 'mixer']);
+    expect(pageRows(page([], [drop(41)])).map((r) => r.pageLevel)).toEqual([true]);
+  });
+
+  it('entries without a param, titles and separators are not used; without any the rows are the page’s own', () => {
+    const rows = [row([knob(0)])];
+    expect(pageRows(page(rows, [title('X', at(1, 1)), sep(at(1, 1)), bold('Y'), graph(at(1, 1))]))).toBe(rows);
+    expect(pageRows({ name: 'P', rows })).toBe(rows);
+    expect(pageRows(null)).toEqual([]);
+    expect(pageRows(page(rows, [null as never, 'x' as never]))).toBe(rows);
+  });
+
+  it('what resolves to nothing, or to a control the page’s rows have, leaves no gap', () => {
+    const entries = pageEntries(pageRows(page([row([knob(0)]), row([knob(5)], 'mixer')], [knob(99), knob(0), knob(5), drop(41), drop(41)])), byKey);
+    expect(entries.map((e) => [e.kind, e.key, !!e.pageLevel])).toEqual([['tile', 'k0', false], ['tile', 'e41', true], ['tile', 'k5', false]]);
+  });
+
+  it('take their exact position on a positioned page, else flow in their own row', () => {
+    const positioned = pageEntries(pageRows(page([row([knob(0, at(305, 50)), knob(1, at(397, 50)), knob(2, at(489, 50))])], [knob(3, at(305, 160))])), byKey);
+    expect(pos(placeLayoutPage(positioned, { pageIndex: 0 }), 'k3')).toEqual({ x: 0, y: 2 });
+    const flow = pageEntries(pageRows(page([row([knob(0), knob(1), knob(2)]), row([knob(4)], 'mixer')], [knob(3, at(305, 160))])), byKey);
+    const items = placeLayoutPage(flow, { pageIndex: 0 });
+    expect(pos(items, 'k3')).toEqual({ x: 0, y: 2 });
+    expect(ctlOf(items, 'k4').y).toBeGreaterThan(2);
+    expect(noOverlaps(items)).toBeNull();
   });
 });

@@ -356,8 +356,6 @@ export interface BeBlockChrome {
   bypassed: boolean;
   /** Scene Ignore + Bypass mode of the active channel (`blockStateView`). */
   blockState: BlockStateView;
-  /** The grid map strip is shown (⋯ "Grid map"). */
-  gridMapShown: boolean;
   /** Open the model palette (retype) or the cab picker. */
   onType: () => void;
   onChannel: (ch: string) => void;
@@ -367,5 +365,4 @@ export interface BeBlockChrome {
   /** Set the bypass mode (an option value of `blockState.bypassMode`). */
   onBypassMode: (value: number) => void;
   onRemove: () => void;
-  onGridMap: (show: boolean) => void;
 }

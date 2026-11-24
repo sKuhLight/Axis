@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addControl,
   addDivider,
+  addFixed,
   addPage,
   BE_PRESETS,
   BE_SPEC,
@@ -12,8 +13,11 @@ import {
   deletePage,
   duplicatePage,
   findFree,
+  FIXED_PAGE,
   fits,
+  hasPage,
   isDivider,
+  isReservedPageName,
   locate,
   MAXC,
   migrateV1,
@@ -21,16 +25,25 @@ import {
   movePage,
   moveToPage,
   normalizeBoard,
+  packArea,
+  pageCols,
+  pageItems,
+  pageLabel,
+  planPageReset,
   PHONE_COLS,
   phoneWrap,
   reflowPack,
+  regions,
+  removeFixed,
   removeItem,
   renamePage,
+  resetFixedFrom,
   resetPageFrom,
   resizeItem,
   rotateDivider,
   sequentialIdGen,
   setDividerLabel,
+  setFixedCols,
   setView,
   sizeItem,
   tidy,
@@ -1008,5 +1021,188 @@ describe('moveToPage (control menu Move to page)', () => {
     const row = Array.from({ length: 12 }, (_, i) => knob(`f${i}`, `k${100 + i}`, i * 2, 0));
     const full = board({ A: [knob('a', 'k1', 0, 0)], F: row });
     expect(locate(moveToPage(full, 'a', 'F').board, 'a')).toMatchObject({ page: 'F', item: { x: 0, y: 2 } });
+  });
+});
+
+// ── the fixed area (AXIS-94) ──
+describe('fixed area', () => {
+  const withFixed = (items: BeItem[], cols = 4): BeBoard =>
+    board({ A: [knob('a', 'k1', 0, 0), knob('s', 'k2', 4, 0, { view: 'slider', w: 6, h: 1 })], B: [knob('b', 'k3', 0, 0)] }, { fixed: { cols, items } });
+  const fx = () => withFixed([knob('f', 'k10', 0, 0), knob('g', 'k11', 2, 0)]);
+
+  it('is one more list under a reserved id: never a page, found and listed last', () => {
+    const b = fx();
+    expect(isReservedPageName(FIXED_PAGE)).toBe(true);
+    expect(renamePage(b, 'A', FIXED_PAGE)).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(addPage(b, FIXED_PAGE).page).toBe('Page 3');
+    expect(regions(b)).toEqual(['A', 'B', FIXED_PAGE]);
+    expect(regions(board({ A: [] }))).toEqual(['A']);
+    expect(pageItems(b, FIXED_PAGE).map((i) => i.id)).toEqual(['f', 'g']);
+    expect([pageCols(b, FIXED_PAGE), pageCols(b, 'A')]).toEqual([4, MAXC]);
+    expect([hasPage(b, FIXED_PAGE), hasPage(board({ A: [] }), FIXED_PAGE)]).toEqual([true, false]);
+    expect(locate(b, 'g')).toMatchObject({ page: FIXED_PAGE, index: 1 });
+    expect(pageLabel(FIXED_PAGE)).toBe('Fixed area');
+    // a page of any other name is a page, also one the label is spelled like
+    expect(addPage(b, 'Fixed area').page).toBe('Fixed area');
+  });
+
+  it('page operations never touch it', () => {
+    const b = fx();
+    for (const r of [deletePage(b, FIXED_PAGE), renamePage(b, FIXED_PAGE, 'X')]) expect(r).toMatchObject({ ok: false, reason: 'missing' });
+    expect(duplicatePage(b, FIXED_PAGE).page).toBeNull();
+    expect(movePage(b, FIXED_PAGE, -1)).toBe(b);
+    expect(deletePage(b, 'A').board.fixed).toBe(b.fixed);
+    expect(duplicatePage(b, 'A', sequentialIdGen('d')).board.fixed).toBe(b.fixed);
+    expect(renamePage(b, 'A', 'Z').board.fixed).toBe(b.fixed);
+    expect(addPage(b).board.fixed).toBe(b.fixed);
+    expect(movePage(b, 'A', 1).fixed).toBe(b.fixed);
+    expect(resetPageFrom(b, board({ A: [knob('f', 'k5', 0, 0)] }), 'A', sequentialIdGen('r')).board.boards.A!.map((i) => i.id)).toEqual(['r1']); // the area's id is taken
+  });
+
+  it('moves within it, from a page and back; bounds are its own width; a source row is dropped', () => {
+    const b = withFixed([knob('f', 'k10', 0, 0)]);
+    expect(moveItem(b, 'f', FIXED_PAGE, 2, 1).board.fixed!.items[0]).toMatchObject({ x: 2, y: 1 });
+    expect(moveItem(b, 'f', FIXED_PAGE, 3, 0)).toMatchObject({ ok: false, reason: 'bounds' });
+    const tagged = board({ A: [knob('a', 'k1', 0, 0, { row: 3 })] }, { fixed: { cols: 4, items: [] } });
+    const inArea = moveItem(tagged, 'a', FIXED_PAGE, 2, 0);
+    expect(inArea.board.boards.A).toEqual([]);
+    expect(inArea.board.fixed!.items).toEqual([knob('a', 'k1', 2, 0)]);
+    const back = moveItem(inArea.board, 'a', 'A', 10, 4);
+    expect(back.board.fixed!.items).toEqual([]);
+    expect(back.board.boards.A).toEqual([knob('a', 'k1', 10, 4)]);
+    expect(moveItem(b, 'a', FIXED_PAGE, 0, 1)).toMatchObject({ ok: false, reason: 'collision' });
+    // no fixed area: nowhere to move to
+    expect(moveItem(board({ A: [knob('a', 'k1', 0, 0)] }), 'a', FIXED_PAGE, 0, 0)).toMatchObject({ ok: false, reason: 'missing' });
+  });
+
+  it('the same key may be on a page and in the area, but only once in the area', () => {
+    const b = withFixed([knob('f', 'k1', 0, 0)]);
+    expect(moveToPage(b, 'a', FIXED_PAGE)).toMatchObject({ ok: false, reason: 'duplicate' });
+    expect(addControl(b, FIXED_PAGE, { key: 'k1', view: 'knob' })).toMatchObject({ ok: false, reason: 'duplicate' });
+    expect(addControl(b, FIXED_PAGE, { key: 'k3', view: 'knob' }, null, sequentialIdGen('n')).board.fixed!.items.map((i) => ('key' in i ? i.key : ''))).toEqual(['k1', 'k3']);
+    expect(moveToPage(b, 'f', 'A')).toMatchObject({ ok: false, reason: 'duplicate' });
+    expect(moveToPage(b, 'f', 'B').board.boards.B!.map((i) => i.id)).toEqual(['b', 'f']);
+  });
+
+  it('a wider item is narrowed to the area when its view allows it, else refused', () => {
+    const b = withFixed([]);
+    const r = moveToPage(b, 's', FIXED_PAGE);
+    expect(r.board.fixed!.items).toEqual([knob('s', 'k2', 0, 0, { view: 'slider', w: 4, h: 1 })]);
+    const eq = board({ A: [knob('q', 'eq', 0, 0, { view: 'eq', w: 8, h: 4 })] }, { fixed: { cols: 4, items: [] } });
+    expect(moveToPage(eq, 'q', FIXED_PAGE)).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(moveItem(eq, 'q', FIXED_PAGE, 0, 0)).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(addControl(eq, FIXED_PAGE, { key: 'eq', view: 'eq' })).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(moveToPage({ ...eq, fixed: { cols: 6, items: [] } }, 'q', FIXED_PAGE).board.fixed!.items[0]).toMatchObject({ w: 6, h: 4 });
+    expect(addDivider(b, FIXED_PAGE, 'hdiv', null, sequentialIdGen('d')).board.fixed!.items[0]).toMatchObject({ kind: 'hdiv', w: 4 });
+  });
+
+  it('view, size, resize, rotate, label and remove work in it', () => {
+    const b = withFixed([knob('f', 'k10', 0, 0), hdiv('h', 0, 2, 4)]);
+    expect(setView(b, 'f', 'slider').board.fixed!.items[0]).toMatchObject({ view: 'slider', w: 4, h: 1 });
+    expect(setView(b, 'f', 'eq')).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(sizeItem(b, 'f', 4, 4)).toMatchObject({ ok: true, moved: true }); // under the divider
+    expect(sizeItem(withFixed([knob('f', 'k10', 0, 0)], 2), 'f', 4, 4).board.fixed!.items[0]).toMatchObject({ w: 2, h: 4 });
+    expect(resizeItem(b, 'f', 4, 2).board.fixed!.items[0]).toMatchObject({ w: 4, h: 2 });
+    expect(resizeItem(b, 'f', 5, 2)).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(setDividerLabel(b, 'h', 'Mix').board.fixed!.items[1]).toMatchObject({ label: 'Mix' });
+    expect(rotateDivider(withFixed([hdiv('h', 0, 0, 4)]), 'h').board.fixed!.items[0]).toMatchObject({ kind: 'vdiv', w: 1, h: 4 });
+    expect(removeItem(b, 'f').board.fixed!.items.map((i) => i.id)).toEqual(['h']);
+    // the rest of the board is shared, not copied
+    expect(removeItem(b, 'f').board.boards).toBe(b.boards);
+  });
+
+  it('add, empty and remove the area; an emptied area stays until it is removed', () => {
+    const plain = board({ A: [] });
+    const added = addFixed(plain);
+    expect(added.board.fixed).toEqual({ cols: 4, items: [] });
+    expect(addFixed(added.board).board).toBe(added.board);
+    expect(removeFixed(added.board).board).toEqual(plain);
+    expect('fixed' in removeFixed(added.board).board).toBe(false);
+    expect(removeFixed(plain)).toMatchObject({ ok: false, reason: 'missing' });
+    const emptied = removeItem(withFixed([knob('f', 'k10', 0, 0)]), 'f').board;
+    expect(emptied.fixed).toEqual({ cols: 4, items: [] });
+    expect(normalizeBoard(emptied, ['k1', 'k2', 'k3']).fixed).toEqual({ cols: 4, items: [] });
+  });
+
+  it('its width: 2..8 and what its items allow; wider keeps every place, narrower packs again in reading order', () => {
+    const items = [knob('a1', 'k1', 0, 0), knob('a2', 'k2', 2, 0), knob('a3', 'k3', 4, 0), knob('a4', 'k4', 0, 2)];
+    const b = board({ A: [] }, { fixed: { cols: 6, items } });
+    expect(setFixedCols(b, 6).board).toBe(b);
+    expect(setFixedCols(b, 8).board.fixed).toEqual({ cols: 8, items });
+    expect(setFixedCols(b, 99).board.fixed!.cols).toBe(8);
+    const n = setFixedCols(b, 4).board.fixed!;
+    expect(n.items.map((i) => [i.id, i.x, i.y])).toEqual([['a1', 0, 0], ['a2', 2, 0], ['a3', 0, 2], ['a4', 2, 2]]);
+    expect(setFixedCols(b, 1).board.fixed!).toMatchObject({ cols: 2 });
+    expect(bbox(setFixedCols(b, 2).board.fixed!.items).C).toBe(2);
+    // an EQ graph needs six cells
+    expect(setFixedCols(board({ A: [] }, { fixed: { cols: 8, items: [knob('q', 'eq', 0, 0, { view: 'eq', w: 8, h: 4 })] } }), 2).board.fixed!).toMatchObject({ cols: 6, items: [{ w: 6 }] });
+    expect(setFixedCols(board({ A: [] }), 4)).toMatchObject({ ok: false, reason: 'missing' });
+    expect(packArea(items, 4)).toEqual(n.items);
+  });
+
+  it('reset: the seed’s area (fresh ids where a page uses them), or none', () => {
+    const seed = board({ A: [] }, { fixed: { cols: 6, items: [knob('a', 'k10', 0, 0), knob('x', 'k11', 2, 0)] } });
+    const r = resetFixedFrom(withFixed([]), seed, sequentialIdGen('n'));
+    expect(r.board.fixed).toEqual({ cols: 6, items: [knob('n1', 'k10', 0, 0), knob('x', 'k11', 2, 0)] });
+    expect(r.board.boards).toEqual(withFixed([]).boards);
+    expect(resetFixedFrom(withFixed([knob('f', 'k1', 0, 0)]), board({ A: [] })).board.fixed).toBeUndefined();
+    const none = board({ A: [] });
+    expect(resetFixedFrom(none, none).board).toBe(none);
+    expect(resetPageFrom(withFixed([]), seed, FIXED_PAGE, sequentialIdGen('n')).board).toEqual(r.board);
+  });
+
+  it('resetting a page restores the fixed area before removing controls the seed puts there', () => {
+    const current = board({ A: [knob('old', 'k10', 0, 0), knob('gone', 'k11', 2, 0)], B: [knob('shared', 'k3', 0, 0)] });
+    const seed = board({ A: [knob('new', 'k1', 0, 0)], B: current.boards.B! }, {
+      fixed: { cols: 6, items: [knob('shared', 'k10', 0, 0), knob('extra', 'k2', 2, 0)] }
+    });
+    const plan = planPageReset(current, seed, 'A', new Set(['k1', 'k2', 'k3', 'k10', 'k11']), sequentialIdGen('reset'))!;
+    expect(plan).toMatchObject({ addsFixed: true, toFixed: ['k10'], lost: ['k11'] });
+    expect(plan.board.boards).toEqual(seed.boards);
+    expect(plan.board.fixed).toEqual({ cols: 6, items: [knob('reset1', 'k10', 0, 0), knob('extra', 'k2', 2, 0)] });
+    expect(planPageReset(board({ A: [knob('gone', 'k11', 0, 0)] }), seed, 'A', new Set(['k1', 'k11']))).toMatchObject({ addsFixed: false, lost: ['k11'] });
+    const duplicate = board({ A: [knob('a', 'k10', 0, 0)], B: [knob('b', 'k10', 0, 0)] });
+    expect(planPageReset(duplicate, seed, 'A', new Set(['k1', 'k10']))).toMatchObject({ addsFixed: false, toFixed: [], lost: [] });
+  });
+
+  it('keeps a custom width when writing fixed-area items', () => {
+    const b = withFixed([knob('f', 'k10', 4, 0)], 6);
+    expect(moveItem(b, 'f', FIXED_PAGE, 4, 2).board.fixed).toEqual({ cols: 6, items: [knob('f', 'k10', 4, 2)] });
+    expect(removeItem(b, 'f').board.fixed).toEqual({ cols: 6, items: [] });
+  });
+
+  describe('normalizeBoard', () => {
+    const keys = ['k1', 'k2', 'k3', 'k10', 'k11', 'eq'];
+    const norm = (fixed: unknown, boards: Record<string, BeItem[]> = { A: [knob('a', 'k1', 0, 0)] }) => normalizeBoard({ ...board(boards), fixed } as BeBoard, keys);
+
+    it('catalog keys, duplicates, clamping and overlaps in its own coordinates; no source rows', () => {
+      const n = norm({ cols: 4, items: [knob('f', 'k10', 9, 0, { row: 2 }), knob('g', 'k11', 2, 0), knob('dup', 'k10', 0, 4), knob('gone', 'k99', 0, 0), knob('w', 'k2', 0, 6, { view: 'slider', w: 9, h: 1 })] });
+      expect(n.fixed!.items).toEqual([knob('f', 'k10', 2, 0), knob('g', 'k11', 0, 1), knob('w', 'k2', 0, 6, { view: 'slider', w: 4, h: 1 })]);
+      expect(normalizeBoard(n, keys)).toEqual(n); // idempotent
+    });
+
+    it('a key on a page and in the area is fine; ids are unique across both', () => {
+      const n = norm({ cols: 4, items: [knob('a', 'k1', 0, 0), knob('', 'k2', 2, 0)] });
+      expect(n.boards.A!.map((i) => i.id)).toEqual(['a']);
+      expect(n.fixed!.items.map((i) => i.id)).toEqual(['nf.k1', 'nf.k2']);
+      expect(normalizeBoard(n, keys)).toEqual(n);
+    });
+
+    it('its width is clamped, and widened to what stays in it', () => {
+      expect(norm({ cols: 1, items: [] }).fixed!.cols).toBe(2);
+      expect(norm({ cols: 40, items: [] }).fixed!.cols).toBe(8);
+      expect(norm({ cols: 5.4, items: [] }).fixed!.cols).toBe(5);
+      expect(norm({ cols: 'x', items: [] }).fixed!.cols).toBe(4);
+      expect(norm({ cols: 4, items: [knob('q', 'eq', 0, 0, { view: 'eq', w: 8, h: 4 })] }).fixed!).toMatchObject({ cols: 6, items: [{ w: 6 }] });
+      expect(norm({ cols: 4, items: [knob('q', 'k99', 0, 0, { view: 'eq', w: 8, h: 4 })] }).fixed!.cols).toBe(4); // it does not stay
+    });
+
+    it('absent stays absent; garbage counts as absent; a stray page of the reserved name is dropped', () => {
+      expect('fixed' in normalizeBoard(board({ A: [] }), keys)).toBe(false);
+      expect(norm(null).fixed).toBeUndefined();
+      expect(norm('x').fixed).toBeUndefined();
+      expect(norm({ cols: 4, items: 'x' }).fixed).toEqual({ cols: 4, items: [] });
+      expect(normalizeBoard(board({ A: [], [FIXED_PAGE]: [knob('z', 'k1', 0, 0)] }), keys).pageOrder).toEqual(['A']);
+    });
   });
 });

@@ -21,6 +21,7 @@ import {
   tidy,
   deletePage,
   duplicatePage,
+  FIXED_PAGE,
   locate,
   moveItem,
   movePage,
@@ -143,6 +144,39 @@ describe('whose key is it', () => {
     expect(isForeignOverlay(drawer, root, layer)).toBe(false);
     expect(isForeignOverlay(dialog, root, layer)).toBe(true);
     expect(isForeignOverlay(library, root, null)).toBe(true);
+  });
+});
+
+describe('the fixed area is one more list', () => {
+  const b: BeBoard = {
+    v: 2,
+    pageOrder: ['A'],
+    page: 'A',
+    boards: { A: [] },
+    fixed: {
+      cols: 4,
+      items: [
+        { id: 'f', key: 'k1', view: 'knob', x: 2, y: 4, w: 2, h: 2 },
+        { id: 'g', key: 'k2', view: 'knob', x: 0, y: 8, w: 2, h: 2 }
+      ]
+    }
+  };
+  it('keys: nudge and grow stay inside its width', () => {
+    expect(nudgeItem(b, 'f', -1, 0).board.fixed!.items[0]).toMatchObject({ x: 1 });
+    expect(nudgeItem(b, 'f', 1, 0)).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(growItem(b, 'f', 1, 0)).toMatchObject({ ok: false, reason: 'bounds' });
+    expect(growItem(b, 'g', 2, 0).board.fixed!.items[1]).toMatchObject({ w: 4 });
+  });
+  it('close gaps, tidy and Auto-pack; not without an area', () => {
+    expect(onPage(b, FIXED_PAGE, closeGaps).board.fixed!.items.map((i) => [i.x, i.y])).toEqual([[2, 0], [0, 2]]);
+    expect(tidyPages(b, ['A', FIXED_PAGE]).fixed!.items.map((i) => [i.x, i.y])).toEqual([[0, 0], [0, 2]]);
+    const { fixed: _f, ...none } = b;
+    expect(onPage(none, FIXED_PAGE, tidy)).toMatchObject({ ok: false, reason: 'missing' });
+    expect(tidyPages(none, [FIXED_PAGE])).toBe(none);
+  });
+  it('the library adds there; the selection survives there', () => {
+    expect(libraryAdd(b, FIXED_PAGE, { key: 'k9', view: 'slider' }, null, () => 'n').board.fixed!.items.at(-1)).toMatchObject({ id: 'n', x: 0, y: 0, w: 4, h: 1 });
+    expect(keepSelection(b, 'g')).toBe('g');
   });
 });
 

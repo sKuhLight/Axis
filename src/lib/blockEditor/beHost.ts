@@ -46,6 +46,9 @@ export interface BeHost {
   /** The axis the board scrolls along (top strip: x; side stack and the phone layout: y). Touch changes
    *  values along the other one (touchGesture.ts; a pen behaves like the mouse). */
   readonly scrollAxis: Axis;
+  /** The same for the tiles of the fixed area: it scrolls vertically itself when its contents are taller than
+   *  its room, else it follows the board. */
+  readonly fixedScrollAxis: Axis;
   /** A workbench with the pin action is around. */
   readonly canPin: boolean;
   readonly eqBands: EQBand[];

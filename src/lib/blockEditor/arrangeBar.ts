@@ -1,7 +1,8 @@
 // Block Editor Arrange bar: ONE row of tools — the selection's tools (a control: View, Size S/M/L, Pin, the
 // grid swipe control, Remove; a divider: its label, Rotate, Remove) · Undo · + Add · + Divider h / v ·
-// Close gaps · Tidy up · Auto-pack · Page ▾ · ✓ Done. What does not fit the row moves into a "⋯" menu at
-// its end instead of wrapping onto a second row (the board keeps its height). Pure (arrangeBar.test.ts):
+// Close gaps · Tidy up · Auto-pack · Add fixed area (only while the board has none) · Page ▾ · ✓ Done. What
+// does not fit the row moves into a "⋯" menu at its end instead of wrapping onto a second row (the board
+// keeps its height). Pure (arrangeBar.test.ts):
 // the selection model, the fit, and the overflow menu's rows.
 
 import type { WorkbenchMenuItem } from '../workbench';
@@ -83,6 +84,7 @@ export type BarPart =
   | 'close-gaps'
   | 'tidy'
   | 'autopack'
+  | 'fixed'
   | 'page'
   | 'done';
 
@@ -92,6 +94,7 @@ export const BAR_DROP: Readonly<Record<BarPart, { order: number; menu: boolean }
   hint: { order: 1, menu: false },
   tag: { order: 2, menu: false },
   autopack: { order: 3, menu: true },
+  fixed: { order: 3.5, menu: true },
   tidy: { order: 4, menu: true },
   'close-gaps': { order: 5, menu: true },
   divider: { order: 6, menu: true },
@@ -109,8 +112,8 @@ export const BAR_DROP: Readonly<Record<BarPart, { order: number; menu: boolean }
   done: { order: Infinity, menu: false }
 };
 
-/** The parts the bar has right now, in row order. */
-export function barParts(sel: ArrangeSel | null): BarPart[] {
+/** The parts the bar has right now, in row order. `addFixed`: the board has no fixed area yet. */
+export function barParts(sel: ArrangeSel | null, addFixed = false): BarPart[] {
   const out: BarPart[] = ['tag'];
   if (!sel) out.push('hint');
   else if (sel.kind === 'control') {
@@ -121,7 +124,9 @@ export function barParts(sel: ArrangeSel | null): BarPart[] {
     if (sel.swipe != null) out.push('sel-swipe');
     out.push('sel-remove');
   } else out.push('sel-name', 'div-label', 'div-rotate', 'sel-remove');
-  out.push('undo', 'add', 'divider', 'close-gaps', 'tidy', 'autopack', 'page', 'done');
+  out.push('undo', 'add', 'divider', 'close-gaps', 'tidy', 'autopack');
+  if (addFixed) out.push('fixed');
+  out.push('page', 'done');
   return out;
 }
 
@@ -164,6 +169,11 @@ export interface BarState {
   /** The Page ▾ menu's rows (pageMenu.ts), offered as a submenu. */
   pageItems: WorkbenchMenuItem[];
   page: string;
+  /** Where "+ Control", the dividers, Close gaps and Tidy up act: the page, or the fixed area while it is the
+   *  selected target. */
+  target: string;
+  /** The selection sits in the fixed area. */
+  selFixed: boolean;
 }
 
 export interface BarActions {
@@ -183,6 +193,8 @@ export interface BarActions {
   closeGaps(): void;
   tidy(): void;
   autoPack(on: boolean): void;
+  /** Give the board a fixed area. */
+  addFixed(): void;
 }
 
 const cls = rowClass('be-ab');
@@ -223,7 +235,7 @@ export function buildBarOverflow(parts: readonly BarPart[], s: BarState, a: BarA
         rows.push({ id: 'rotate', label: 'Rotate', className: cls('rotate'), run: () => a.rotate() });
         break;
       case 'sel-remove':
-        rows.push({ id: 'remove', label: sel?.kind === 'divider' ? 'Remove divider' : 'Remove from page', hint: 'Del', danger: true, className: cls('remove'), run: () => a.remove() });
+        rows.push({ id: 'remove', label: sel?.kind === 'divider' ? 'Remove divider' : s.selFixed ? 'Remove from the fixed area' : 'Remove from page', hint: 'Del', danger: true, className: cls('remove'), run: () => a.remove() });
         break;
       case 'undo':
         rows.push(boardRow({ id: 'undo', label: 'Undo', hint: UNDO_KEYS, disabled: !s.canUndo, className: cls('undo'), run: () => a.undo() }));
@@ -238,13 +250,16 @@ export function buildBarOverflow(parts: readonly BarPart[], s: BarState, a: BarA
         );
         break;
       case 'close-gaps':
-        rows.push(boardRow({ id: 'close-gaps', label: 'Close gaps', hint: s.page, className: cls('close-gaps'), run: () => a.closeGaps() }));
+        rows.push(boardRow({ id: 'close-gaps', label: 'Close gaps', hint: s.target, className: cls('close-gaps'), run: () => a.closeGaps() }));
         break;
       case 'tidy':
-        rows.push(boardRow({ id: 'tidy', label: 'Tidy up', hint: s.page, className: cls('tidy'), run: () => a.tidy() }));
+        rows.push(boardRow({ id: 'tidy', label: 'Tidy up', hint: s.target, className: cls('tidy'), run: () => a.tidy() }));
         break;
       case 'autopack':
         rows.push(boardRow({ id: 'autopack', label: 'Auto-pack', hint: s.autoPack ? 'on' : 'off', className: cls('autopack', s.autoPack ? 'on' : ''), run: () => a.autoPack(!s.autoPack) }));
+        break;
+      case 'fixed':
+        rows.push(boardRow({ id: 'fixed', label: 'Add fixed area', className: cls('fixed'), run: () => a.addFixed() }));
         break;
       case 'page':
         rows.push({ id: 'page', kind: 'submenu', label: 'Page', hint: s.page, separatorBefore: rows.length > 0, className: cls('page'), run: noop, items: s.pageItems });

@@ -4,6 +4,11 @@
 // the height is free (capped at `MAX_ROWS`). Items are either controls (bound to a catalog key such as
 // `k12`, `e4`, `eq`) or dividers (horizontal / vertical rules with an optional label, one cell thick).
 //
+// A board may also have a FIXED AREA: items that stay in view beside every page (`fixed`, 2..8 cells wide,
+// with a coordinate space of its own). In every operation it is one more list of items under the reserved
+// page id `FIXED_PAGE`: the same functions move, resize, add and remove there. It is no page: it is never in
+// `pageOrder`, never the current page, and the page operations (rename, duplicate, move, delete) refuse it.
+//
 // Everything here is pure and immutable: every operation returns a new board / list, and an operation
 // that changes nothing hands back the very same reference so callers can skip a save or a render.
 // No Svelte, no DOM — unit-tested in node (boardModel.test.ts).
@@ -52,11 +57,20 @@ export interface BeDivider extends BeRect {
 }
 export type BeItem = BeControl | BeDivider;
 
+/** The fixed area: items that stay in view beside every page, in cells of its own (0..cols). */
+export interface BeFixedArea {
+  /** Width in cells (2..8; a knob is 2 cells wide). */
+  cols: number;
+  items: BeItem[];
+}
+
 export interface BeBoard {
   v: 2;
   pageOrder: string[];
   page: string;
   boards: Record<string, BeItem[]>;
+  /** Absent: the board has no fixed area (its pages use the full width). */
+  fixed?: BeFixedArea;
   /** Fingerprint of the device-layout variant a Default board was seeded from. */
   variantSig?: string;
 }
@@ -74,8 +88,14 @@ export const isBeView = (v: unknown): v is BeView => typeof v === 'string' && (B
 
 /** Own-property check, so page names like `constructor` or `toString` never hit Object.prototype. */
 export const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
-/** Page names that can never be used (they would rewrite an object's prototype). */
-export const isReservedPageName = (n: string): boolean => n === '__proto__';
+/** The fixed area's page id in the operation layer. It starts with a control character, so no page name a
+ *  user can type (or a layout can give) ever equals it. Never stored, never in `pageOrder`. */
+export const FIXED_PAGE = '\u0001fixed';
+/** Page names that can never be used (`__proto__` would rewrite an object's prototype; the fixed area's id). */
+export const isReservedPageName = (n: string): boolean => n === '__proto__' || n === FIXED_PAGE;
+/** How a page (or the fixed area) is named in menus and lists, and inside a sentence. */
+export const pageLabel = (page: string): string => (page === FIXED_PAGE ? 'Fixed area' : page);
+export const pageInText = (page: string): string => (page === FIXED_PAGE ? 'the fixed area' : page);
 
 // ── size table ───────────────────────────────────────────────────────────────────────────────────
 
@@ -83,6 +103,10 @@ export const isReservedPageName = (n: string): boolean => n === '__proto__';
 export const MAXC = 24;
 /** Maximum page height in cells; positions are clamped so no page can grow without bound. */
 export const MAX_ROWS = 512;
+/** Width limits of the fixed area in cells, and the width a new one gets (two knobs). */
+export const FIXED_MIN_COLS = 2;
+export const FIXED_MAX_COLS = 8;
+export const FIXED_DEFAULT_COLS = 4;
 
 export interface BeSpec {
   w: number;
@@ -188,36 +212,36 @@ export function bbox(list: readonly BeRect[]): { C: number; R: number } {
 
 const overlaps = (a: BeRect, b: BeRect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
-/** True when a w×h rect at (x,y) stays inside the 24-cell page and touches nothing else on it. */
-export function fits(list: readonly Placed[], x: number, y: number, w: number, h: number, exceptId?: string): boolean {
-  if (x < 0 || y < 0 || x + w > MAXC) return false;
+/** True when a w×h rect at (x,y) stays inside the page (`cols` cells wide) and touches nothing else on it. */
+export function fits(list: readonly Placed[], x: number, y: number, w: number, h: number, exceptId?: string, cols: number = MAXC): boolean {
+  if (x < 0 || y < 0 || x + w > cols) return false;
   const r = { x, y, w, h };
   return !list.some((o) => o.id !== exceptId && overlaps(r, o));
 }
 
 /** First free spot (row-major from the top-left) for a w×h rect; below everything if the page is full. */
-export function findFree(list: readonly Placed[], w: number, h: number, exceptId?: string): { x: number; y: number } {
-  const ww = Math.min(w, MAXC);
+export function findFree(list: readonly Placed[], w: number, h: number, exceptId?: string, cols: number = MAXC): { x: number; y: number } {
+  const ww = Math.min(w, cols);
   const { R } = bbox(list);
   for (let y = 0; y <= R + h; y++) {
-    for (let x = 0; x <= MAXC - ww; x++) if (fits(list, x, y, ww, h, exceptId)) return { x, y };
+    for (let x = 0; x <= cols - ww; x++) if (fits(list, x, y, ww, h, exceptId, cols)) return { x, y };
   }
   return { x: 0, y: R };
 }
 
 /** Nearest free spot to (x0,y0): first the same line to the right, then the following lines, closest
  *  column first. Used to resolve overlaps without throwing an item across the page. */
-export function findNear(list: readonly Placed[], w: number, h: number, x0: number, y0: number, exceptId?: string): { x: number; y: number } {
-  const ww = Math.min(w, MAXC);
-  const sx = clamp(int(x0), 0, MAXC - ww);
+export function findNear(list: readonly Placed[], w: number, h: number, x0: number, y0: number, exceptId?: string, cols: number = MAXC): { x: number; y: number } {
+  const ww = Math.min(w, cols);
+  const sx = clamp(int(x0), 0, cols - ww);
   const sy = Math.max(0, int(y0));
-  for (let x = sx; x <= MAXC - ww; x++) if (fits(list, x, sy, ww, h, exceptId)) return { x, y: sy };
-  const xs = Array.from({ length: MAXC - ww + 1 }, (_, i) => i).sort(
+  for (let x = sx; x <= cols - ww; x++) if (fits(list, x, sy, ww, h, exceptId, cols)) return { x, y: sy };
+  const xs = Array.from({ length: cols - ww + 1 }, (_, i) => i).sort(
     (a, b) => Math.abs(a - sx) - Math.abs(b - sx) || (a < sx ? 1 : 0) - (b < sx ? 1 : 0)
   );
   const { R } = bbox(list);
   const last = Math.max(R, sy + 1);
-  for (let y = sy + 1; y <= last; y++) for (const x of xs) if (fits(list, x, y, ww, h, exceptId)) return { x, y };
+  for (let y = sy + 1; y <= last; y++) for (const x of xs) if (fits(list, x, y, ww, h, exceptId, cols)) return { x, y };
   return { x: sx, y: last };
 }
 
@@ -502,14 +526,28 @@ export interface BeOpResult {
 const ok = (board: BeBoard, extra: Partial<BeOpResult> = {}): BeOpResult => ({ board, ok: true, ...extra });
 const fail = (board: BeBoard, reason: BeOpFailure): BeOpResult => ({ board, ok: false, reason });
 
-const hasPage = (board: BeBoard, page: string): boolean => hasOwn(board.boards, page);
+/** Pages and — when the board has one — the fixed area: every list of items, in order. */
+export const regions = (board: BeBoard): string[] => (board.fixed ? [...board.pageOrder, FIXED_PAGE] : board.pageOrder);
+/** The board has this page (or the fixed area). */
+export const hasPage = (board: BeBoard, page: string): boolean => (page === FIXED_PAGE ? !!board.fixed : hasOwn(board.boards, page));
 export function pageItems(board: BeBoard, page: string): BeItem[] {
+  if (page === FIXED_PAGE) return board.fixed?.items ?? [];
   return hasPage(board, page) ? (board.boards[page] ?? []) : [];
 }
+/** Width of a page in cells (the fixed area's own width, else a full page). */
+export const pageCols = (board: BeBoard, page: string): number => (page === FIXED_PAGE ? (board.fixed?.cols ?? FIXED_DEFAULT_COLS) : MAXC);
 
-/** Find an item anywhere on the board. */
+const specOf = (it: BeItem): BeSpec => BE_SPEC[isDivider(it) ? it.kind : it.view];
+/** An item as a page `cols` cells wide takes it: a wider item is narrowed to the page (a slider or a divider
+ *  in the fixed area); null when its view cannot be that narrow. Same reference when it fits as it is. */
+export function sizedFor<T extends BeItem>(it: T, cols: number): T | null {
+  if (it.w <= cols) return it;
+  return specOf(it).minW > cols ? null : { ...it, w: cols };
+}
+
+/** Find an item anywhere on the board (pages, then the fixed area). */
 export function locate(board: BeBoard, id: string): { page: string; item: BeItem; index: number } | null {
-  for (const page of board.pageOrder) {
+  for (const page of regions(board)) {
     const list = pageItems(board, page);
     const index = list.findIndex((it) => it.id === id);
     if (index >= 0) return { page, item: list[index]!, index };
@@ -517,8 +555,9 @@ export function locate(board: BeBoard, id: string): { page: string; item: BeItem
   return null;
 }
 
-/** The board with one page's item list replaced. */
+/** The board with one page's (or the fixed area's) item list replaced. */
 export function writePage(board: BeBoard, page: string, list: BeItem[]): BeBoard {
+  if (page === FIXED_PAGE) return { ...board, fixed: { cols: pageCols(board, page), items: list } };
   return { ...board, boards: { ...board.boards, [page]: list } };
 }
 function replaceItem(board: BeBoard, page: string, id: string, next: BeItem): BeBoard {
@@ -527,35 +566,33 @@ function replaceItem(board: BeBoard, page: string, id: string, next: BeItem): Be
 const hasKey = (list: readonly BeItem[], key: string, exceptId?: string): boolean =>
   list.some((it) => isControl(it) && it.key === key && it.id !== exceptId);
 
-/** Move an item to (x,y) on `toPage` (its own page or another one). Rejects positions outside the page,
- *  collisions, and a parameter that already sits on the target page. A control moved to another page
- *  loses its source `row` (that row belongs to the old page). */
+/** Move an item to (x,y) on `toPage` (its own page, another one, or the fixed area). Rejects positions
+ *  outside the page, collisions, and a parameter that already sits on the target page. An item wider than
+ *  the fixed area is narrowed to it (`sizedFor`; refused when its view cannot be that narrow). A control
+ *  moved to another page loses its source `row` (that row belongs to the old page). */
 export function moveItem(board: BeBoard, id: string, toPage: string, x: number, y: number): BeOpResult {
   const f = locate(board, id);
   if (!f || !hasPage(board, toPage)) return fail(board, 'missing');
   const nx = int(x);
   const ny = int(y);
-  const it = f.item;
-  if (nx < 0 || ny < 0 || nx + it.w > MAXC || ny + it.h > MAX_ROWS) return fail(board, 'bounds');
+  const cols = pageCols(board, toPage);
+  const it = sizedFor(f.item, cols);
+  if (!it || nx < 0 || ny < 0 || nx + it.w > cols || ny + it.h > MAX_ROWS) return fail(board, 'bounds');
   if (toPage === f.page) {
     if (nx === it.x && ny === it.y) return ok(board);
-    if (!fits(pageItems(board, toPage), nx, ny, it.w, it.h, id)) return fail(board, 'collision');
+    if (!fits(pageItems(board, toPage), nx, ny, it.w, it.h, id, cols)) return fail(board, 'collision');
     return ok(replaceItem(board, toPage, id, { ...it, x: nx, y: ny }));
   }
   const target = pageItems(board, toPage);
   if (isControl(it) && hasKey(target, it.key)) return fail(board, 'duplicate');
-  if (!fits(target, nx, ny, it.w, it.h)) return fail(board, 'collision');
+  if (!fits(target, nx, ny, it.w, it.h, undefined, cols)) return fail(board, 'collision');
   let moved: BeItem;
   if (isControl(it)) {
     const { row: _row, ...rest } = it;
     moved = { ...rest, x: nx, y: ny };
   } else moved = { ...it, x: nx, y: ny };
-  const boards = {
-    ...board.boards,
-    [f.page]: pageItems(board, f.page).filter((o) => o.id !== id),
-    [toPage]: [...target, moved]
-  };
-  return ok({ ...board, boards });
+  const taken = writePage(board, f.page, pageItems(board, f.page).filter((o) => o.id !== id));
+  return ok(writePage(taken, toPage, [...target, moved]));
 }
 
 /** Resize an item in place (clamped to its view's limits). Rejects a size that would collide. */
@@ -566,23 +603,27 @@ export function resizeItem(board: BeBoard, id: string, w: number, h: number): Be
   const spec = BE_SPEC[isDivider(it) ? it.kind : it.view];
   const s = clampSize(spec, w, h);
   if (s.w === it.w && s.h === it.h) return ok(board);
-  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id)) return fail(board, it.x + s.w > MAXC ? 'bounds' : 'collision');
+  const cols = pageCols(board, f.page);
+  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id, cols)) return fail(board, it.x + s.w > cols ? 'bounds' : 'collision');
   return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
 }
 
-/** Change a control's view; it takes the new view's default size. When that does not fit where the
- *  control sits, it moves to the next free spot on the same page (`moved: true`). */
+/** Change a control's view; it takes the new view's default size (no wider than the fixed area there).
+ *  When that does not fit where the control sits, it moves to the next free spot on the same page
+ *  (`moved: true`). */
 export function setView(board: BeBoard, id: string, view: BeView): BeOpResult {
   const f = locate(board, id);
   if (!f) return fail(board, 'missing');
   const it = f.item;
   if (isDivider(it) || !isBeView(view)) return fail(board, 'invalid');
   if (it.view === view) return ok(board);
-  const sp = BE_SPEC[view];
+  const cols = pageCols(board, f.page);
+  const next = sizedFor<BeControl>({ ...it, view, w: BE_SPEC[view].w, h: BE_SPEC[view].h }, cols);
+  if (!next) return fail(board, 'bounds');
   const list = pageItems(board, f.page);
-  if (fits(list, it.x, it.y, sp.w, sp.h, id)) return ok(replaceItem(board, f.page, id, { ...it, view, w: sp.w, h: sp.h }));
-  const p = findFree(list, sp.w, sp.h, id);
-  return ok(replaceItem(board, f.page, id, { ...it, view, w: sp.w, h: sp.h, x: p.x, y: p.y }), { moved: true });
+  if (fits(list, it.x, it.y, next.w, next.h, id, cols)) return ok(replaceItem(board, f.page, id, next));
+  const p = findFree(list, next.w, next.h, id, cols);
+  return ok(replaceItem(board, f.page, id, { ...next, x: p.x, y: p.y }), { moved: true });
 }
 
 /** Give an item a new size (a size preset of the control menu), clamped to its view's limits. When the new
@@ -592,24 +633,29 @@ export function sizeItem(board: BeBoard, id: string, w: number, h: number): BeOp
   const f = locate(board, id);
   if (!f) return fail(board, 'missing');
   const it = f.item;
-  const s = clampSize(BE_SPEC[isDivider(it) ? it.kind : it.view], w, h);
+  const cols = pageCols(board, f.page);
+  const c = clampSize(specOf(it), w, h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
   if (s.w === it.w && s.h === it.h) return ok(board);
   const list = pageItems(board, f.page);
-  if (fits(list, it.x, it.y, s.w, s.h, id)) return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
-  const p = findNear(list, s.w, s.h, it.x, it.y, id);
+  if (fits(list, it.x, it.y, s.w, s.h, id, cols)) return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
+  const p = findNear(list, s.w, s.h, it.x, it.y, id, cols);
   return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h, x: p.x, y: p.y }), { moved: true });
 }
 
-/** Move an item to the first free spot of another page ("Move to page"). Refuses a parameter that already
- *  sits on that page; the item's own page is a no-op. */
+/** Move an item to the first free spot of another page or of the fixed area ("Move to page"). Refuses a
+ *  parameter that already sits there, and an item the fixed area is too narrow for; the item's own page is
+ *  a no-op. */
 export function moveToPage(board: BeBoard, id: string, toPage: string): BeOpResult {
   const f = locate(board, id);
   if (!f || !hasPage(board, toPage)) return fail(board, 'missing');
   if (toPage === f.page) return ok(board);
-  const it = f.item;
   const target = pageItems(board, toPage);
-  if (isControl(it) && hasKey(target, it.key)) return fail(board, 'duplicate');
-  const p = findFree(target, it.w, it.h);
+  if (isControl(f.item) && hasKey(target, f.item.key)) return fail(board, 'duplicate');
+  const cols = pageCols(board, toPage);
+  const it = sizedFor(f.item, cols);
+  if (!it) return fail(board, 'bounds');
+  const p = findFree(target, it.w, it.h, undefined, cols);
   return moveItem(board, id, toPage, p.x, p.y);
 }
 
@@ -621,7 +667,8 @@ export function rotateDivider(board: BeBoard, id: string): BeOpResult {
   if (!isDivider(it)) return fail(board, 'invalid');
   const kind: BeDividerKind = it.kind === 'hdiv' ? 'vdiv' : 'hdiv';
   const s = clampSize(BE_SPEC[kind], it.h, it.w);
-  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id)) return fail(board, it.x + s.w > MAXC ? 'bounds' : 'collision');
+  const cols = pageCols(board, f.page);
+  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id, cols)) return fail(board, it.x + s.w > cols ? 'bounds' : 'collision');
   return ok(replaceItem(board, f.page, id, { ...it, kind, w: s.w, h: s.h }));
 }
 
@@ -643,8 +690,8 @@ export function removeItem(board: BeBoard, id: string): BeOpResult {
   return ok(writePage(board, f.page, pageItems(board, f.page).filter((it) => it.id !== id)));
 }
 
-/** Add a control to a page, at `at` when given (must fit) or at the first free spot. A parameter can
- *  sit on a page only once. */
+/** Add a control to a page (or the fixed area), at `at` when given (must fit) or at the first free spot. A
+ *  parameter can sit on a page only once. */
 export function addControl(
   board: BeBoard,
   page: string,
@@ -657,9 +704,12 @@ export function addControl(
   if (!isBeView(ctl.view)) return fail(board, 'invalid');
   if (hasKey(list, ctl.key)) return fail(board, 'duplicate');
   const sp = BE_SPEC[ctl.view];
-  const s = clampSize(sp, ctl.w ?? sp.w, ctl.h ?? sp.h);
-  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, s.w, s.h);
-  if (at && !fits(list, p.x, p.y, s.w, s.h)) return fail(board, p.x < 0 || p.y < 0 || p.x + s.w > MAXC ? 'bounds' : 'collision');
+  const cols = pageCols(board, page);
+  if (sp.minW > cols) return fail(board, 'bounds');
+  const c = clampSize(sp, ctl.w ?? sp.w, ctl.h ?? sp.h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
+  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, s.w, s.h, undefined, cols);
+  if (at && !fits(list, p.x, p.y, s.w, s.h, undefined, cols)) return fail(board, p.x < 0 || p.y < 0 || p.x + s.w > cols ? 'bounds' : 'collision');
   const id = idGen();
   const item: BeControl = { id, key: ctl.key, view: ctl.view, x: p.x, y: p.y, w: s.w, h: s.h };
   if (ctl.row != null) item.row = ctl.row;
@@ -677,13 +727,76 @@ export function addDivider(
 ): BeOpResult & { id?: string } {
   if (!hasPage(board, page)) return fail(board, 'missing');
   const list = pageItems(board, page);
-  const sp = BE_SPEC[kind];
-  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, sp.w, sp.h);
-  if (at && !fits(list, p.x, p.y, sp.w, sp.h)) return fail(board, p.x < 0 || p.y < 0 || p.x + sp.w > MAXC ? 'bounds' : 'collision');
+  const cols = pageCols(board, page);
+  const sp = { w: Math.min(BE_SPEC[kind].w, cols), h: BE_SPEC[kind].h };
+  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, sp.w, sp.h, undefined, cols);
+  if (at && !fits(list, p.x, p.y, sp.w, sp.h, undefined, cols)) return fail(board, p.x < 0 || p.y < 0 || p.x + sp.w > cols ? 'bounds' : 'collision');
   const id = idGen();
   const item: BeDivider = { id, kind, x: p.x, y: p.y, w: sp.w, h: sp.h };
   if (label?.trim()) item.label = label.trim();
   return { ...ok(writePage(board, page, [...list, item])), id };
+}
+
+// ── the fixed area ───────────────────────────────────────────────────────────────────────────────
+
+/** Pack items into `cols` columns in reading order, each at the first free spot (a wider item is narrowed
+ *  to the area). Pure and deterministic; nothing overlaps. */
+export function packArea<T extends BeItem>(items: readonly T[], cols: number): T[] {
+  const out: T[] = [];
+  const order = items.map((it, i) => ({ it, i })).sort((a, b) => a.it.y - b.it.y || a.it.x - b.it.x || a.i - b.i);
+  for (const { it } of order) {
+    const s = sizedFor(it, cols) ?? it;
+    const p = findFree(out, s.w, s.h, undefined, cols);
+    out.push(s.x === p.x && s.y === p.y ? s : { ...s, x: p.x, y: p.y });
+  }
+  return out;
+}
+
+/** The narrowest the fixed area may get: no item narrower than its view allows. */
+export const fixedMinCols = (items: readonly BeItem[]): number => Math.max(FIXED_MIN_COLS, ...items.map((it) => Math.min(specOf(it).minW, FIXED_MAX_COLS)));
+
+/** Give the board an (empty) fixed area; a board that has one stays as it is. */
+export function addFixed(board: BeBoard, cols: number = FIXED_DEFAULT_COLS): BeOpResult {
+  if (board.fixed) return ok(board);
+  return ok({ ...board, fixed: { cols: clamp(int(cols), FIXED_MIN_COLS, FIXED_MAX_COLS), items: [] } });
+}
+
+/** Take the fixed area (and whatever is in it) off the board. */
+export function removeFixed(board: BeBoard): BeOpResult {
+  if (!board.fixed) return fail(board, 'missing');
+  const { fixed: _area, ...rest } = board;
+  return ok(rest);
+}
+
+/** Set the fixed area's width (clamped to 2..8 cells and to what its items allow). Items keep their places
+ *  while they all fit; a narrower area is packed again in reading order. */
+export function setFixedCols(board: BeBoard, cols: number): BeOpResult {
+  const area = board.fixed;
+  if (!area) return fail(board, 'missing');
+  const next = clamp(int(cols), fixedMinCols(area.items), FIXED_MAX_COLS);
+  if (next === area.cols) return ok(board);
+  const items = area.items.length && bbox(area.items).C > next ? packArea(area.items, next) : area.items;
+  return ok({ ...board, fixed: { cols: next, items } });
+}
+
+/** Reset the fixed area to its seed: the board gets a copy of the seed's fixed area (none when the seed has
+ *  none). Seed items whose id is already used on a page of the board get a fresh id. The pages stay. */
+export function resetFixedFrom(board: BeBoard, seed: BeBoard, idGen: BeIdGen = defaultIdGen): BeOpResult {
+  const area = seed.fixed;
+  if (!area) return board.fixed ? removeFixed(board) : ok(board);
+  const used = new Set<string>();
+  for (const pg of board.pageOrder) for (const it of pageItems(board, pg)) used.add(it.id);
+  return ok({ ...board, fixed: { cols: area.cols, items: copyWithIds(area.items, used, idGen) } });
+}
+
+/** Copies of items; an id that is missing or already in `used` is replaced by a fresh one. */
+function copyWithIds(items: readonly BeItem[], used: Set<string>, idGen: BeIdGen): BeItem[] {
+  return items.map((it) => {
+    let id = it.id;
+    while (!id || used.has(id)) id = idGen();
+    used.add(id);
+    return { ...it, id };
+  });
 }
 
 // ── pages ────────────────────────────────────────────────────────────────────────────────────────
@@ -753,18 +866,61 @@ export function movePage(board: BeBoard, page: string, delta: number): BeBoard {
 
 /** Reset one page to its seed: the page gets the seed's items for the page of the same name (copies),
  *  or none when the seed has no such page. Seed items whose id is already used on another page of the
- *  board get a fresh id. The other pages, the page order and the current page stay as they are. */
+ *  board (or in its fixed area) get a fresh id. Everything else stays as it is. */
 export function resetPageFrom(board: BeBoard, seed: BeBoard, page: string, idGen: BeIdGen = defaultIdGen): BeOpResult {
+  if (page === FIXED_PAGE) return resetFixedFrom(board, seed, idGen);
   if (!board.pageOrder.includes(page)) return fail(board, 'missing');
   const used = new Set<string>();
-  for (const pg of board.pageOrder) if (pg !== page) for (const it of pageItems(board, pg)) used.add(it.id);
-  const list = pageItems(seed, page).map((it) => {
-    let id = it.id;
-    while (!id || used.has(id)) id = idGen();
-    used.add(id);
-    return { ...it, id };
-  });
-  return ok(writePage(board, page, list));
+  for (const pg of regions(board)) if (pg !== page) for (const it of pageItems(board, pg)) used.add(it.id);
+  return ok(writePage(board, page, copyWithIds(pageItems(seed, page), used, idGen)));
+}
+
+const keysOn = (board: BeBoard, pages: readonly string[]): Set<string> => new Set(pages.flatMap((pg) => pageItems(board, pg).flatMap((it) => (isControl(it) ? [it.key] : []))));
+
+/** Keys (of `keys`: the ones drawn now) that are somewhere on `before` and nowhere on `after`, in board order. */
+export function lostKeys(before: BeBoard, after: BeBoard, keys: ReadonlySet<string>): string[] {
+  const left = keysOn(after, regions(after));
+  return [...keysOn(before, regions(before))].filter((k) => keys.has(k) && !left.has(k));
+}
+
+export interface PageResetPlan {
+  board: BeBoard;
+  /** Controls the page gives up because the seed has them in its fixed area: they are in the board's now. */
+  toFixed: string[];
+  /** The board had no fixed area: it gets a copy of the seed's. */
+  addsFixed: boolean;
+  /** Controls that are on no page and not in the fixed area afterwards. */
+  lost: string[];
+}
+
+/** What resetting a page to its seed does (`resetPageFrom`) — without a control going away only because the
+ *  seed shows it in its fixed area: a board without one gets a copy of the seed's, one that lacks the control
+ *  gets it there (at the first free spot). Null for a page the board does not have. `keys`: the ones drawn now. */
+export function planPageReset(board: BeBoard, seed: BeBoard, page: string, keys: ReadonlySet<string>, idGen: BeIdGen = defaultIdGen): PageResetPlan | null {
+  if (page === FIXED_PAGE) return null;
+  const r = resetPageFrom(board, seed, page, idGen);
+  if (!r.ok) return null;
+  let next = r.board;
+  const toFixed: string[] = [];
+  let addsFixed = false;
+  if (seed.pageOrder.includes(page) && seed.fixed) {
+    const was = keysOn(board, [page]);
+    const has = keysOn(next, regions(next));
+    const goes = seed.fixed.items.filter((it): it is BeControl => isControl(it) && keys.has(it.key) && was.has(it.key) && !has.has(it.key));
+    if (goes.length && !next.fixed) {
+      next = resetFixedFrom(next, seed, idGen).board;
+      addsFixed = true;
+      toFixed.push(...goes.map((it) => it.key));
+    } else {
+      for (const it of goes) {
+        const a = addControl(next, FIXED_PAGE, { key: it.key, view: it.view, w: it.w, h: it.h }, null, idGen);
+        if (!a.ok) continue;
+        next = a.board;
+        toFixed.push(it.key);
+      }
+    }
+  }
+  return { board: next, toFixed, addsFixed, lost: lostKeys(board, next, keys) };
 }
 
 /** Delete a page. The last remaining page is never deleted. */
@@ -797,16 +953,22 @@ export interface NormalizeOptions {
   keepKeys?: ReadonlySet<string> | ((key: string) => boolean);
 }
 
-function cleanControl(it: BeControl, viewsByKey?: ReadonlyMap<string, readonly BeView[]>): BeControl {
+/** The view a stored control is drawn in: its own when it is one the catalog allows, else the first
+ *  allowed one (an unknown view: the key's default). */
+function viewOf(it: BeControl, viewsByKey?: ReadonlyMap<string, readonly BeView[]>): BeView {
   const allowed = viewsByKey?.get(it.key);
-  let view: BeView = isBeView(it.view) ? it.view : defaultViewForKey(it.key);
-  if (allowed?.length && !allowed.includes(view)) view = allowed[0]!;
-  const s = clampSize(BE_SPEC[view], it.w, it.h);
+  const view: BeView = isBeView(it.view) ? it.view : defaultViewForKey(it.key);
+  return allowed?.length && !allowed.includes(view) ? allowed[0]! : view;
+}
+function cleanControl(it: BeControl, viewsByKey: ReadonlyMap<string, readonly BeView[]> | undefined, cols: number): BeControl {
+  const view = viewOf(it, viewsByKey);
+  const c = clampSize(BE_SPEC[view], it.w, it.h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
   const out: BeControl = {
     id: typeof it.id === 'string' ? it.id : '',
     key: it.key,
     view,
-    x: clamp(int(it.x), 0, MAXC - s.w),
+    x: clamp(int(it.x), 0, cols - s.w),
     y: clamp(int(it.y), 0, MAX_ROWS - s.h),
     w: s.w,
     h: s.h
@@ -814,12 +976,13 @@ function cleanControl(it: BeControl, viewsByKey?: ReadonlyMap<string, readonly B
   if (typeof it.row === 'number' && Number.isFinite(it.row)) out.row = int(it.row);
   return out;
 }
-function cleanDivider(it: BeDivider): BeDivider {
-  const s = clampSize(BE_SPEC[it.kind], it.w, it.h);
+function cleanDivider(it: BeDivider, cols: number): BeDivider {
+  const c = clampSize(BE_SPEC[it.kind], it.w, it.h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
   const out: BeDivider = {
     id: typeof it.id === 'string' ? it.id : '',
     kind: it.kind,
-    x: clamp(int(it.x), 0, MAXC - s.w),
+    x: clamp(int(it.x), 0, cols - s.w),
     y: clamp(int(it.y), 0, MAX_ROWS - s.h),
     w: s.w,
     h: s.h
@@ -840,6 +1003,9 @@ function cleanDivider(it: BeDivider): BeDivider {
  *    page index and key (deterministic, so reloading the same input gives the same ids);
  *  - overlaps are resolved by moving the LATER item to the nearest free spot (same line to the right
  *    first, then the following lines);
+ *  - the fixed area is reconciled the same way in its own coordinates (a key once in it, whatever the pages
+ *    hold; ids unique across pages and area; no source rows): its width is clamped to 2..8 cells and widened
+ *    to its widest item's minimum, an emptied area stays;
  *  - `variantSig` is kept.
  *  Idempotent: normalizing a normalized board yields a deep-equal board. */
 export function normalizeBoard(raw: BeBoard, catalogKeys: Iterable<string>, opts: NormalizeOptions = {}): BeBoard {
@@ -856,42 +1022,57 @@ export function normalizeBoard(raw: BeBoard, catalogKeys: Iterable<string>, opts
   if (!order.length) order.push('Page 1');
 
   // ids already in use anywhere on the input, so a derived id never steals one a later item owns
+  const rawFixed = raw.fixed && typeof raw.fixed === 'object' ? raw.fixed : null;
   const rawIds = new Set<string>();
-  for (const pg of order) {
-    const src = listOf(pg);
+  for (const src of [...order.map(listOf), rawFixed?.items]) {
     if (Array.isArray(src)) for (const it of src) if (it && typeof (it as BeItem).id === 'string') rawIds.add((it as BeItem).id);
   }
   const usedIds = new Set<string>();
-  const derivedId = (pi: number, item: BeItem): string => {
+  const derivedId = (pi: number | 'f', item: BeItem): string => {
     const base = `n${pi}.${isDivider(item) ? `${item.kind}${item.x}_${item.y}` : item.key}`;
     let id = base;
     for (let n = 2; usedIds.has(id) || rawIds.has(id); n++) id = `${base}~${n}`;
     return id;
   };
 
-  const boards: Record<string, BeItem[]> = {};
-  order.forEach((pg, pi) => {
-    const src = listOf(pg);
+  const cleanList = (src: unknown, pi: number | 'f', cols: number): BeItem[] => {
     const placed: BeItem[] = [];
     const keys = new Set<string>();
     for (const it of Array.isArray(src) ? (src as BeItem[]) : []) {
       if (!it || typeof it !== 'object') continue;
       let item: BeItem;
-      if (isDivider(it)) item = cleanDivider(it);
+      if (isDivider(it)) item = cleanDivider(it, cols);
       else {
         const key = (it as { key?: unknown }).key;
         if (typeof key !== 'string' || !(valid.has(key) || keep?.has(key)) || keys.has(key)) continue;
         keys.add(key);
-        item = cleanControl(it, opts.viewsByKey);
+        item = cleanControl(it, opts.viewsByKey, cols);
+        if (pi === 'f') delete item.row;
       }
       if (!item.id || usedIds.has(item.id)) item = { ...item, id: derivedId(pi, item) };
       usedIds.add(item.id);
-      if (!fits(placed, item.x, item.y, item.w, item.h)) item = { ...item, ...findNear(placed, item.w, item.h, item.x, item.y) };
+      if (!fits(placed, item.x, item.y, item.w, item.h, undefined, cols)) item = { ...item, ...findNear(placed, item.w, item.h, item.x, item.y, undefined, cols) };
       placed.push(item);
     }
-    boards[pg] = placed;
+    return placed;
+  };
+
+  const boards: Record<string, BeItem[]> = {};
+  order.forEach((pg, pi) => {
+    boards[pg] = cleanList(listOf(pg), pi, MAXC);
   });
   const out: BeBoard = { v: 2, pageOrder: order, page: order.includes(raw.page) ? raw.page : order[0]!, boards };
+  if (rawFixed) {
+    // the area is at least as wide as the narrowest form of what stays in it
+    const stays = (Array.isArray(rawFixed.items) ? rawFixed.items : []).flatMap((it): BeItem[] => {
+      if (!it || typeof it !== 'object') return [];
+      if (isDivider(it)) return [it];
+      return typeof it.key === 'string' && (valid.has(it.key) || keep?.has(it.key)) ? [{ ...it, view: viewOf(it, opts.viewsByKey) }] : [];
+    });
+    const wanted = typeof rawFixed.cols === 'number' ? int(rawFixed.cols) : FIXED_DEFAULT_COLS;
+    const cols = clamp(wanted, fixedMinCols(stays), FIXED_MAX_COLS);
+    out.fixed = { cols, items: cleanList(rawFixed.items, 'f', cols) };
+  }
   if (typeof raw.variantSig === 'string') out.variantSig = raw.variantSig;
   return out;
 }

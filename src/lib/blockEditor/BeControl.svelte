@@ -6,7 +6,7 @@
   import BeGraph from './BeGraph.svelte';
   import { longPress } from '../axis-workbench/longPress';
   import { getBeHost } from './beHost';
-  import { isDivider, type BeItem, type BeRect } from './boardModel';
+  import { FIXED_PAGE, isDivider, type BeItem, type BeRect } from './boardModel';
   import type { BeCtl } from './catalog';
   import {
     centredPartHit,
@@ -145,7 +145,7 @@
   // touch: a value control leaves the board's scroll axis to the browser (a swipe along it scrolls) and
   // takes the other one for its value; Arrange takes every gesture (touchGesture.ts). The flat search
   // results scroll vertically.
-  const touchAction = $derived(tileTouchAction({ editMode: ed, kind: ctl?.kind, view, scroll: standalone ? 'y' : host.scrollAxis }));
+  const touchAction = $derived(tileTouchAction({ editMode: ed, kind: ctl?.kind, view, scroll: standalone ? 'y' : page === FIXED_PAGE ? host.fixedScrollAxis : host.scrollAxis }));
   const NWAVE = 110;
   /** Looper transport: action, symbol, accessible name. Stop and Undo are momentary, the rest latch. */
   const LOOP_BUTTONS: readonly [string, string, string][] = [

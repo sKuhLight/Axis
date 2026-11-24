@@ -13,23 +13,18 @@
 //     class or the remote revision changes. A reload of the same family keeps the page the user is on;
 //   - every load also resolves the active profile's seed (the family's "default for this type" board,
 //     else the device layout / curated fallback; Blank: an empty board) — the layout status compares
-//     against it, and "Reset this page" / the whole-layout reset ("Reset to device layout", or "Reset all
-//     pages" with a saved default) go back to it;
-//   - a stored Default board that is still exactly the device default as earlier versions built it (rows
-//     only, `previousSeed`, built only when such a board is found) loads as the current device default
-//     (positions), without a write — not while a "default for this type" is saved, not when the stored
+//     against it, and "Reset this page" / "Reset fixed area" / the whole-layout reset ("Reset to device
+//     layout", or "Reset all pages" with a saved default) go back to it;
+//   - a stored Default board that is still exactly the default as earlier versions built it (`previousSeed`:
+//     rows only, without a fixed area, …; built only when such a board is found) loads as the current
+//     default, without a write — not while a "default for this type" is saved, not when the stored
 //     board holds a control the catalog does not list yet, never for copies;
 //   - while arranging, every committed change is one undo step (the board it replaced, capped); Undo saves
 //     once. The stack is cleared when Arrange starts or ends, on a profile switch and on every (re)load.
 // Covered by beState.runes.test.ts.
 
 import { popUndo, pushUndo, restoreBoard } from './arrangeHistory';
-import {
-  isBlockLevelKey,
-  normalizeBoard,
-  resetPageFrom,
-  type BeBoard
-} from './boardModel';
+import { isBlockLevelKey, lostKeys, normalizeBoard, planPageReset, resetFixedFrom, type BeBoard, type PageResetPlan } from './boardModel';
 import {
   BLANK_PROFILE,
   boardKey,
@@ -37,6 +32,7 @@ import {
   clearUserSeed,
   DEFAULT_PROFILE,
   DEVICE_CLASSES,
+  fixedDiffersFromSeed,
   hasUserSeed,
   isFamilyMigrated,
   loadBoard,
@@ -72,10 +68,13 @@ export interface BeSource {
   /** Effect id of the open block: the device seed's cross-block guard depends on it, so another instance
    *  of the same block (Output 1 → Output 2: same family, catalog and variant) re-seeds. */
   owner?: number | null;
+  /** What the header shows itself (the block-state params the server tags): the seed leaves them out, so a
+   *  change re-seeds. */
+  header?: string;
   /** The device-authentic default board (device layout, else the curated fallback). */
   deviceSeed: () => BeBoard;
-  /** The device default as earlier versions built it (rows only; positioned before graph displays), one
-   *  board or several, or null when it equals `deviceSeed` by construction (no device layout). A stored
+  /** The default as earlier versions built it (rows only; every control on its pages, before the fixed area;
+   *  the curated one with the header's controls), one board or several, or null when there is none. A stored
    *  Default board still equal to one of them follows `deviceSeed`. */
   previousSeed?: () => PreviousSeeds;
   /** Remote revision of the surface document (bumped by a host↔remote push). */
@@ -145,7 +144,7 @@ export class BeState {
    *  when it (re)loaded. */
   sync(src: BeSource): boolean {
     if (!src.slug || !catalogReady(src.catalog)) return false;
-    const sig = [src.slug, src.catalog.map((c) => c.key).join(','), src.variantSig, src.deviceClass, src.rev, src.owner ?? ''].join('|');
+    const sig = [src.slug, src.catalog.map((c) => c.key).join(','), src.variantSig, src.deviceClass, src.rev, src.owner ?? '', src.header ?? ''].join('|');
     const prev = this.#src;
     this.#src = src;
     if (sig === this.#sig) return false;
@@ -358,22 +357,46 @@ export class BeState {
     }
   }
 
-  /** Reset the current page to the profile's seed (its page of the same name, else empty) and save;
-   *  false (and no write) when the page already equals it. */
-  resetPage(): boolean {
+  /** What resetting the current page to the profile's seed (its page of the same name, else empty) does, or
+   *  null when the page already equals it. The prompt names what it moves and what it takes off the board. */
+  planResetPage(): PageResetPlan | null {
     const b = this.board;
     const seed = this.seed;
     const src = this.#src;
-    if (!src || !b || !seed) return false;
-    // an unchanged page is left alone (no write)
-    if (!pageDiffersFromSeed(b, seed, b.page, new Set(src.catalog.map((c) => c.key)))) return false;
-    const r = resetPageFrom(b, seed, b.page);
+    if (!src || !b || !seed) return null;
+    const keys = new Set(src.catalog.map((c) => c.key));
+    return pageDiffersFromSeed(b, seed, b.page, keys) ? planPageReset(b, seed, b.page, keys) : null;
+  }
+
+  /** Reset the current page that way and save; null (and no write) when the page already equals its seed. */
+  resetPage(): PageResetPlan | null {
+    const plan = this.planResetPage();
+    if (plan) this.commit(plan.board);
+    return plan;
+  }
+
+  /** Controls the reset of the fixed area takes off the board. */
+  lostByFixedReset(): string[] {
+    const b = this.board;
+    const seed = this.seed;
+    const src = this.#src;
+    return src && b && seed ? lostKeys(b, resetFixedFrom(b, seed).board, new Set(src.catalog.map((c) => c.key))) : [];
+  }
+
+  /** Reset the fixed area to the profile's seed (away when the seed has none) and save; false (and no write)
+   *  when it already equals it. */
+  resetFixed(): boolean {
+    const b = this.board;
+    const seed = this.seed;
+    const src = this.#src;
+    if (!src || !b || !seed || !fixedDiffersFromSeed(b, seed, new Set(src.catalog.map((c) => c.key)))) return false;
+    const r = resetFixedFrom(b, seed);
     if (r.ok) this.commit(r.board);
     return r.ok;
   }
 
-  /** Reset every page to the profile's seed (the saved default for the type, else the device layout;
-   *  Blank: empty) and save. The current page stays when the seed has it. */
+  /** Reset every page (and the fixed area) to the profile's seed (the saved default for the type, else the
+   *  device layout; Blank: empty) and save. The current page stays when the seed has it. */
   resetAll(): void {
     const b = this.board;
     const seed = this.seed;

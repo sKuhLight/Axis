@@ -98,11 +98,20 @@ export const beBoardV1Schema = z.object({
   variantSig: optStr
 });
 
+/** The fixed area: `null` or anything that is not one counts as absent (the board itself stays); a bad item
+ *  in it is dropped. Its width is clamped by normalization. */
+const fixedSchema = z
+  .object({ cols: num, items: lenientList(beItemSchema) })
+  .nullish()
+  .catch(undefined)
+  .transform((v) => v ?? undefined);
+
 export const beBoardV2Schema = z.object({
   v: z.literal(2),
   pageOrder: pageOrderSchema,
   page: pageSchema,
   boards: pagesOf(beItemSchema),
+  fixed: fixedSchema,
   variantSig: optStr
 });
 
@@ -154,6 +163,7 @@ export function parseStoredBoard(json: unknown): BeBoard | null {
     const r = beBoardV2Schema.safeParse(raw);
     if (!r.success) return null;
     const out: BeBoard = { v: 2, pageOrder: r.data.pageOrder, page: r.data.page, boards: r.data.boards as Record<string, BeItem[]> };
+    if (r.data.fixed) out.fixed = { cols: r.data.fixed.cols, items: r.data.fixed.items as BeItem[] };
     if (r.data.variantSig != null) out.variantSig = r.data.variantSig;
     return out;
   }
