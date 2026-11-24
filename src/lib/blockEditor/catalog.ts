@@ -1,13 +1,15 @@
 // Block Editor control catalog: every control a block offers, built from its live parameters.
 //
 // Same keys as the previous editor (`k<id>` continuous, `e<id>` enum, `eq`, `bypass`, `meter`, `wave`)
-// so stored boards stay valid; sizes are in the new cell units (one knob = 2×2), taken from BE_SPEC.
+// so stored boards stay valid; sizes are in the new cell units (one knob = 2×2), taken from BE_SPEC. Graph
+// displays the server serves for the block are `graph:<visual key>` (read-only, kind `graph`).
 // Pure (catalog.test.ts).
 
 import { BE_SPEC, type BeView } from './boardModel';
-import type { EnumParam, NamedParam } from '../types';
+import { graphCatalogKey } from '../blockVisuals';
+import type { BlockVisual, EnumParam, NamedParam } from '../types';
 
-export type BeKind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
+export type BeKind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave' | 'graph';
 
 export const CONT_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number'];
 export const TOG_VIEWS: readonly BeView[] = ['button', 'switch'];
@@ -16,13 +18,15 @@ export interface BeCtl {
   key: string;
   kind: BeKind;
   label: string;
-  /** Parameter id; negative for block-level entries (eq −1, bypass −2, meter −3, wave −4). */
+  /** Parameter id; negative for block-level entries (eq −1, bypass −2, meter −3, wave −4, graphs −10, −11, …). */
   id: number;
   /** Default view and its default size in cells. */
   view: BeView;
   views: readonly BeView[];
   w: number;
   h: number;
+  /** Graph entries: the served display (roles are param ids; values reach the tile through the host). */
+  visual?: BlockVisual;
 }
 
 export interface CatalogInput {
@@ -37,6 +41,8 @@ export interface CatalogInput {
   monitors?: readonly { role: string }[];
   /** The block has live loop waveform data (looper). */
   hasWave?: boolean;
+  /** Read-only graph displays served for the block (cap `blockVisuals`). */
+  visuals?: readonly BlockVisual[];
 }
 
 const entry = (key: string, kind: BeKind, label: string, id: number, view: BeView, views: readonly BeView[]): BeCtl => ({
@@ -55,12 +61,16 @@ export function meterLabel(role: string | undefined): string {
   return role === 'gainReduction' ? 'Gain Reduction' : role === 'vu' ? 'VU' : 'Meter';
 }
 
-/** Build the catalog. Order: EQ, continuous params, enums (two options or fewer = toggle, else select),
- *  bypass, meter, loop waveform. */
+/** First id of the graph entries (−10, −11, … in served order). */
+export const GRAPH_ID_BASE = -10;
+
+/** Build the catalog. Order: EQ, graph displays, continuous params, enums (two options or fewer = toggle,
+ *  else select), bypass, meter, loop waveform. */
 export function buildCatalog(input: CatalogInput): BeCtl[] {
   const hidden = new Set(input.hideIds ?? []);
   const out: BeCtl[] = [];
   if ((input.eqBandCount ?? 0) > 0) out.push(entry('eq', 'eq', input.eqTitle || 'EQ', -1, 'eq', ['eq']));
+  (input.visuals ?? []).forEach((v, i) => out.push({ ...entry(graphCatalogKey(v.key), 'graph', v.title, GRAPH_ID_BASE - i, 'graph', ['graph']), visual: v }));
   for (const p of input.params) {
     if (p.id == null || hidden.has(p.id)) continue;
     out.push(entry(`k${p.id}`, 'cont', p.name, p.id, 'knob', CONT_VIEWS));

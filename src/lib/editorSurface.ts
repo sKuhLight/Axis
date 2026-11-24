@@ -11,7 +11,7 @@
 import { getContext, hasContext } from 'svelte';
 import { editor } from './editor.svelte';
 import type { Cell, Layout } from './grid';
-import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState, BlockState } from './types';
+import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState, BlockState, BlockVisual } from './types';
 import type { SwipeCtrl } from './layouts';
 
 export const EDITOR_SURFACE_KEY = Symbol('axis.editorSurface');
@@ -86,6 +86,16 @@ export interface EditorSurface {
   readonly blockStateStale?: boolean;
   /** Write one of them (the enum write the board uses). */
   setBlockStateParam?: (paramId: number, value: number) => void;
+
+  // ── read-only block visuals (the Block Editor's graph tiles) ──
+  /** Tempo in bpm, and whether the device reports one (tempo-synced LFO rates; without it a synced LFO
+   *  is drawn at its Rate value and says so). An offline buffer: 120 / false. */
+  readonly bpm: number;
+  readonly hasTempo: boolean;
+  /** The open block's served graph displays (caps.blockVisuals); absent or empty = no graph tiles. */
+  readonly blockVisuals?: readonly BlockVisual[];
+  /** Live block metering is on (a dynamics graph shows its gain-reduction bar only then). */
+  readonly meteringOn?: boolean;
 
   // ── telemetry / meters / swipe controls ──
   levels: { out1L: number; out1R: number; out2L: number; out2R: number } | null;

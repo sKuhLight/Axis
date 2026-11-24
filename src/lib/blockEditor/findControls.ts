@@ -39,7 +39,8 @@ export const KIND_NAME: Readonly<Record<BeKind, string>> = {
   eq: 'Graph',
   action: 'Action',
   meter: 'Meter',
-  wave: 'Waveform'
+  wave: 'Waveform',
+  graph: 'Graph'
 };
 
 /** The glyph of a row's kind (the Find popover and the "Add" library). */
@@ -50,7 +51,8 @@ export const KIND_ICON: Readonly<Record<BeKind, string>> = {
   eq: '∿',
   action: '⏻',
   meter: '▊',
-  wave: '⌇'
+  wave: '⌇',
+  graph: '∿'
 };
 
 const groupOf = (kind: BeKind): FindGroup['id'] => (kind === 'cont' || kind === 'toggle' || kind === 'select' ? kind : 'other');
@@ -106,5 +108,5 @@ export function itemIdOn(board: BeBoard | null, page: string, key: string): stri
  *  always did); an empty query lists every control. The popover's filter carries over ("unused" = on
  *  no page of the board). */
 export function flatMatches(catalog: readonly BeCtl[], query: string, filter: FindFilter = 'all', board: BeBoard | null = null): BeCtl[] {
-  return catalog.filter((c) => c.kind !== 'eq' && matchesQuery(c.label, query) && (filter !== 'unused' || !pagesOf(board, c.key).length));
+  return catalog.filter((c) => c.kind !== 'eq' && c.kind !== 'graph' && matchesQuery(c.label, query) && (filter !== 'unused' || !pagesOf(board, c.key).length));
 }

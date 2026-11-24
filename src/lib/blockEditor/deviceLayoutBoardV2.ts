@@ -3,7 +3,8 @@
 // Pages become pages; inside a page the controls take the device editor's positions where the layout
 // gives them (exact pixel positions, columns, nudges) and otherwise flow left→right inside a layout row,
 // rows top→bottom; section changes and section titles become labelled dividers (layoutPlacement.ts has
-// the rules). Catalog entries the layout never mentions go to a trailing "More" page. Sizes come from
+// the rules). Catalog entries the layout never mentions go to a trailing "More" page, except graph displays
+// (only a graph slot of the layout anchors one; the Arrange library offers the rest). Sizes come from
 // BE_SPEC (one knob = 2×2) and a page is at most 24 cells wide. Same control resolution as the v1
 // builder in ../deviceLayoutBoard.ts (shared `resolveControl`).
 //
@@ -17,7 +18,7 @@
 // previous default.
 // Pure (deviceLayoutBoardV2.test.ts).
 
-import { layoutVariantSig, resolveControl, type LayoutOwner } from '../deviceLayoutBoard';
+import { layoutVariantSig, resolveControl, withoutCrossBlockRefs, type LayoutOwner } from '../deviceLayoutBoard';
 import type { DeviceLayout, LayoutPage } from '../types';
 import { bbox, BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeItem, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
@@ -89,17 +90,19 @@ export interface DeviceLayoutBoardOptions {
   /** Effect id of the open block: a control of another block (a cross-block ref) binds only when the
    *  server names this block as its owner; otherwise it is a gap (deviceLayoutBoard `isForeignControl`). */
   effectId?: number | null;
-  /** With `rowFlowOnly`: build the previous default exactly as those versions did, cross-block refs bound
-   *  by their bare paramId (no guard) — only to recognise an untouched stored Default board. */
+  /** Build a previous default exactly as versions before the cross-block guard did (refs bound by their
+   *  bare paramId) — only to recognise an untouched stored Default board (boardPersistence
+   *  `previousSeed`), never for a drawn board. */
   legacyUnguarded?: boolean;
 }
 
 /** True when the device layout has a control the catalog can show (the default board then comes from
  *  it; otherwise the curated fallback is used). */
-export function hasDeviceLayoutBoard(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], owner: LayoutOwner = {}): boolean {
+export function hasDeviceLayoutBoard(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], owner: Pick<LayoutOwner, 'effectId'> = {}): boolean {
   if (!layout?.pages?.length) return false;
   const byKey = new Map(catalog.map((c) => [c.key, c]));
-  return layout.pages.some((pg) => !!pg && (pg.rows ?? []).some((r) => (r?.controls ?? []).some((c) => !!c && resolveControl(c, byKey, owner) !== 'gap')));
+  const own: LayoutOwner = { effectId: owner.effectId, family: layout.family };
+  return layout.pages.some((pg) => !!pg && (pg.rows ?? []).some((r) => (r?.controls ?? []).some((c) => !!c && resolveControl(c, byKey, own) !== 'gap')));
 }
 
 /** Height of the tallest page of a board (cells). */
@@ -107,10 +110,15 @@ const tallestPage = (b: BeBoard | null): number => (b ? Math.max(0, ...b.pageOrd
 
 /** Board from a device layout, or null when it has no renderable control (the caller then uses the
  *  curated board). */
-export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], opts: DeviceLayoutBoardOptions = {}): BeBoard | null {
-  if (!layout?.pages?.length) return null;
+export function buildDeviceLayoutBoardV2(
+  served: DeviceLayout | null | undefined,
+  catalog: readonly BeCtl[],
+  opts: DeviceLayoutBoardOptions = {}
+): BeBoard | null {
+  if (!served?.pages?.length) return null;
+  const layout = opts.legacyUnguarded ? withoutCrossBlockRefs(served) : served;
   const byKey = new Map(catalog.map((c) => [c.key, c]));
-  const owner: LayoutOwner = { effectId: opts.effectId, legacyUnguarded: !!opts.rowFlowOnly && !!opts.legacyUnguarded };
+  const owner: LayoutOwner = { effectId: opts.effectId, family: layout.family };
 
   // page names key the board, so a layout that repeats a name gets a numeric suffix
   const used = new Set<string>();
@@ -144,7 +152,9 @@ export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined
   if (!pageOrder.length) return null;
 
   const placedKeys = new Set(pageOrder.flatMap((p) => boards[p]!.flatMap((it) => ('key' in it ? [it.key] : []))));
-  const rest = catalog.filter((c) => !placedKeys.has(c.key));
+  // graph displays the layout does not anchor are not added (no page just for a graph): the Arrange
+  // library offers them
+  const rest = catalog.filter((c) => !placedKeys.has(c.key) && c.kind !== 'graph');
   if (rest.length) {
     const name = uniqName('More');
     boards[name] = packSequential(rest, pageOrder.length);
@@ -154,7 +164,8 @@ export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined
 }
 
 /** Curated board for blocks without a device layout: "Main" (EQ, the given musician-facing knobs,
- *  bypass) and "Advanced" (everything else), each filled first-free in catalog order. */
+ *  bypass) and "Advanced" (everything else), each filled first-free in catalog order. Graph displays are
+ *  not placed (no layout anchors them): the Arrange library offers them. */
 export function buildCuratedBoardV2(catalog: readonly BeCtl[], mainParamIds: ReadonlySet<number>): BeBoard {
   const fill = (ctls: readonly BeCtl[], pageIndex: number): BeControl[] => {
     const out: BeControl[] = [];
@@ -166,7 +177,7 @@ export function buildCuratedBoardV2(catalog: readonly BeCtl[], mainParamIds: Rea
     return out;
   };
   const main = catalog.filter((c) => c.key === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && mainParamIds.has(c.id)));
-  const rest = catalog.filter((c) => !main.includes(c));
+  const rest = catalog.filter((c) => !main.includes(c) && c.kind !== 'graph');
   const boards: Record<string, BeControl[]> = { Main: fill(main, 0) };
   const pageOrder = ['Main'];
   if (rest.length) {

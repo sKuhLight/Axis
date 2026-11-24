@@ -68,6 +68,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* a read-only display's notes under its name (what the graph draws and what it does not) */
+  .be-menu-scope :global(.aw-menu-header.be-ci-note) {
+    max-width: 280px;
+    padding: 0 9px 6px;
+    color: var(--aw-text-muted);
+    font: 500 11px/1.35 var(--aw-font-ui);
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: normal;
+  }
   /* ⋯ LAYOUT header: teal dot = Default, amber = Custom */
   .be-menu-scope :global(.be-mi-layout-head) {
     display: flex;

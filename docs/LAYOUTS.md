@@ -51,6 +51,26 @@ board until it changes something) in the `config/surface` document (cloud and re
 Boards of the previous editor (`axs.surface3.*`, `axs.surface2.*`) are read and migrated, never written
 or deleted.
 
+**Graph tiles (read-only displays, AXIS-89).** Where the server serves them (cap `blockVisuals`, gen-3
+FM3 / FM9 / Axe-Fx III), a block's params carry `visuals` — `{ key, kind, title, mode?, roles }`, `roles`
+mapping an input of the display (`threshold`, `rate`, `time`, …) to a param id of that response, already
+narrowed to the block's current type — and the served layout's graph slots carry a `graphKey`. The
+Block Editor turns each visual into a catalog entry `graph:<key>` (kind and view `graph`, read-only; size
+8×4 cells, min 4×3, max 24×8; presets S 6×3 / M 8×4 / L 12×6) and draws it from the values its knobs
+hold (`blockEditor/visuals/`, own math only): a compressor / gate curve (with the live gain reduction
+while metering is on), an LFO scope (tempo-synced; its moving dot shows the rate, not the device's
+phase), a filter / wah response, a reverb decay, a delay echo train, an ADSR envelope, the cab
+alignment markers. Each graph's notes (what it draws and what it does not) are its tooltip, its
+accessible description and, on touch, the head of its control menu (long-press). **Seeding:** a graph slot whose key has a served visual becomes that tile at its
+anchor (the PEQ / GEQ slot stays the interactive EQ graph; a slot of another block never anchors);
+a visual no slot anchors (a gate, a delay without a layout) is not placed — no page just for a graph —
+and is offered by the Arrange library under "Graphs · meters · actions". A stored Default board that is
+still exactly the earlier rows-only built-in default follows the current one and so picks up its
+anchored graphs — unless that earlier default is also the current one minus its graphs (such a board
+may just as well be one whose graphs the user removed, and is kept). A board the user changed — a
+removed graph included — is never rewritten; "Reset to device layout" brings the anchored graphs back. On the phone a graph is always one full-width row. Without the cap (older server, other
+devices) there are no graph tiles.
+
 ## Axis-Layouts (layout profiles)
 
 **Implemented.** The **Axis-Layouts** system generalizes the previous editor's per-family tabs into

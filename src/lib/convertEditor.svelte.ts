@@ -424,6 +424,9 @@ class ConvertEditor {
     return null;
   }
   looperControl = async (_action: string, _on: boolean): Promise<void> => {};
+  // an offline buffer has no device tempo and serves no graph displays
+  readonly bpm = 120;
+  readonly hasTempo = false;
   typeNameFor = (_effectId: number): string => '';
   monitorFor = (_effectId: number): LiveMonitor | null => null;
   monitorsFor = (_effectId: number): LiveMonitor[] => [];

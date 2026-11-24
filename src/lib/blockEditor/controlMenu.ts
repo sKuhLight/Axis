@@ -30,7 +30,8 @@ export const VIEW_NAME: Readonly<Record<BeView, string>> = {
   eq: 'EQ graph',
   action: 'Action',
   meter: 'Meter',
-  wave: 'Waveform'
+  wave: 'Waveform',
+  graph: 'Graph'
 };
 
 export const SIZE_NAME: Readonly<Record<BeSizeLabel, string>> = { S: 'Small', M: 'Medium', L: 'Large' };
@@ -72,6 +73,9 @@ export interface ControlMenuState {
   /** The editor keeps grid swipe controls (the live editor with a block family; not the offline convert
    *  buffer, where a toggle would do nothing). */
   swipeSupported: boolean;
+  /** A read-only display's notes (a graph's "what is drawn and what is not"), shown under the header —
+   *  the tooltip does not reach touch. A menu with notes opens even when it offers nothing to do. */
+  notes?: readonly string[];
 }
 
 export interface ControlMenuActions {
@@ -199,9 +203,12 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
 
   if (layout && it) push({ id: 'remove', label: 'Remove from page', danger: true, className: cls('remove'), run: () => a.remove() });
 
-  if (!rows.length) return [];
+  const notes = (s.notes ?? []).filter((n) => !!n);
+  if (!rows.length && !notes.length) return [];
   const head = `${s.ctl.label}${it && s.page ? ` · ${s.page}` : ''}`;
-  return [{ id: 'head', kind: 'header', label: head, className: cls('head'), run: noop }, ...rows];
+  const noteRows: WorkbenchMenuItem[] = notes.map((n, i) => ({ id: `note.${i}`, kind: 'header', label: n, className: cls('note'), run: noop }));
+  const body = noteRows.length && rows.length ? [{ ...rows[0]!, separatorBefore: true }, ...rows.slice(1)] : rows;
+  return [{ id: 'head', kind: 'header', label: head, className: cls('head'), run: noop }, ...noteRows, ...body];
 }
 
 /** Where a custom panel is, seen from the current workbench page. */

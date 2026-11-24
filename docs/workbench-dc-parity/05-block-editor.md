@@ -374,6 +374,10 @@ Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `
 - [ ] Clear button semantics (`source=0`, keeps other settings) + status dot; dashed "NONE — tap to assign" source box.
 - [ ] Flyout presentation: right slide-in `min(400px,96%)`, `beSlide .24s`, scrim `rgba(6,6,8,.45)` — vs production flyout styling.
 
+### Beyond the design (production extras)
+
+- [x] **Read-only graph tiles (AXIS-89)** — not in the design: a `graph` view (8×4 cells, S 6×3 / M 8×4 / L 12×6) drawing the block's served `visuals` (cap `blockVisuals`) from the knobs' own values: compressor / gate curve + live gain reduction (metering on), LFO scope (tempo-synced, moving dot = rate only), filter / wah response, reverb decay, delay echo train, ADSR, cab alignment. `role="img"` with a computed `aria-label` and its notes as the accessible description (also under its name in the control menu, for touch), theme tokens only (no-hex guard test), the control menu keeps Size / Remove, the board scrolls through it on touch, one full-width row on the phone. Seeded at keyed layout graph slots; unanchored ones only via the Arrange library ("Graphs · meters · actions"). See `docs/LAYOUTS.md`.
+
 ### P2 — polish
 
 - [ ] Card/`bePop` placement animation, toast spec (`beToast 2.1s`, glowing dot), hover border transitions (.12s).

@@ -8,6 +8,7 @@
 // that changes nothing hands back the very same reference so callers can skip a save or a render.
 // No Svelte, no DOM — unit-tested in node (boardModel.test.ts).
 
+import { isGraphKey } from '../blockVisuals';
 import type { SurfaceBoard } from '../deviceLayoutBoard';
 
 // ── types ────────────────────────────────────────────────────────────────────────────────────────
@@ -23,10 +24,11 @@ export type BeView =
   | 'eq'
   | 'action'
   | 'meter'
-  | 'wave';
+  | 'wave'
+  | 'graph';
 export type BeDividerKind = 'hdiv' | 'vdiv';
 
-export const BE_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'action', 'meter', 'wave'];
+export const BE_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'action', 'meter', 'wave', 'graph'];
 export const BE_DIVIDER_KINDS: readonly BeDividerKind[] = ['hdiv', 'vdiv'];
 
 export interface BeRect {
@@ -37,7 +39,7 @@ export interface BeRect {
 }
 export interface BeControl extends BeRect {
   id: string;
-  /** Catalog key (`k<paramId>`, `e<paramId>`, `eq`, `bypass`, `meter`, `wave`). */
+  /** Catalog key (`k<paramId>`, `e<paramId>`, `eq`, `bypass`, `meter`, `wave`, `graph:<visual key>`). */
   key: string;
   view: BeView;
   /** Source row of a device-layout board; keeps rows together when the page reflows. */
@@ -106,6 +108,8 @@ export const BE_SPEC: Readonly<Record<BeView | BeDividerKind, BeSpec>> = {
   // lying read-out variant.
   meter: { w: 2, h: 4, minW: 1, maxW: 24, minH: 1, maxH: 8 },
   wave: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  // read-only graph display (dynamics curve, LFO scope, filter response, …): one phone row wide by default
+  graph: { w: 8, h: 4, minW: 4, maxW: 24, minH: 3, maxH: 8 },
   hdiv: { w: 6, h: 1, minW: 2, maxW: MAXC, minH: 1, maxH: 1 },
   vdiv: { w: 1, h: 4, minW: 1, maxW: 1, minH: 2, maxH: 24 }
 };
@@ -130,7 +134,8 @@ export const BE_PRESETS: Readonly<Record<BeView, readonly BePreset[]>> = {
   eq: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
   action: [P(2, 1, 'S'), P(3, 1, 'M'), P(2, 2, 'L')],
   meter: [P(1, 4, 'S'), P(2, 4, 'M'), P(2, 6, 'L')],
-  wave: [P(8, 4, 'S'), P(12, 4, 'M'), P(16, 6, 'L')]
+  wave: [P(8, 4, 'S'), P(12, 4, 'M'), P(16, 6, 'L')],
+  graph: [P(6, 3, 'S'), P(8, 4, 'M'), P(12, 6, 'L')]
 };
 
 const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
@@ -147,6 +152,7 @@ export function defaultViewForKey(key: string): BeView {
   if (key === 'bypass') return 'action';
   if (key === 'meter') return 'meter';
   if (key === 'wave') return 'wave';
+  if (isGraphKey(key)) return 'graph';
   if (key.startsWith('e')) return 'button';
   return 'knob';
 }
@@ -364,7 +370,8 @@ export const PHONE_COLS = 8;
  *  - A band wider than `cols` is cut into chunks at the widest column no item straddles, and the chunks
  *    go one under the other, each keeping its 2D arrangement (a row of twelve knobs → three rows of four;
  *    a fader beside two knob rows stays beside them). Inner gaps stay, a leading indent goes.
- *  - Items wider than `cols` take `cols` (an EQ graph, a long slider, a full-width divider); a horizontal
+ *  - Items wider than `cols` take `cols` (an EQ graph, a long slider, a full-width divider), and so does every
+ *    graph display (one full-width row); a horizontal
  *    divider then runs to the right edge of its chunk wherever the line is free, so section rules span the
  *    phone page. A vertical divider is kept only between items of its chunk (at a chunk edge it separates
  *    nothing and is left out of `pos`).
@@ -374,7 +381,8 @@ export const PHONE_COLS = 8;
 export function phoneWrap(list: readonly BeItem[], cols: number = PHONE_COLS): BeReflow {
   const C = Math.max(1, Math.floor(cols));
   const items = list
-    .map((it, i) => ({ it, i, x: Math.max(0, it.x), y: Math.max(0, it.y), w: Math.max(1, Math.min(it.w, C)), h: Math.max(1, it.h) }))
+    // a graph display is always one full-width row on the phone (whatever its board width)
+    .map((it, i) => ({ it, i, x: Math.max(0, it.x), y: Math.max(0, it.y), w: !isDivider(it) && it.view === 'graph' ? C : Math.max(1, Math.min(it.w, C)), h: Math.max(1, it.h) }))
     .sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
   type Cell = (typeof items)[number];
   const isH = (c: Cell) => isDivider(c.it) && c.it.kind === 'hdiv';
@@ -776,13 +784,17 @@ export function deletePage(board: BeBoard, page: string): BeOpResult {
 /** Block-level catalog entries that depend on data arriving after the parameters (EQ bands, level
  *  meters, loop waveform). Persistence keeps them even while they are missing from the catalog. */
 export const BLOCK_LEVEL_KEYS: ReadonlySet<string> = new Set(['meter', 'wave', 'eq', 'bypass']);
+/** A block-level key: one of BLOCK_LEVEL_KEYS, or a graph display (`graph:<key>`, served with the block's
+ *  params — kept while a re-read has not brought it back yet, like the meter). */
+export const isBlockLevelKey = (key: string): boolean => BLOCK_LEVEL_KEYS.has(key) || isGraphKey(key);
 
 export interface NormalizeOptions {
   /** Allowed views per catalog key; a stored view outside the list falls back to the first one. */
   viewsByKey?: ReadonlyMap<string, readonly BeView[]>;
-  /** Keys kept even when the catalog does not list them (yet). The renderer shows only keys that are
-   *  in the catalog, so a kept-but-absent control is simply not drawn until its data arrives. */
-  keepKeys?: ReadonlySet<string>;
+  /** Keys kept even when the catalog does not list them (yet): a set, or a predicate (`isBlockLevelKey`).
+   *  The renderer shows only keys that are in the catalog, so a kept-but-absent control is simply not
+   *  drawn until its data arrives. */
+  keepKeys?: ReadonlySet<string> | ((key: string) => boolean);
 }
 
 function cleanControl(it: BeControl, viewsByKey?: ReadonlyMap<string, readonly BeView[]>): BeControl {
@@ -832,7 +844,8 @@ function cleanDivider(it: BeDivider): BeDivider {
  *  Idempotent: normalizing a normalized board yields a deep-equal board. */
 export function normalizeBoard(raw: BeBoard, catalogKeys: Iterable<string>, opts: NormalizeOptions = {}): BeBoard {
   const valid = catalogKeys instanceof Set ? (catalogKeys as Set<string>) : new Set(catalogKeys);
-  const keep = opts.keepKeys;
+  const keepOpt = opts.keepKeys;
+  const keep: { has(key: string): boolean } | null = keepOpt == null ? null : typeof keepOpt === 'function' ? { has: keepOpt } : keepOpt;
   const rawBoards: object = raw.boards && typeof raw.boards === 'object' ? raw.boards : {};
   const listOf = (pg: string): unknown => (hasOwn(rawBoards, pg) ? (rawBoards as Record<string, unknown>)[pg] : undefined);
 

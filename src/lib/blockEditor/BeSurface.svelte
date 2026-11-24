@@ -63,6 +63,7 @@
     menuAtTile
   } from './controlMenuInput';
   import { setBeHost, type BeHost } from './beHost';
+  import { graphPlot } from './visuals/graphModel';
   import { BeArrange, type ArrangeTone } from './beArrange.svelte';
   import { arrangeSelection, buildBarOverflow, type BarActions, type BarPart } from './arrangeBar';
   import { buildPageMenu } from './pageMenu';
@@ -79,7 +80,7 @@
     type BeItem,
     type BeView
   } from './boardModel';
-  import { boardDiffersFromSeed, pageDiffersFromSeed } from './boardPersistence';
+  import { boardDiffersFromSeed, pageDiffersFromSeed, type PreviousSeeds } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
   import { buildCuratedBoardV2, buildDeviceLayoutBoardV2, hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
   import {
@@ -163,12 +164,19 @@
   // ── live data ──
   const knobById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
   const enumById = $derived(new Map(editor.enums.map((e) => [e.id, e])));
-  const mons = $derived(editor.monitorsFor(editor.selected?.effectId ?? -1));
+  /** Live block metering is on (an offline buffer says nothing: its monitors are empty anyway). */
+  const meteringOn = $derived(editor.meteringOn ?? true);
+  // the block's live monitors only while metering is on: the meter tile and a graph's gain-reduction bar
+  // never show a stale reading after METER OFF
+  const blockMons = $derived(editor.monitorsFor(editor.selected?.effectId ?? -1));
+  const mons = $derived(meteringOn ? blockMons : []);
   const NWAVE = 110;
   const wave = $derived(waveBars(editor.looperWave?.wave, NWAVE));
   const wavePos = $derived(clamp01(editor.looperWave?.position ?? 0));
-  // the catalog only cares whether (and as what) the block meters, not about every level poll
-  const monRole = $derived(mons[0]?.role ?? null);
+  // the catalog only cares whether (and as what) the block meters, not about every level poll — and not
+  // about METER ON/OFF either (the ungated list): toggling metering must not change the catalog, reload
+  // the board or drop the Arrange undo history; the meter tile just shows no reading while it is off
+  const monRole = $derived(blockMons[0]?.role ?? null);
   const hasWave = $derived(wave.length > 0);
   // The catalog only changes with the block's parameter SET (ids, names, option counts), not with their
   // values, but a device parameter event replaces the params array. Keep the previous catalog (same
@@ -176,13 +184,23 @@
   // tile's derived values are not rebuilt per event; values still reach the tiles through the host.
   let catMemo: { sig: string; cat: BeCtl[] } | null = null;
   const catalog = $derived.by(() => {
-    const next = buildCatalog({ params: editor.params, enums: editor.enums, eqBandCount: eqBands.length, eqTitle, hideIds, monitors: monRole ? [{ role: monRole }] : [], hasWave });
+    const next = buildCatalog({
+      params: editor.params,
+      enums: editor.enums,
+      eqBandCount: eqBands.length,
+      eqTitle,
+      hideIds,
+      monitors: monRole ? [{ role: monRole }] : [],
+      hasWave,
+      visuals: editor.blockVisuals ?? []
+    });
     const sig = JSON.stringify(next);
     if (catMemo && catMemo.sig === sig) return catMemo.cat;
     catMemo = { sig, cat: next };
     return next;
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
+
   const variantSig = $derived(layoutVariantSig(editor.blockLayout));
 
   // ── device class: one value for the board key AND every phone decision (chrome, arrange, hover) ──
@@ -202,6 +220,53 @@
     set: () => {}
   };
   const be = new BeState({ get: surfGet, set: surfSet, remove: surfRemove }, legacyStorage);
+
+  // ── graph tiles: the shared clock of the LFO playheads (≤ 30 fps, only while one is moving on screen) ──
+  const PLAYHEAD_FPS = 30;
+  let clock = $state(0);
+  let reducedMotion = $state(false);
+  let pageHidden = $state(false);
+  const playheads = new Set<string>();
+  let playheadCount = $state(0);
+  let raf = 0;
+  let lastFrame = 0;
+  const animate = $derived(!be.editMode && !reducedMotion && !pageHidden);
+  function frame(now: number) {
+    raf = 0;
+    if (!animate || playheadCount === 0) return;
+    if (now - lastFrame >= 1000 / PLAYHEAD_FPS - 1) {
+      lastFrame = now;
+      clock = now / 1000;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  $effect(() => {
+    if (animate && playheadCount > 0 && !raf && typeof requestAnimationFrame !== 'undefined') raf = requestAnimationFrame(frame);
+  });
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const syncMotion = () => (reducedMotion = !!mq?.matches);
+    const syncHidden = () => (pageHidden = document.hidden);
+    syncMotion();
+    syncHidden();
+    mq?.addEventListener?.('change', syncMotion);
+    document.addEventListener('visibilitychange', syncHidden);
+    return () => {
+      mq?.removeEventListener?.('change', syncMotion);
+      document.removeEventListener('visibilitychange', syncHidden);
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+  });
+  /** Register / drop a moving playhead. Writes the reactive count only (never reads it), so a tile's
+   *  registering effect never depends on it. */
+  function setPlayhead(id: string, on: boolean) {
+    const had = playheads.size;
+    if (on) playheads.add(id);
+    else playheads.delete(id);
+    if (playheads.size !== had) playheadCount = playheads.size;
+  }
   /** The open block, for the cross-block guard: a layout control of another block never binds to this
    *  block's param with the same id (deviceLayoutBoard `isForeignControl`). */
   const layoutOwnerEid = $derived(editor.selected?.effectId ?? null);
@@ -213,14 +278,18 @@
   }
   /** The built-in seed comes from the device layout (else the curated fallback; the ⋯ wording follows). */
   const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog, { effectId: layoutOwnerEid }));
-  /** The device default as earlier versions built it (rows only, cross-block refs still bound by their bare
-   *  paramId — those versions had no guard): a stored Default board still equal to it follows the
-   *  positioned, guarded default (boardPersistence `previousSeed`; built only when needed). */
-  function previousSeed(): BoardModel | null {
-    return buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { rowFlowOnly: true, legacyUnguarded: true });
+  /** The device default as earlier, released versions built it: rows only, before positions, cross-block
+   *  refs bound by their bare paramId and no graph displays (those versions had neither the guard nor graph
+   *  tiles). A stored Default board still equal to it was never changed by the user and follows the current
+   *  default (boardPersistence `previousSeed`; built only when such a board is found). The positioned
+   *  default never shipped before graph tiles, so a positioned board without them is a user's choice (a
+   *  removed graph) and stays; "Reset to device layout" brings the graphs back. */
+  function previousSeed(): PreviousSeeds {
+    const noGraphs = catalog.filter((c) => c.kind !== 'graph');
+    return buildDeviceLayoutBoardV2(editor.blockLayout, noGraphs, { rowFlowOnly: true, legacyUnguarded: true });
   }
   $effect(() => {
-    const src = { slug, deviceClass, catalog, variantSig, deviceSeed, previousSeed, rev: surfRev() };
+    const src = { slug, deviceClass, catalog, variantSig, owner: layoutOwnerEid, deviceSeed, previousSeed, rev: surfRev() };
     if (status !== 'ready') return; // the parameters of another block / channel may still be in place
     untrack(() => {
       // a (re)load can swap the board under the scroll position: keep its stored page active until the
@@ -1234,7 +1303,9 @@
         newTab: canPinIt && !!tab,
         canSwipe: c.kind === 'cont' && knobById.has(c.id),
         swipe: c.kind === 'cont' && editor.isSwipeControl(c.id),
-        swipeSupported: !!editor.canSwipeControl
+        swipeSupported: !!editor.canSwipeControl,
+        // a graph's notes (what it draws and what not): the tooltip does not reach touch
+        notes: c.kind === 'graph' && c.visual ? graphPlot(c.visual, { knob: host.knob, enm: host.enm, typeName: host.typeName, bpm: host.bpm, hasTempo: host.hasTempo }).notes : undefined
       },
       {
         pinNewTab: () => {
@@ -1486,6 +1557,25 @@
     knob: (id) => knobById.get(id),
     enm: (id) => enumById.get(id),
     loopOn: (a) => !!loopLatch[a],
+    get bpm() {
+      return editor.bpm;
+    },
+    get hasTempo() {
+      return editor.hasTempo;
+    },
+    get typeName() {
+      return editor.blockType?.name ?? null;
+    },
+    get clock() {
+      return clock;
+    },
+    get animate() {
+      return animate;
+    },
+    playhead: setPlayhead,
+    get meteringOn() {
+      return meteringOn;
+    },
     tileDown,
     trackDown,
     valueKey,

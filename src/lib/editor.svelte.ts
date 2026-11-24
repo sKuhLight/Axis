@@ -19,7 +19,7 @@ import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import { liveBlockState, withBypassModeLabels } from './blockState';
 import { resolveCurrentSlot, checkSaveTarget, guardedStore, isSlotConfirmed, saveBlockedText, withTimeout, canProbePreset, saveProbeMs } from './saveTarget';
-import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, BlockState } from './types';
+import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, BlockState, BlockVisual } from './types';
 import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
@@ -112,6 +112,9 @@ class EditorStore {
   /** caps.blockState: the block params carry Scene Ignore + Bypass Mode (true / false); undefined when the
    *  server does not say (a pre-v2 or older ForgeFX) — the header then names a newer server as the fix. */
   get blockStateCap(): boolean | undefined { return this.isV2 ? this.caps?.blockState : undefined; }
+  /** caps.blockVisuals: the block params carry read-only graph displays (`visuals`) and the served layout's
+   *  graph slots their key. Absent (older server) or false → no graph tiles. */
+  get hasBlockVisuals(): boolean { return this.isV2 && this.caps?.blockVisuals === true; }
   /** Scene names are writable on this device. */
   get canRenameScenes(): boolean { return this.isV2 ? !!this.caps?.sceneNamesWritable : !this.isAm4; }
   /** Device supports full preset dumps → the library's deep param index (summary/params reads). */
@@ -171,6 +174,11 @@ class EditorStore {
   }
   /** Device-authentic editor pages for the open block/virtual effect (seeds the Block Editor's Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
+  /** Read-only displays the server serves for the open block (`visuals`), kept as served. */
+  #servedVisuals = $state<BlockVisual[]>([]);
+  /** The open block's graph displays: what the server served, and only where it says it serves them
+   *  (caps.blockVisuals); otherwise none (an older server, another device). */
+  get blockVisuals(): BlockVisual[] { return this.hasBlockVisuals ? this.#servedVisuals : []; }
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
   /** True when the full Preset Browser rail screen is open (replaces the grid/editor view). */
@@ -1522,6 +1530,7 @@ class EditorStore {
       this.params = [];
       this.enums = [];
       this.#blockStateTag = null;
+      this.#servedVisuals = [];
       return;
     }
     await this.#loadParams();
@@ -1576,6 +1585,7 @@ class EditorStore {
       this.blockSlug = r.slug ?? null;
       if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
       this.blockLayout = r.layout ?? null; // device-authentic pages seed the Block Editor's Default layout
+      this.#servedVisuals = r.visuals ?? []; // read-only graph displays (forgefx.blockParams parsed them)
       // Scene Ignore + Bypass Mode (header); forgefx.blockParams already dropped a missing / malformed tag
       this.#blockStateTag = !this.virtual && r.blockState ? { eid: c.effectId, channel: readChannel, state: r.blockState } : null;
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
@@ -1599,6 +1609,7 @@ class EditorStore {
     } catch (e) {
       this.sheetState = 'error';
       this.#blockStateTag = null;
+      this.#servedVisuals = [];
       if (e instanceof ForgeError) console.warn(e.message);
     }
   };

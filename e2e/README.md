@@ -53,8 +53,9 @@ npx playwright install firefox    # optional `firefox` project
   `PW_FIREFOX_PATH=/path/to/firefox` to point at a custom Playwright-compatible
   Firefox build, but the normal path is `npx playwright install firefox`.
 
-`44-block-editor-touch` drives touch through the Chrome DevTools Protocol (`Input.dispatchTouchEvent`), so it
-runs on `chromium` only and skips itself on the `firefox` project (`test.skip(({ browserName }) => …)`).
+`44-block-editor-touch` and the phone tests of `45-block-editor-graphs` drive touch through the Chrome DevTools
+Protocol (`Input.dispatchTouchEvent`), so they run on `chromium` only and skip themselves on the `firefox`
+project (`test.skip(({ browserName }) => …)`).
 
 Both projects pin the viewport to **1440×900**. This is load-bearing: the
 workbench viewport-profile resolver (T14) treats widths `<1366` as the *tablet*
@@ -110,7 +111,7 @@ attributes were added**:
   `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
   `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
 
-## Test inventory (27 spec files, 246 tests on `chromium`; the first nine below)
+## Test inventory (28 spec files, 259 tests on `chromium`; the first nine below)
 
 1. **01-boot** — shell chrome renders; no console errors beyond the filtered
    ForgeFX/`/api` connection failures.
@@ -273,6 +274,22 @@ every control view's role / value and the select's keyboard listbox (Enter opens
 a pick, reopened, on the picked one, which holds the list's one tab stop —, arrows walk with a focus ring,
 Enter picks, Escape back to the field without restoring a maximized panel, Tab closes it and moves on from the
 field).
+**45-block-editor-graphs** — read-only graph tiles (AXIS-89) against synthetic blocks in row 1 of the mocked
+grid (`support/graphBlocks.ts`: served `visuals` + keyed layout graph slots, the device tempo 90 bpm): the
+compressor graph at its slot (cells 8,0), its `aria-label` naming threshold / ratio / knee / level / mix and its
+notes as its accessible description (`aria-describedby`), a threshold change by keyboard redrawing label and path while only the threshold is written; knee (select) and
+mix redraw it, a sustain-only type shows no curve ("No static curve for this type"); metering on shows the
+live gain reduction and METER OFF removes it; the tremolo's tempo 1/4 at 90 bpm draws 1.5 Hz with a moving playhead whose tooltip says it
+shows the rate, not the device phase; reduced motion and Arrange keep it still; the filter's response (Filter
+page) and LFO (Modulation page); the controllers' LFO 1 / LFO 2 / ADSR 1; a gate (no slot) gets its graph only
+from the Arrange library under "Graphs · meters · actions", sized S / M / L, and its control menu shows its notes and keeps Size
+and Remove; a delay without a device layout gets its echo train only from the library (40 % feedback, ping-pong: eight
+spikes, caption "500 ms, 8 repeats to −60 dB"); no `blockVisuals` cap (false
+or absent; `visuals` and the slots' graph keys still served, so the cap alone hides them) → no graph tiles and
+none in the library; on the phone (Chromium, CDP touch) a graph is one full-width row, knobs stay ≤ 4 a row, a
+swipe starting on the graph scrolls the board and writes nothing, and a long-press on it opens the control
+menu with the graph's notes. Every test of the desktop describe also fails on a page error or a console error
+(e.g. a Svelte effect that re-runs itself).
 Helpers `selectTile` / `openLibrary` /
 `arrangeAdd` / `countBoardSaves` / `boardSaves` live in `support/blockEditorMock.ts`. Arrange selectors:
 `[data-be-arrange-bar]` (`touch` class on the tablet), its parts `[data-be-ab="<part>"]` (`remove`, `pin`,

@@ -3,6 +3,7 @@
   // eq, action, meter, wave) or a divider. Sized from its cells; everything it does goes through the
   // BeHost the surface provides (values, gestures, pin, arrange selection).
   import EQGraph from '../EQGraph.svelte';
+  import BeGraph from './BeGraph.svelte';
   import { longPress } from '../axis-workbench/longPress';
   import { getBeHost } from './beHost';
   import { isDivider, type BeItem, type BeRect } from './boardModel';
@@ -184,6 +185,7 @@
   class:sel={selected}
   class:div={!!div}
   class:eq={view === 'eq'}
+  class:graph={view === 'graph'}
   class:standalone
   class:touch={touchUi}
   class:dragging={host.dragId === item.id}
@@ -441,6 +443,8 @@
       <div class="be-eqbox" style:pointer-events={ed ? 'none' : 'auto'}>
         <EQGraph bands={host.eqBands} gainRange={host.eqGainRange} accent={host.accent} onSet={(pp, n) => host.eqSet(pp, n)} />
       </div>
+    {:else if ctl.kind === 'graph' && ctl.visual}
+      <BeGraph visual={ctl.visual} itemId={item.id} {pxW} {pxH} edit={ed} />
     {:else if ctl.kind === 'action'}
       <button
         class="be-pill action"
@@ -598,6 +602,9 @@
     padding: 0;
     background: var(--input);
     border-color: var(--border);
+  }
+  .be-tile.graph {
+    padding: 0;
   }
   .be-tile.div {
     padding: 0;

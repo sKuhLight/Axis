@@ -25,7 +25,7 @@
 
 import { popUndo, pushUndo, restoreBoard } from './arrangeHistory';
 import {
-  BLOCK_LEVEL_KEYS,
+  isBlockLevelKey,
   normalizeBoard,
   resetPageFrom,
   type BeBoard
@@ -51,7 +51,8 @@ import {
   type BeMeta,
   type BoardSource,
   type DeviceClass,
-  type KeyValueStore
+  type KeyValueStore,
+  type PreviousSeeds
 } from './boardPersistence';
 import type { BePrefs } from './boardSchema';
 import { viewsByKey, type BeCtl } from './catalog';
@@ -68,11 +69,15 @@ export interface BeSource {
   catalog: readonly BeCtl[];
   /** Device-layout variant fingerprint ('' without a device layout). */
   variantSig: string;
+  /** Effect id of the open block: the device seed's cross-block guard depends on it, so another instance
+   *  of the same block (Output 1 → Output 2: same family, catalog and variant) re-seeds. */
+  owner?: number | null;
   /** The device-authentic default board (device layout, else the curated fallback). */
   deviceSeed: () => BeBoard;
-  /** The device default as earlier versions built it (rows only), or null when it equals `deviceSeed`
-   *  by construction (no device layout). A stored Default board still equal to it follows `deviceSeed`. */
-  previousSeed?: () => BeBoard | null;
+  /** The device default as earlier versions built it (rows only; positioned before graph displays), one
+   *  board or several, or null when it equals `deviceSeed` by construction (no device layout). A stored
+   *  Default board still equal to one of them follows `deviceSeed`. */
+  previousSeed?: () => PreviousSeeds;
   /** Remote revision of the surface document (bumped by a host↔remote push). */
   rev: number;
 }
@@ -140,7 +145,7 @@ export class BeState {
    *  when it (re)loaded. */
   sync(src: BeSource): boolean {
     if (!src.slug || !catalogReady(src.catalog)) return false;
-    const sig = [src.slug, src.catalog.map((c) => c.key).join(','), src.variantSig, src.deviceClass, src.rev].join('|');
+    const sig = [src.slug, src.catalog.map((c) => c.key).join(','), src.variantSig, src.deviceClass, src.rev, src.owner ?? ''].join('|');
     const prev = this.#src;
     this.#src = src;
     if (sig === this.#sig) return false;
@@ -413,7 +418,7 @@ export class BeState {
     const seed = src.deviceSeed();
     const stamped = this.meta.active === DEFAULT_PROFILE && src.variantSig ? { ...seed, variantSig: src.variantSig } : seed;
     const keys = new Set(src.catalog.map((c) => c.key));
-    const next = normalizeBoard(stamped, keys, { viewsByKey: viewsByKey(src.catalog), keepKeys: BLOCK_LEVEL_KEYS });
+    const next = normalizeBoard(stamped, keys, { viewsByKey: viewsByKey(src.catalog), keepKeys: isBlockLevelKey });
     const page = this.board && next.pageOrder.includes(this.board.page) ? this.board.page : next.page;
     this.commit({ ...next, page });
   }

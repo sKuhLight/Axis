@@ -1,5 +1,6 @@
 import { expect, type Page, type Route } from '@playwright/test';
 import { bootCleanWorkbench } from './workbench';
+import { GRAPH_BPM, GRAPH_CELLS, GRAPH_EIDS, GRAPH_MONITORS, graphBlockParams } from './graphBlocks';
 
 // A fully mocked backend with one amp-like block whose params carry a multi-page device layout, for the
 // Block Editor board specs. Nothing reaches a real device: every /api call is answered here (or aborted
@@ -223,6 +224,10 @@ export interface BlockEditorMock {
   bypassWrites: boolean[];
   /** Captured bypass writes of every block, by effect id. */
   bypassByEid: Record<number, boolean[]>;
+  /** Captured parameter writes of the graph blocks (`graphs`), by effect id. */
+  graphWrites: Record<number, ParamWrite[]>;
+  /** `graphs`: serve the compressor as a sustain-only type (no threshold / ratio) from its next read. */
+  compSustainOnly: boolean;
 }
 
 export interface BlockEditorMockOptions {
@@ -241,6 +246,13 @@ export interface BlockEditorMockOptions {
   /** Serve the amp's Scene Ignore as firmware-gated (`supported: false` with this reason, e.g.
    *  "Needs firmware ≥ 5.03"). */
   sceneIgnoreGate?: string;
+  /** Six more blocks in row 1 that serve read-only graph displays (`visuals`, cap `blockVisuals`), see
+   *  support/graphBlocks.ts; the device tempo is 90 bpm. */
+  graphs?: boolean;
+  /** The device's `blockVisuals` capability with `graphs` (default true). `false`: caps false; `'absent'`:
+   *  an older ForgeFX (no caps key). `visuals` and the slots' graph keys are served either way, so the
+   *  capability alone is what hides the graphs. */
+  blockVisuals?: boolean | 'absent';
 }
 
 export const CAB_EID = 101;
@@ -273,15 +285,14 @@ const CAB_STATE = {
 
 /** Install the mocked backend and boot a clean workbench with the amp block on the grid. */
 export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptions = {}): Promise<BlockEditorMock> {
-  const mock: BlockEditorMock = { writes: [], enumWrites: [], failNextEnumWrite: null, channelWrites: [], bypassWrites: [], bypassByEid: {} };
-  const grid = opts.extraBlocks ? { ...GRID, cells: [...GRID.cells, ...EXTRA_CELLS] } : GRID;
+  const mock: BlockEditorMock = { writes: [], enumWrites: [], failNextEnumWrite: null, channelWrites: [], bypassWrites: [], bypassByEid: {}, graphWrites: {}, compSustainOnly: false };
+  const grid = { ...GRID, cells: [...GRID.cells, ...(opts.extraBlocks ? EXTRA_CELLS : []), ...(opts.graphs ? GRAPH_CELLS : [])] };
   const bsCap = opts.blockState ?? true;
-  const device =
-    bsCap === true
-      ? DEVICE
-      : bsCap === false
-        ? { ...DEVICE, capabilities: { ...CAPS, blockState: false } }
-        : { ...DEVICE, capabilities: Object.fromEntries(Object.entries(CAPS).filter(([k]) => k !== 'blockState')) };
+  const bvCap = opts.blockVisuals ?? true;
+  const baseCaps: Record<string, unknown> = { ...CAPS, ...(opts.graphs ? { tempo: true, ...(bvCap === 'absent' ? {} : { blockVisuals: bvCap }) } : {}) };
+  if (bsCap === false) baseCaps.blockState = false;
+  if (bsCap === 'absent') delete baseCaps.blockState;
+  const device = { ...DEVICE, capabilities: baseCaps };
   // the amp's enum values as the device holds them (the captured enum writes land here)
   const enumValues = new Map<number, number>();
   const ampParams = () => {
@@ -339,6 +350,18 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
       if (path === `/preset/blocks/${CAB_EID}/cab`) return json(route, CAB_STATE);
       if (path === '/cab/irs') return json(route, { 'FACTORY 1': ['4x12 Green', '2x12 Blue'] });
       if (path === `/preset/blocks/${ERROR_EID}/params`) return json(route, { error: 'unknown block' }, 404); // 4xx: a read error without the failure reporter
+    }
+    if (opts.graphs) {
+      if (path === '/tempo') return json(route, { bpm: GRAPH_BPM });
+      const gp = /^\/preset\/blocks\/(\d+)\/params$/.exec(path);
+      if (gp && GRAPH_EIDS.has(Number(gp[1]))) return json(route, graphBlockParams(Number(gp[1]), { sustainOnly: mock.compSustainOnly }));
+      const gw = /^\/preset\/blocks\/(\d+)\/params\/(\d+)$/.exec(path);
+      if (gw && GRAPH_EIDS.has(Number(gw[1])) && req.method() === 'PUT') {
+        const body = req.postDataJSON() as { value: number; continuous: boolean };
+        (mock.graphWrites[Number(gw[1])] ??= []).push({ pid: Number(gw[2]), value: body.value, continuous: body.continuous });
+        return json(route, { ok: true });
+      }
+      if (path === '/preset/monitors/live') return json(route, GRAPH_MONITORS);
     }
     if (path === '/ports') return json(route, { chosen: null, override: null, profileOverride: null, ports: [] });
     if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, ampParams());

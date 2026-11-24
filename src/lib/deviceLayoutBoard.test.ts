@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isForeignControl, layoutVariantSig, resolveControl, type BoardCtl } from './deviceLayoutBoard';
+import { isForeignControl, layoutVariantSig, resolveControl, withoutCrossBlockRefs, type BoardCtl } from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
 // ── catalog builders (the Block Editor's live catalog entries, blockEditor/catalog.ts) ──
@@ -95,8 +95,28 @@ describe('resolveControl — controls of another block (cross-block refs, AXIS-9
     expect(isForeignControl(ctl('knob', 0, 'Threshold'))).toBe(false);
   });
 
-  it('legacyUnguarded resolves as before the guard (only for recognising old stored seeds)', () => {
-    expect(resolveControl(foreign('knob', 0), cat, { legacyUnguarded: true })).toEqual({ key: 'k0', view: 'knob' });
+  it('withoutCrossBlockRefs resolves as before the guard (only for recognising old stored seeds)', () => {
+    const lay = layout([{ name: 'P', rows: [{ controls: [foreign('knob', 0)] }] }]);
+    const plain = withoutCrossBlockRefs(lay).pages[0]!.rows[0]!.controls[0]!;
+    expect(resolveControl(plain, cat)).toEqual({ key: 'k0', view: 'knob' });
+    expect(lay.pages[0]!.rows[0]!.controls[0]!.crossBlock).toBeTruthy(); // the served layout is untouched
+  });
+
+  // fix round: refs to the open layout's own family and a single-instance effect are the block's own params
+  const own = (effect: string, family: string | null, paramId: number) =>
+    ctl('knob', paramId, 'Own', { crossBlock: { effect, family, paramName: 'X', paramId } });
+  it('a same-family ref to a single-instance effect binds (the Foot Controller screen’s own params)', () => {
+    expect(resolveControl(own('ID_FOOTCONTROLLER', 'FC', 0), cat, { family: 'FC' })).toEqual({ key: 'k0', view: 'knob' });
+    expect(isForeignControl(own('ID_FOOTCONTROLLER', 'FC', 0), { effectId: 199, family: 'FC' })).toBe(false);
+  });
+  it('a same-family ref to one instance of a multi-instance effect stays a gap', () => {
+    expect(resolveControl(own('ID_OUTPUT1', 'OUTPUT', 0), cat, { family: 'OUTPUT' })).toBe('gap');
+    expect(resolveControl(own('ID_DISTORT1', 'DISTORT', 0), cat, { family: 'DISTORT' })).toBe('gap');
+  });
+  it('a ref to another family, or without a family (AM4), stays a gap', () => {
+    expect(resolveControl(own('ID_GLOBAL', 'GLOBAL', 0), cat, { family: 'FC' })).toBe('gap');
+    expect(resolveControl(own('ID_FOOTCONTROLLER', null, 0), cat, { family: 'FC' })).toBe('gap');
+    expect(resolveControl(own('ID_FOOTCONTROLLER', 'FC', 0), cat)).toBe('gap'); // open layout family unknown
   });
 });
 

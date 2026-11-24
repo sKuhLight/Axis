@@ -279,6 +279,104 @@ describe('device positions: the previous (rows-only) default', () => {
   });
 });
 
+describe('graph displays: an untouched legacy Default picks up its anchored graph, a removed one stays gone (AXIS-89)', () => {
+  const visuals = [{ key: 'dynamics', kind: 'dynamics' as const, title: 'Compressor curve', roles: { threshold: 0, ratio: 1 } }];
+  const cat = buildCatalog({ params: [0, 1, 2].map((id) => ({ id, name: `P${id}` })), enums: [], visuals });
+  const noGraphs = cat.filter((c) => c.kind !== 'graph');
+  const ckeys = cat.map((c) => c.key);
+  const k = (id: number) => ({ label: `P${id}`, paramName: `P${id}`, paramId: id, widget: 'knob' as const, rawWidget: 'knob' });
+  const slot = { label: '', paramName: null, paramId: null, widget: 'graph' as const, rawWidget: 'graph', graphKey: 'dynamics' };
+  const layout: DeviceLayout = { family: 'COMP', variantName: 'Studio', pages: [{ name: 'Basic', rows: [{ section: 'parameters', controls: [k(0), k(1), slot, k(2)] }] }] };
+  const now = buildDeviceLayoutBoardV2(layout, cat)!;
+  // the one previous default the surface passes: the legacy rows-only seed, built as before graphs existed
+  const prevRows = buildDeviceLayoutBoardV2(layout, noGraphs, { rowFlowOnly: true, legacyUnguarded: true })!;
+  const input = (st: KeyValueStore) => ({ storage: st, slug: 'comp', profile: 'Default', deviceClass: 'desktop' as const, catalogKeys: ckeys, seed: now, previousSeed: () => prevRows });
+  const hasGraph = (b: BeBoard) => b.boards.Basic!.some((i) => 'key' in i && i.key === 'graph:dynamics');
+
+  it('the seed has the graph at its slot; the legacy rows-only default does not', () => {
+    expect(hasGraph(now)).toBe(true);
+    expect(hasGraph(prevRows)).toBe(false);
+  });
+
+  it('a stored board still equal to the legacy rows-only default loads the current default (graph included, nothing written)', () => {
+    const st = memory({ [boardKey('comp', 'Default', 'desktop')]: JSON.stringify(prevRows) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('seed');
+    expect(hasGraph(r.board)).toBe(true);
+    expect(st.writes).toEqual([]);
+  });
+
+  it('a graph the user removed stays removed: saved without it, it loads without it', () => {
+    const st = memory();
+    const removed: BeBoard = { ...now, boards: { ...now.boards, Basic: now.boards.Basic!.filter((i) => !('key' in i && i.key === 'graph:dynamics')) } };
+    saveBoard({ storage: st, slug: 'comp', profile: 'Default', deviceClass: 'desktop', board: removed });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(hasGraph(r.board)).toBe(false);
+  });
+
+  it('a removal that leaves exactly the legacy default (graph slot last) is kept too — the user wins', () => {
+    const tail: DeviceLayout = { ...layout, pages: [{ name: 'Basic', rows: [{ section: 'parameters', controls: [k(0), k(1), k(2), slot] }] }] };
+    const seedT = buildDeviceLayoutBoardV2(tail, cat)!;
+    const legacyT = buildDeviceLayoutBoardV2(tail, noGraphs, { rowFlowOnly: true, legacyUnguarded: true })!;
+    const removed: BeBoard = { ...seedT, boards: { ...seedT.boards, Basic: seedT.boards.Basic!.filter((i) => !('key' in i && i.key === 'graph:dynamics')) } };
+    const st = memory();
+    saveBoard({ storage: st, slug: 'comp', profile: 'Default', deviceClass: 'desktop', board: removed });
+    const r = loadBoard({ ...input(st), seed: seedT, previousSeed: () => legacyT });
+    // the two are the same shape, so the stored board cannot tell "untouched legacy" from "graph removed"
+    expect(boardDiffersFromSeed(removed, legacyT)).toBe(false);
+    expect(r.source).toBe('desktop');
+    expect(hasGraph(r.board)).toBe(false);
+  });
+
+  it('a stored board the user changed is never rewritten (no graph added)', () => {
+    const edited: BeBoard = { ...prevRows, boards: { Basic: prevRows.boards.Basic!.map((i) => ('key' in i && i.key === 'k2' ? { ...i, x: 20 } : i)) } };
+    const st = memory({ [boardKey('comp', 'Default', 'desktop')]: JSON.stringify(edited) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(hasGraph(r.board)).toBe(false);
+  });
+
+  it('a stored graph tile survives a read that has not brought its visual back yet (block-level key)', () => {
+    const st = memory({ [boardKey('comp', 'Default', 'desktop')]: JSON.stringify({ ...now, boards: { Basic: [...now.boards.Basic!].map((i) => ('key' in i && i.key === 'k2' ? { ...i, x: 20 } : i)) } }) });
+    const r = loadBoard({ ...input(st), catalogKeys: noGraphs.map((c) => c.key) });
+    expect(hasGraph(r.board)).toBe(true);
+  });
+});
+
+describe('cross-block refs: stored Default boards (AXIS-93 fix round)', () => {
+  const cat = buildCatalog({ params: [0, 1, 2].map((id) => ({ id, name: `P${id}` })), enums: [] });
+  const ckeys = cat.map((c) => c.key);
+  const k = (id: number) => ({ label: `P${id}`, paramName: `P${id}`, paramId: id, widget: 'knob' as const, rawWidget: 'knob' });
+  // pid 2 is also a param of the open block; the ref belongs to the global block
+  const ref = { ...k(2), label: 'Metronome', paramName: 'GLOBAL_METRONOME', crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'GLOBAL_METRONOME', paramId: 2 } };
+  const layout: DeviceLayout = { family: 'CONTROLLERS', variantName: 'Controllers', pages: [{ name: 'Tempo', rows: [{ controls: [k(0), ref, k(1)] }] }] };
+  const now = buildDeviceLayoutBoardV2(layout, cat)!;
+  const legacyRows = buildDeviceLayoutBoardV2(layout, cat, { rowFlowOnly: true, legacyUnguarded: true })!;
+  const input = (st: KeyValueStore) => ({ storage: st, slug: 'controllers', profile: 'Default', deviceClass: 'desktop' as const, catalogKeys: ckeys, seed: now, previousSeed: () => legacyRows });
+
+  it('the old (unguarded) rows-only seed bound the ref; the current seed does not', () => {
+    expect(legacyRows.boards.Tempo!.some((i) => 'key' in i && i.key === 'k2')).toBe(true);
+    expect(now.boards.Tempo!.some((i) => 'key' in i && i.key === 'k2')).toBe(false);
+  });
+
+  it('a stored Default equal to the old seed loads the guarded seed (source seed, no storage write)', () => {
+    const st = memory({ [boardKey('controllers', 'Default', 'desktop')]: JSON.stringify(legacyRows) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('seed');
+    expect(r.board.boards.Tempo!.some((i) => 'key' in i && i.key === 'k2')).toBe(false);
+    expect(st.writes).toEqual([]);
+  });
+
+  it('an edited board with a ref-bound tile is kept as the user left it', () => {
+    const edited: BeBoard = { ...legacyRows, boards: { Tempo: legacyRows.boards.Tempo!.map((i) => ('key' in i && i.key === 'k1' ? { ...i, x: 20 } : i)) } };
+    const st = memory({ [boardKey('controllers', 'Default', 'desktop')]: JSON.stringify(edited) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(r.board.boards.Tempo!.some((i) => 'key' in i && i.key === 'k2')).toBe(true);
+  });
+});
+
 describe('saveBoard / saveUserSeed', () => {
   it('writes only the current device-class key (plus the meta on the first save)', () => {
     const st = memory();

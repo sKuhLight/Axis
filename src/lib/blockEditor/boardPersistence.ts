@@ -20,7 +20,8 @@
 // deleted profile whose name is reused). Legacy keys are never deleted or written (they are the way
 // back on a revert).
 
-import { BLOCK_LEVEL_KEYS, isDivider, normalizeBoard, pageItems, type BeBoard, type BeItem, type BeView } from './boardModel';
+import { isGraphKey } from '../blockVisuals';
+import { isBlockLevelKey, isDivider, normalizeBoard, pageItems, type BeBoard, type BeItem, type BeView } from './boardModel';
 import { parseStoredBoard, parseStoredMeta, type BePrefs } from './boardSchema';
 
 export type DeviceClass = 'desktop' | 'tablet' | 'phone';
@@ -149,11 +150,16 @@ export interface LoadBoardInput {
   variantSig?: string;
   viewsByKey?: ReadonlyMap<string, readonly BeView[]>;
   /** `Default` only: the built-in seed as earlier versions built it (the device layout by rows only,
-   *  before positions and dividers were used), or a function building it — called only when a stored
-   *  Default board has to be compared with it. A stored board that is still exactly that board was never
-   *  changed by the user, so it follows the current built-in seed instead (nothing is written). */
-  previousSeed?: BeBoard | null | (() => BeBoard | null);
+   *  before positions, dividers and graph displays were used), one board or several, or a function
+   *  building them — called only when a stored Default board has to be compared with them. A stored board
+   *  that is still exactly one of them was never changed by the user, so it follows the current built-in
+   *  seed instead (nothing is written) — unless that previous seed is also the current seed minus its
+   *  graph displays (then the stored board may be the user's "graph removed", which is kept). */
+  previousSeed?: PreviousSeeds | (() => PreviousSeeds);
 }
+
+/** One previous built-in seed, or several (null entries are skipped). */
+export type PreviousSeeds = BeBoard | null | readonly (BeBoard | null)[];
 
 /** Load a board. Chain: own device-class key → desktop key → (only while the family is not migrated:)
  *  previous editor's key, then for `Default` the pre-profile key, both migrated → the user's family
@@ -174,7 +180,7 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
   const { storage, slug, profile, deviceClass } = input;
   const keys = input.catalogKeys instanceof Set ? input.catalogKeys : new Set(input.catalogKeys);
   const sig = input.variantSig ?? input.seed.variantSig ?? '';
-  const norm = (b: BeBoard) => normalizeBoard(b, keys, { viewsByKey: input.viewsByKey, keepKeys: BLOCK_LEVEL_KEYS });
+  const norm = (b: BeBoard) => normalizeBoard(b, keys, { viewsByKey: input.viewsByKey, keepKeys: isBlockLevelKey });
   const read = (st: KeyValueStore, key: string): BeBoard | null => {
     const raw = safeGet(st, key);
     return raw ? parseStoredBoard(raw) : null;
@@ -184,15 +190,23 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
   // a stored Default board that is still exactly the previous built-in seed follows the current one
   // (worked out only when a stored Default board is found)
   const stamp = (b: BeBoard): BeBoard => (isDefault && sig ? { ...b, variantSig: sig } : b);
-  let upgrade: { prevShape: string; current: BeBoard } | null | undefined;
+  let upgrade: { prevShapes: ReadonlySet<string>; current: BeBoard } | null | undefined;
   const upgradeInfo = () => {
     if (upgrade !== undefined) return upgrade;
     upgrade = null;
     const prevRaw = typeof input.previousSeed === 'function' ? input.previousSeed() : input.previousSeed;
-    if (!isDefault || !prevRaw || hasUserSeed(storage, slug)) return upgrade;
-    const prevShape = boardShape(norm(stamp(prevRaw)), keys);
+    const prevs = (Array.isArray(prevRaw) ? prevRaw : [prevRaw]).filter((b): b is BeBoard => !!b);
+    if (!isDefault || !prevs.length || hasUserSeed(storage, slug)) return upgrade;
     const current = norm(stamp(input.seed));
-    if (boardShape(current, keys) !== prevShape) upgrade = { prevShape, current };
+    const currentShape = boardShape(current, keys);
+    // A previous seed that is exactly the current one without its graph displays is ambiguous: a stored
+    // board of that shape may just as well be the current seed with its graphs removed by the user. The
+    // user's removal wins (no upgrade; "Reset to device layout" brings the graphs back).
+    const currentNoGraphs = boardShape(current, new Set([...keys].filter((k) => !isGraphKey(k))));
+    const prevShapes = new Set(
+      prevs.map((b) => boardShape(norm(stamp(b)), keys)).filter((s) => s !== currentShape && s !== currentNoGraphs)
+    );
+    if (prevShapes.size) upgrade = { prevShapes, current };
     return upgrade;
   };
   const untouched = (b: BeBoard): boolean => {
@@ -200,7 +214,7 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
     // every stored control must be one the catalog lists now (kept, not drawn controls make it unknown)
     if (!b.pageOrder.every((pg) => pageItems(b, pg).every((it) => isDivider(it) || keys.has(it.key)))) return false;
     const u = upgradeInfo();
-    return !!u && boardShape(b, keys) === u.prevShape;
+    return !!u && u.prevShapes.has(boardShape(b, keys));
   };
 
   const chain: [BoardSource, KeyValueStore, string][] = [];
@@ -234,7 +248,7 @@ export function loadSeed(input: Omit<LoadBoardInput, 'deviceClass' | 'legacyStor
   const keys = input.catalogKeys instanceof Set ? input.catalogKeys : new Set(input.catalogKeys);
   const sig = input.variantSig ?? input.seed.variantSig ?? '';
   const stamp = (b: BeBoard): BeBoard => (input.profile === DEFAULT_PROFILE && sig ? { ...b, variantSig: sig } : b);
-  const norm = (b: BeBoard) => normalizeBoard(stamp(b), keys, { viewsByKey: input.viewsByKey, keepKeys: BLOCK_LEVEL_KEYS });
+  const norm = (b: BeBoard) => normalizeBoard(stamp(b), keys, { viewsByKey: input.viewsByKey, keepKeys: isBlockLevelKey });
   if (input.profile !== BLANK_PROFILE) {
     const raw = safeGet(input.storage, seedKey(input.slug));
     const user = raw ? parseStoredBoard(raw) : null;

@@ -47,18 +47,22 @@ import type {
 } from './types';
 import { checkSaveTarget, saveBlockedText } from './saveTarget';
 import { parseBlockState } from './blockState';
+import { parseBlockVisuals } from './blockVisuals';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
-/** Normalize the additive `blockState` of a block-params response (absent when not served or malformed). */
+/** Normalize the additive `blockState` and `visuals` of a block-params response (each absent when not
+ *  served or malformed). */
 function withParsedBlockState(r: BlockParams): BlockParams {
   if (!r || typeof r !== 'object') return r;
   const blockState = parseBlockState((r as { blockState?: unknown }).blockState);
-  if (blockState) return { ...r, blockState };
-  if (!('blockState' in r)) return r;
-  const rest: BlockParams = { ...r };
-  delete rest.blockState;
-  return rest;
+  const visuals = parseBlockVisuals((r as { visuals?: unknown }).visuals);
+  const out: BlockParams = { ...r };
+  if (blockState) out.blockState = blockState;
+  else delete out.blockState;
+  if (visuals) out.visuals = visuals;
+  else delete out.visuals;
+  return out;
 }
 
 // Per-tab client id, stamped onto config writes (putDoc) so the live cross-UI sync can tell a UI's own echo

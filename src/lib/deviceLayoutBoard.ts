@@ -8,7 +8,8 @@
 //   pre-v2 — no regression) and only refine the VIEW when the layout's widget hint is meaningful
 //   (slider/number for a continuous param, switch/button for a toggle). Controls with no live parameter
 //   fall back to the block's meter / bypass / EQ catalog entries where they exist, else a gap (spacers,
-//   labels, and params the device didn't surface). A control that belongs to ANOTHER block (a cross-block
+//   labels, and params the device didn't surface). A graph slot keyed by the server (`graphKey`) becomes
+//   the served graph display of that key (`graph:<key>`), the EQ graph rule first. A control that belongs to ANOTHER block (a cross-block
 //   ref: Controllers › Modifiers, Tempo/Pitch, CS per Scene, …) is always a gap unless the server names
 //   its owner by effect id and that is the open block (`isForeignControl`): its paramId is in the
 //   owner's id space and must never bind to the open block's param with the same number.
@@ -16,6 +17,7 @@
 //   change).
 // UI-free (no Svelte), unit-tested in deviceLayoutBoard.test.ts.
 
+import { graphCatalogKey } from './blockVisuals';
 import type { DeviceLayout, LayoutControl } from './types';
 
 export interface SurfaceWidget {
@@ -72,23 +74,42 @@ export type Resolved = { key: string; view: string } | 'gap';
 
 /** What the open block is, for the cross-block guard. */
 export interface LayoutOwner {
-  /** Effect id of the block being edited (null/undefined = unknown: no cross-block ref can bind). */
+  /** Effect id of the block being edited (null/undefined = unknown: no ref naming an effect id binds). */
   effectId?: number | null;
-  /** Resolve as versions before the guard did (a cross-block ref binds by its bare paramId). ONLY for
-   *  recognising a stored Default board that is still exactly such an old built-in seed (boardPersistence
-   *  `previousSeed`), so it follows the current, guarded seed. Never for anything that is drawn. */
-  legacyUnguarded?: boolean;
+  /** Catalog family of the open block's layout (`layout.family`). */
+  family?: string | null;
 }
 
+/** An editor owner token that names one instance of a multi-instance effect (`ID_OUTPUT1`, `ID_DISTORT1`):
+ *  it ends in an instance number. A single-instance token (`ID_FOOTCONTROLLER`) does not. */
+const isInstanceToken = (effect: unknown): boolean => typeof effect !== 'string' || /\d\s*$/.test(effect);
+
 /** True when a layout control belongs to another block than the open one: it carries a cross-block ref
- *  whose owner is not proven to be the open block (no `effectId`, or a different one). Such a control
+ *  whose owner is not proven to be the open block. Proven: the ref's `effectId` equals the open block's;
+ *  or, without an effect id, the ref names the open layout's own family (same param-id space) and a
+ *  single-instance effect (the Foot Controller screen's own params are tagged `ID_FOOTCONTROLLER`).
+ *  A same-family ref to one instance of a multi-instance effect (`ID_OUTPUT1` on an Output page) stays
+ *  foreign: binding it by family would put another instance's param under its heading. Such a control
  *  never binds to a catalog entry of the open block. */
 export function isForeignControl(ctl: LayoutControl, owner: LayoutOwner = {}): boolean {
-  if (owner.legacyUnguarded) return false;
   const x = (ctl as { crossBlock?: unknown }).crossBlock;
   if (x == null || typeof x !== 'object') return false;
-  const ownerId = (x as { effectId?: unknown }).effectId;
-  return !(typeof ownerId === 'number' && typeof owner.effectId === 'number' && ownerId === owner.effectId);
+  const ref = x as { effectId?: unknown; effect?: unknown; family?: unknown };
+  if (typeof ref.effectId === 'number') return !(typeof owner.effectId === 'number' && ref.effectId === owner.effectId);
+  const sameFamily = typeof ref.family === 'string' && !!ref.family && typeof owner.family === 'string' && ref.family === owner.family;
+  return !(sameFamily && !isInstanceToken(ref.effect));
+}
+
+/** A copy of a layout without cross-block refs: every control resolves by its bare paramId, as versions
+ *  before the guard did. ONLY for recognising a stored Default board that is still exactly such an old
+ *  built-in seed (`buildDeviceLayoutBoardV2` option `legacyUnguarded`); never for anything that is drawn. */
+export function withoutCrossBlockRefs(layout: DeviceLayout): DeviceLayout {
+  return {
+    ...layout,
+    pages: (layout.pages ?? []).map((pg) =>
+      !pg ? pg : { ...pg, rows: (pg.rows ?? []).map((r) => (!r ? r : { ...r, controls: (r.controls ?? []).map((c) => (c && c.crossBlock ? { ...c, crossBlock: undefined } : c)) })) }
+    )
+  };
 }
 
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
@@ -108,6 +129,12 @@ export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, Bo
   if (ctl.widget === 'meter' && byKey.has('meter')) return { key: 'meter', view: 'meter' };
   if (ctl.widget === 'button' && isBypassControl(ctl) && byKey.has('bypass')) return { key: 'bypass', view: 'action' };
   if ((ctl.widget === 'graph' || ctl.widget === 'label') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
+  // a graph slot the server keyed (`graphKey`) → the served display of that key, when the block serves it
+  // (the EQ rule above stays first: a PEQ / GEQ slot is the interactive EQ graph)
+  if (ctl.widget === 'graph' && typeof ctl.graphKey === 'string' && ctl.graphKey) {
+    const g = byKey.get(graphCatalogKey(ctl.graphKey));
+    if (g) return { key: g.key, view: 'graph' };
+  }
   // Labels, unresolved dropdowns, and anything else with no binding: leave a gap (matches the pre-v2
   // behaviour of silently skipping unmapped controls, but keeps neighbours' horizontal alignment).
   return 'gap';

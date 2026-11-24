@@ -200,6 +200,18 @@ describe('buildControlMenu', () => {
     // on desktop a meter still has size / move / remove
     expect(ids(buildControlMenu(meter, actions()))).toEqual(['head', 'size', 'move', 'remove']);
   });
+
+  it('a graph: its notes under the header (the tooltip does not reach touch); notes alone still open the menu', () => {
+    const notes = ['Static curve only (no attack / release).', 'Model knee, drawn medium.'];
+    const g = knob({ ctl: { key: 'graph:dynamics', kind: 'graph', label: 'Compressor curve', views: ['graph'] }, item: { id: 'g', view: 'graph', w: 8, h: 4 }, pinTargets: null, canSwipe: false, notes });
+    const rows = buildControlMenu(g, actions());
+    expect(ids(rows)).toEqual(['head', 'note.0', 'note.1', 'size', 'move', 'remove']);
+    expect(row(rows, 'note.0')).toMatchObject({ kind: 'header', label: notes[0], className: 'be-ci be-ci-note' });
+    expect(row(rows, 'size').separatorBefore).toBe(true);
+    // a phone: nothing to arrange, the notes are the menu
+    expect(ids(buildControlMenu({ ...g, canLayout: false }, actions()))).toEqual(['head', 'note.0', 'note.1']);
+    expect(buildControlMenu({ ...g, canLayout: false, notes: [] }, actions())).toEqual([]);
+  });
 });
 
 describe('sizeChoices', () => {

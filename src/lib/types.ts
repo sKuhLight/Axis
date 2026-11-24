@@ -58,12 +58,16 @@ export type LayoutWidget =
 /** A layout control that belongs to a DIFFERENT block than the one being edited (the global metronome on
  *  a Tempo page, a modifier's source on the Controllers' Modifiers page, …). Its `paramId` is in the
  *  OWNER's id space, so it must never bind to the open block's param with the same id: the Block Editor
- *  draws it as a gap unless `effectId` is present and is the open block (deviceLayoutBoard.ts
- *  `isForeignControl`). Today's servers send only the `effect` token. */
+ *  draws it as a gap unless `effectId` is present and is the open block, or (no effect id) the ref names
+ *  the open layout's own family and a single-instance effect — e.g. the Foot Controller screen's own
+ *  params, tagged `ID_FOOTCONTROLLER` (deviceLayoutBoard.ts `isForeignControl`). Today's servers send only
+ *  the `effect` token. */
 export interface LayoutCrossBlock {
   /** The device editor's token for the owning effect (e.g. `ID_GLOBAL`, `ID_MODIFIER1`). */
   effect: string;
-  /** Effect id of the owning block, when the server resolves it (not sent yet). */
+  /** Effect id of the owning block, when the server resolves it (not sent yet). Must be in the same id
+   *  space as the `:eid` the client reads the block with (`/preset/blocks/:eid/params`, i.e. the open
+   *  cell's `effectId`): the guard compares the two directly. */
   effectId?: number;
   /** Catalog family of the referenced parameter, or null. */
   family: string | null;
@@ -97,6 +101,9 @@ export interface LayoutControl {
   placement?: LayoutPlacement;
   crossBlock?: LayoutCrossBlock;
   fw?: unknown;
+  /** Graph slots only: the key of the served visual this slot is for (cap `blockVisuals`). A key whose
+   *  visual the block does not serve (its current type lacks the params, or `eq`) is a gap. */
+  graphKey?: string;
 }
 /** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
 export interface LayoutRow {
@@ -136,7 +143,27 @@ export interface BlockParams {
   /** Scene Ignore + Bypass Mode of the block's active channel, tagged by the server (cap `blockState`).
    *  Absent on servers / devices without it. */
   blockState?: BlockState;
+  /** Read-only displays ("graphs") the block can show, served by the server (cap `blockVisuals`) and
+   *  already narrowed to the block's current type/variant. Absent on servers / devices without them. */
+  visuals?: BlockVisual[];
 }
+
+/** One served read-only display of a block (GET /preset/blocks/:eid/params `visuals`). `roles` maps a role
+ *  (an input of the client's own display math: `threshold`, `rate`, `time`, …) to a paramId of THIS
+ *  response (a served knob or selector) or of a read-only monitor; the client draws from the values it
+ *  holds for those ids and never needs a catalog symbol. Role semantics per kind: forgefx-midi
+ *  `src/visuals.ts`. */
+export interface BlockVisual {
+  /** Stable key, unique per block (`dynamics`, `lfo`, `lfo1`, `response`, `echo`, `adsr1`, `cabAlign`, …). */
+  key: string;
+  kind: BlockVisualKind;
+  title: string;
+  /** Sub-variant whose display law differs (`compressor` / `gate`, `mod` / `tremolo` / `panner`,
+   *  `filter` / `wah`). */
+  mode?: string;
+  roles: Record<string, number>;
+}
+export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign';
 
 /** The block's Scene Ignore toggle on its ACTIVE channel (the device param is per channel). `paramId` is
  *  the same id as the block's own `enums[]` entry: a toggle is the ordinary enum write. */
@@ -691,6 +718,10 @@ export interface DeviceCaps {
    *  the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older servers → the Block Editor header's
    *  Scene Ignore / Bypass mode controls are disabled with "Needs a newer ForgeFX server". */
   blockState?: boolean;
+  /** The block-params response carries `visuals` (read-only graph displays) and the served layout's graph
+   *  slots carry `graphKey`. True on the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older
+   *  servers → no graph tiles. */
+  blockVisuals?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */

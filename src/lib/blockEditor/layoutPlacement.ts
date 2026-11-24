@@ -65,7 +65,7 @@ import type { LayoutControl, LayoutRow } from '../types';
 import {
   bbox,
   BE_SPEC,
-  BLOCK_LEVEL_KEYS,
+  isBlockLevelKey,
   findNear,
   fits,
   isBeView,
@@ -851,10 +851,10 @@ class PagePlacer {
 
   /** Device lines (exact tops within a few pixels) keep their left-to-right order on the board: every
    *  control after the one left of it (a later line, or the same line further right). Block-level
-   *  controls (EQ graph, meter, waveform, bypass) don't count. */
+   *  controls (EQ graph, graph displays, meter, waveform, bypass) don't count. */
   private readingOrderKept(kept: readonly LayoutEntry[], at: ReadonlyMap<LayoutEntry, BeControl>): boolean {
     const lines: { y: number; m: LayoutEntry[] }[] = [];
-    for (const e of kept.filter((e) => !BLOCK_LEVEL_KEYS.has(e.key!)).sort((a, b) => a.exact!.y - b.exact!.y || a.index - b.index)) {
+    for (const e of kept.filter((e) => !isBlockLevelKey(e.key!)).sort((a, b) => a.exact!.y - b.exact!.y || a.index - b.index)) {
       const l = lines.find((l) => Math.abs(l.y - e.exact!.y) <= DEVICE_LINE_PX);
       if (l) l.m.push(e);
       else lines.push({ y: e.exact!.y, m: [e] });

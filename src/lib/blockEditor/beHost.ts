@@ -59,6 +59,22 @@ export interface BeHost {
   enm(id: number): EnumParam | undefined;
   loopOn(action: string): boolean;
 
+  // ── graph tiles (read-only displays) ──
+  /** Tempo for tempo-synced LFO / delay times, and whether the device reports one. */
+  readonly bpm: number;
+  readonly hasTempo: boolean;
+  /** The block's type name (the filter type of a FILTER block's response graph). */
+  readonly typeName: string | null;
+  /** Shared animation clock in seconds for the LFO playheads: advances at most 30 times a second, and only
+   *  while some playhead is registered (`playhead`) and `animate` holds. */
+  readonly clock: number;
+  /** Playheads may move: not arranging, the page visible, no reduced motion asked for. */
+  readonly animate: boolean;
+  /** A tile's playhead is moving and on screen (true) or not / gone (false). */
+  playhead(id: string, on: boolean): void;
+  /** Live block metering is on (`mons` is empty otherwise; a graph's gain-reduction bar shows only then). */
+  readonly meteringOn: boolean;
+
   // ── value gestures ──
   tileDown(e: PointerEvent, item: BeItem, ctl: BeCtl | undefined, page: string, tile: HTMLElement): void;
   trackDown(e: PointerEvent, ctl: BeCtl, vertical: boolean): void;

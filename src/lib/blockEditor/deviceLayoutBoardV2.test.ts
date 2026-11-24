@@ -233,12 +233,28 @@ describe('buildDeviceLayoutBoardV2', () => {
       expect(buildDeviceLayoutBoardV2(refsOnly, catalog)).toBeNull();
     });
 
-    it('legacyUnguarded rebuilds the previous rows-only default exactly as before the guard', () => {
-      const legacy = buildDeviceLayoutBoardV2(mixed, catalog, { rowFlowOnly: true, legacyUnguarded: true })!;
-      expect(find(legacy.boards.Main!, 'k0')).toMatchObject({ x: 2 });
-      expect(legacy.pageOrder).toContain('Global');
-      // only together with rowFlowOnly: a drawn board is always guarded
-      expect(buildDeviceLayoutBoardV2(mixed, catalog, { legacyUnguarded: true })!.boards.Main!.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+    it('legacyUnguarded rebuilds a previous default exactly as before the guard (rows only and positioned)', () => {
+      for (const legacy of [
+        buildDeviceLayoutBoardV2(mixed, catalog, { rowFlowOnly: true, legacyUnguarded: true })!,
+        buildDeviceLayoutBoardV2(mixed, catalog, { legacyUnguarded: true })!
+      ]) {
+        expect(find(legacy.boards.Main!, 'k0')).toMatchObject({ x: 2 });
+        expect(legacy.pageOrder).toContain('Global');
+      }
+      // the served layout is untouched: the default board stays guarded
+      expect(buildDeviceLayoutBoardV2(mixed, catalog)!.boards.Main!.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+    });
+
+    // fix round: the Foot Controller screen tags every one of its own params with ID_FOOTCONTROLLER (family FC)
+    it('a layout whose controls are same-family single-instance refs (FC) builds a device-layout board', () => {
+      const fcRef = (paramId: number, effect = 'ID_FOOTCONTROLLER', family = 'INPUT'): LayoutControl =>
+        ctl('knob', paramId, `P${paramId}`, { crossBlock: { effect, family, paramName: `INPUT_P${paramId}`, paramId } });
+      const fc = layout([{ name: 'Switch', rows: [{ controls: [fcRef(0), fcRef(1), fcRef(5, 'ID_OUTPUT1'), fcRef(9, 'ID_FOOTCONTROLLER', 'GLOBAL')] }] }]);
+      expect(hasDeviceLayoutBoard(fc, catalog)).toBe(true);
+      const S = buildDeviceLayoutBoardV2(fc, catalog, { effectId: 199 })!.boards.Switch!;
+      expect(find(S, 'k0')).toBeTruthy();
+      expect(find(S, 'k1')).toBeTruthy();
+      expect(S.some((i) => 'key' in i && (i.key === 'k5' || i.key === 'e9'))).toBe(false); // multi-instance + foreign family: gaps
     });
   });
 });
