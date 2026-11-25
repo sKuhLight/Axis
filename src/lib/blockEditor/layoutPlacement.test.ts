@@ -16,6 +16,8 @@ import {
   preferFinerSlot,
   readPlacement,
   recurringDistance,
+  seedLargeWidth,
+  slotSpanCells,
   verticalSlot,
   wrapAnchors,
   type LayoutEntry
@@ -175,6 +177,30 @@ describe('pitch detection', () => {
   });
 });
 
+describe('large-view seed size', () => {
+  it('keeps the view’s full width when its slot and the page have room', () => {
+    expect(seedLargeWidth(0, 8, 4, MAXC)).toBe(8);
+    expect(slotSpanCells(305, [305, 200], 92)).toBe(MAXC); // no control to the right: the page edge
+  });
+
+  it('narrows to a slot narrower than the spec, never under the view’s minimum', () => {
+    expect(slotSpanCells(305, [305, 397], 92)).toBe(2); // one knob slot
+    expect(slotSpanCells(305, [305, 305 + 92 * 3], 92)).toBe(6);
+    expect(seedLargeWidth(0, 8, 4, 2)).toBe(4); // the minimum wins; the placer moves it instead
+    expect(seedLargeWidth(0, 8, 4, 6)).toBe(6);
+  });
+
+  it('narrows to the room left on the page from the slot’s column', () => {
+    expect(seedLargeWidth(18, 8, 4, MAXC)).toBe(6);
+    expect(seedLargeWidth(22, 8, 4, MAXC)).toBe(4);
+  });
+
+  it('survives a slot without a measured pitch', () => {
+    expect(slotSpanCells(305, [305, 400], 0)).toBe(MAXC);
+    expect(slotSpanCells(305, [], 92)).toBe(MAXC);
+  });
+});
+
 describe('positioned pages', () => {
   it('one regular knob row: a knob slot is 2 cells, all on one line, gaps kept', () => {
     const items = place([row([0, 1, 2, 4, 5].map((k) => knob(k, at(kx(k), 50))))]);
@@ -205,6 +231,20 @@ describe('positioned pages', () => {
     const items = place([row([graph(at(315, 30)), ...[0, 1, 2, 3].map((k) => knob(k, at(kx(k), 250)))])]);
     expect(ctlOf(items, 'eq')).toMatchObject({ x: 0, y: 0, w: 8, h: 4 });
     expect([0, 1, 2, 3].map((k) => pos(items, `k${k}`))).toEqual([0, 2, 4, 6].map((x) => ({ x, y: 4 })));
+    expect(noOverlaps(items)).toBeNull();
+  });
+
+  it('seeds a large view inside its slot’s run: a slot narrower than the spec narrows it', () => {
+    // the graph's slot ends one knob slot right of its left edge (a control sits exactly there)
+    const items = place([row([graph(at(305, 20)), knob(0, at(kx(1), 20))])]);
+    expect(ctlOf(items, 'eq')).toMatchObject({ w: 6 }); // the EQ's minimum, not the default 8
+    expect(noOverlaps(items)).toBeNull();
+  });
+
+  it('seeds a large view inside the page: a slot that starts near the right edge keeps its column', () => {
+    // the graph's anchor is 18 cells in (no control to its right); only 6 cells are left on the page
+    const items = place([row([graph(at(305 + 92 * 9, 20)), knob(0, at(kx(0), 250)), knob(1, at(kx(1), 250))])]);
+    expect(ctlOf(items, 'eq')).toMatchObject({ x: 18, y: 0, w: 6 });
     expect(noOverlaps(items)).toBeNull();
   });
 

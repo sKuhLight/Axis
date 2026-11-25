@@ -2901,11 +2901,7 @@ replaces instead of falling onto "More".
 
 - **Edit-mode widget drag-out of a Quick Controls tile:** start the workbench `beginWidgetDrag` from the tile in
   Customize (the dashed surface is there; the pointer handler is not).
-- **Graph-tile size clamp (handover item 2):** `graphTiles.ts` no longer exists — graph/EQ sizing lives in
-  `layoutPlacement.ts` (`sizeFor` + the per-anchor cursor that gives up height, then width). Clamping a seeded
-  graph tile to "the stamped slot's span" needs a definition of that span (the free run on the anchored line, else
-  the page edge) and tests beside `layoutPlacement.test.ts`; the EQ injection above already reuses the fader's
-  anchor.
+- **Graph-tile size clamp (handover item 2):** done — see the section below.
 - **EQ style switch on the tile (handover item 3):** the plumbing is in place (`BE_VIEWS`, `VIEW_NAME`,
   `controlMenu.viewS`, per-key `viewsByKey`), but a second `BE_SPEC` entry with the same footprint, the persisted
   per-tile view and the three renderings (Output EQ / Input EQ / PEQ) need the block's served EQ visuals per
@@ -2921,3 +2917,25 @@ replaces instead of falling onto "More".
 - **Stale e2e specs noticed in the full run:** `45-block-editor-graphs` (4 cases still expect METER off by default;
   `meteringOn` starts true) and `46-block-editor-fixed` (the right-edge case still expects the `.be-tip` value
   bubble, removed earlier). Both fail on the base branch too.
+
+## Graph and EQ tile seeds stay inside their slot
+
+- **The seed.** `layoutPlacement` now sizes a large view (graph, EQ, meter, waveform) from its device slot before
+  placement: `seedLargeWidth` narrows the view's default width to the room left on the page from its child column
+  and to the slot's own run, never under the view's minimum. The slot's run is `slotSpanCells`: from the slot's
+  exact x to the next exact control of the SAME device line, else the page's right edge, in cells at the page's
+  measured pitch (one knob slot = 2 cells). A slot narrower than the spec keeps the view's minimum and the placer
+  moves the tile to a free spot; a slot that starts near the right edge keeps its column instead of being clamped
+  left over its neighbours. Arrange can still grow a tile; a stored board keeps whatever size it has.
+- **Why not `graphTiles.ts`:** that file never existed on this branch — sizing lives in `layoutPlacement`'s
+  positioned-page anchors. The clamp is applied where the anchors are built, so `putLarge` (height first, then
+  width, then move) still has the last word when a spot is blocked.
+- **No data migration needed:** a stored Default board whose graph tile was seeded at the old full width no longer
+  matches the new seed and is kept as the user's board (nothing is removed or moved on load).
+- **Tests.** New pure-helper cases (`seedLargeWidth` / `slotSpanCells`: slot narrower than the spec, page narrower
+  than the slot, both fitting, a slot with no right neighbour, no measured pitch) and two positioned-page cases
+  (an EQ narrowed from 8 to its 6-cell minimum by a neighbour on its line; a slot 18 cells in keeps x = 18 with a
+  6-cell seed). The existing full-size and give-up-height cases still pass unchanged.
+- **Gates.** `npm run check` 0/0; `npm test` 191 files / 2,991 tests (2,985 + 6). Chromium e2e: block editor
+  17 + 40 + 41 + 44 + 47 + 51 75/75; 43 + 45 + 46 60/65 with only the five known stale cases (METER default,
+  `.be-tip`).

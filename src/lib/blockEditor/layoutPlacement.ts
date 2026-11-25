@@ -291,6 +291,23 @@ export function pageEntries(
 /** Views the size of one knob slot or smaller; they set the grid (larger views are placed after them). */
 export const isStandardView = (v: BeView): boolean => BE_SPEC[v].w <= SLOT && BE_SPEC[v].h <= SLOT;
 
+/** The horizontal run a device slot has: from its exact x to the next exact control on the same line (to the
+ *  page's right edge when there is none), in cells. Never under one knob slot. */
+export function slotSpanCells(exactX: number, lineXs: readonly number[], pitchX: number, maxC = MAXC): number {
+  const next = lineXs.reduce((m, x) => (x > exactX + 1 && x < m ? x : m), Infinity);
+  if (!Number.isFinite(next) || !(pitchX > 0)) return maxC;
+  return Math.max(SLOT, Math.min(maxC, Math.floor((next - exactX) / pitchX) * SLOT));
+}
+
+/** A large view's SEED width: its default width, narrowed to the run its device slot has
+ *  (`slotSpanCells`) and to the room left on the page from `x`, never under the view's own minimum —
+ *  a slot narrower than that cannot hold it, and the placer puts it elsewhere instead. Arrange may grow
+ *  it afterwards; a stored board keeps whatever size it has. */
+export function seedLargeWidth(x: number, w: number, minW: number, slotCells: number, maxC = MAXC): number {
+  const page = Math.max(minW, maxC - Math.min(Math.max(0, x), Math.max(0, maxC - minW)));
+  return Math.max(minW, Math.min(w, slotCells, page, maxC));
+}
+
 /** For every point: the distance to its nearest neighbour further along `axis` within `tol` pixels on the
  *  other axis (same line / same column). Distances under `MIN_DIST_PX` don't count. */
 export function neighbourDistances(points: readonly PxPoint[], axis: 'x' | 'y', tol: number): number[] {
@@ -998,8 +1015,15 @@ class PagePlacer {
     const ox = Math.min(...kept.map((e) => e.exact!.x));
     const oy = Math.min(...kept.map((e) => e.exact!.y));
     const anchors: Anchor[] = kept.map((e) => {
-      const { w, h } = sizeOf(e.view!);
-      return { e, w, h, x: Math.max(0, Math.round(((e.exact!.x - ox) / px) * SLOT)), y: clamp(Math.round(((e.exact!.y - oy) / py) * SLOT), 0, MAX_ROWS - h) };
+      const view = e.view!;
+      const { w, h } = sizeOf(view);
+      const x = Math.max(0, Math.round(((e.exact!.x - ox) / px) * SLOT));
+      const y = clamp(Math.round(((e.exact!.y - oy) / py) * SLOT), 0, MAX_ROWS - h);
+      // A graph / EQ / meter / waveform is seeded within its stamped slot's own run and the page's width,
+      // so a wide visual never has to be pushed left or grow over the controls beside it.
+      const lineXs = kept.filter((k) => Math.abs(k.exact!.y - e.exact!.y) <= LINE_TOL_PX).map((k) => k.exact!.x);
+      const width = isStandardView(view) ? w : seedLargeWidth(x, w, BE_SPEC[view].minW, slotSpanCells(e.exact!.x, lineXs, px));
+      return { e, w: width, h, x, y };
     });
     wrapAnchors(anchors, readingOrder);
     for (const a of anchors) {
