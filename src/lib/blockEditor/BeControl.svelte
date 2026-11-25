@@ -282,8 +282,6 @@
         style:width="{dial}px"
         style:height="{dial}px"
         onkeydown={(e) => host.valueKey(e, ctl, item.id)}
-        onpointerenter={(e) => e.pointerType === 'mouse' && host.tipShow(e.currentTarget, ctl)}
-        onpointerleave={() => host.tipHide()}
         ondblclick={() => host.startType(item.id, ctl)}
       >
         <svg width={dial} height={dial} viewBox="0 0 64 64" aria-hidden="true">

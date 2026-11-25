@@ -70,6 +70,18 @@ export function surfRemove(key: string): void {
   persist();
 }
 
+/** Remove every key a prefix owns (a bulk reset, e.g. every block board + its meta). Returns how many went. */
+export function surfRemovePrefix(prefix: string): number {
+  const keys = Object.keys(mem).filter((k) => k.startsWith(prefix));
+  if (!keys.length) return 0;
+  const m = { ...mem };
+  for (const k of keys) delete m[k];
+  mem = m;
+  persist();
+  rev++; // an open board reloads from what is left (nothing: it re-seeds)
+  return keys.length;
+}
+
 /** Apply the whole surface doc pushed live by another UI (host↔remote), WITHOUT re-publishing it (that would
  *  loop). Updates the cache and bumps `rev` so an open Control Surface reloads its board. */
 export function surfApplyRemote(doc: unknown): void {

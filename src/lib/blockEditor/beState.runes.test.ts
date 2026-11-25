@@ -151,7 +151,7 @@ describe('BeState prefs', () => {
     const m = memStore();
     const st = new BeState(m.store);
     st.sync(src());
-    expect(st.prefs).toEqual({ nav: 'top', density: 'm' });
+    expect(st.prefs).toEqual({ nav: 'side', density: 'm' });
     st.setPrefs({ nav: 'side' });
     st.setPrefs({ density: 'l' });
     expect(st.prefs).toEqual({ nav: 'side', density: 'l' });
@@ -281,10 +281,10 @@ describe('BeState legacy hand-over (previous editor keys)', () => {
   it('a prefs click (Top / Side, S / M / L) carries every legacy profile over first', () => {
     const { m, open } = legacyFamily();
     const st = open();
-    st.setPrefs({ nav: 'side' });
+    st.setPrefs({ nav: 'top' }); // the built-in default is the side list, so a change to Top triggers the carry-over
     for (const p of ['Default', 'Live', 'Studio']) expect(m.data.has(boardKey('Amp', p, 'desktop'))).toBe(true);
     const again = open();
-    expect(again.prefs.nav).toBe('side');
+    expect(again.prefs.nav).toBe('top');
     expect(again.source).toBe('desktop');
     expectEveryProfile(again);
   });

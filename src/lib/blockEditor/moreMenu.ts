@@ -62,6 +62,8 @@ export interface MoreMenuActions {
   resetAll(): void;
   resetDevice(): void;
   newCopy(): void;
+  /** Every block family: drop the stored boards, seeds and prefs, so each regenerates from its device layout with the built-in (side list) navigation. */
+  resetAllLayouts(): void;
   deleteCopy(name: string): void;
   saveDefault(): void;
   forgetDefault(): void;
@@ -235,6 +237,17 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
     });
   }
   out.push({ id: 'new-copy', label: 'New copy', disabled: off, className: cls('new-copy'), run: () => a.newCopy() });
+  // every block family at once: back to the generated device default + the side list (a bulk reset, e.g. after
+  // trying layouts across blocks); kept out of the "custom" gating so it is always findable
+  out.push({
+    id: 'reset-all-layouts',
+    label: 'Reset all editor layouts',
+    hint: 'every block',
+    danger: true,
+    className: cls('reset-all-layouts'),
+    confirm: { prompt: 'Reset every block layout and the navigation to the built-in default (side list)?', confirmLabel: 'Reset all' },
+    run: () => a.resetAllLayouts()
+  });
   if (isCopyProfile(s.profile)) {
     const name = s.profile;
     out.push({

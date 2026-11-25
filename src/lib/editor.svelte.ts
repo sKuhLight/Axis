@@ -649,7 +649,7 @@ class EditorStore {
   // ── live audio meters (per-block monitor level, normalized→dB) ──
   // Scope live reads to the selected block while its editor is visible. Full-preset sweeps compete
   // with editing on the same link.
-  meteringOn = $state(false);
+  meteringOn = $state(true);
   /** Per-block metering is only offered when the device supports live monitors, over a fast link
    *  (never a slow 5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is separate. */
   get canMeterBlocks(): boolean {

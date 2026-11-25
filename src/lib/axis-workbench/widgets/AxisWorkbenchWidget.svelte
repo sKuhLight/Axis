@@ -226,7 +226,9 @@
     prevTrafficAt = now;
   });
 
-  function openWidget() {
+  let scnOpen = $state(false);
+
+function openWidget() {
     if (kind === 'preset') editor.presetOpen = true;
     else if (kind === 'addBlock') {
       editor.paletteMode = 'place';
@@ -350,6 +352,14 @@
   }
 </script>
 
+<svelte:window
+  onpointerdown={(e) => {
+    if (!scnOpen) return;
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest('.scn-pop') && !t?.closest('[data-scn-toggle]')) scnOpen = false;
+  }}
+/>
+
 {#if kind === 'preset'}
   <div class="axis-widget axis-preset" data-size={size}>
     {#if !mini}
@@ -384,24 +394,43 @@
 {:else if kind === 'scenes'}
   <!-- Capability-gated like the legacy TopBar: no scene chips on a device without scenes (or before caps load). -->
   {#if editor.sceneCount > 0}
-    <div class="axis-widget chips" data-size={size}>
-      {#if expanded}<span class="mono token">SCN</span>{/if}
-      <div class="chip-row">
-        {#each Array(sceneCount) as _, i}
-          {@const s = i + 1}
-          {#if !mini || activeScene === s}
+    <div class="axis-widget preset scn" data-size={size}>
+      <button
+        class="preset-main"
+        type="button"
+        data-scn-toggle
+        title="Scene {editor.scene} - {editor.sceneName(editor.scene)}"
+        aria-haspopup="listbox"
+        aria-expanded={scnOpen}
+        onclick={() => (scnOpen = !scnOpen)}
+      >
+        <span class="mono token">SCN</span>
+        <span class="mono preset-num">{editor.scene}</span>
+        {#if expanded}<span class="preset-name">{editor.sceneName(editor.scene)}</span>{/if}
+        {#if !mini}<span class="chev">▾</span>{/if}
+      </button>
+      {#if scnOpen}
+        <!-- the block editor's channel selector, for scenes: one row per scene, the active one marked -->
+        <div class="scn-pop" role="listbox" aria-label="Scene" tabindex="-1">
+          {#each Array(editor.sceneCount) as _, i (i)}
+            {@const n = i + 1}
             <button
-              class="num-chip"
-              class:on={activeScene === s}
+              class="scn-row"
+              class:on={editor.scene === n}
               type="button"
-              title={`Scene ${s}`}
-              onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : s)}
+              role="option"
+              aria-selected={editor.scene === n}
+              onclick={() => {
+                editor.selectScene(n);
+                scnOpen = false;
+              }}
             >
-              {s}
+              <span class="mono scn-num">{n}</span>
+              <span class="scn-name">{editor.sceneName(n)}</span>
             </button>
-          {/if}
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 {:else if kind === 'view'}
@@ -861,6 +890,61 @@
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
+  }
+  /* scenes: the preset shape without arrows; the number opens a scene list (the block editor's channel selector) */
+  .axis-widget.scn {
+    position: relative;
+    overflow: visible;
+  }
+  .scn-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 80;
+    min-width: 172px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--bg) 70%, transparent);
+  }
+  .scn-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text2);
+    text-align: left;
+    cursor: pointer;
+  }
+  .scn-row:hover {
+    background: var(--input);
+  }
+  .scn-row.on {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--text);
+  }
+  .scn-num {
+    color: var(--amber);
+    font-weight: 800;
+    min-width: 14px;
+  }
+  .scn-row.on .scn-num {
+    color: var(--accent);
+  }
+  .scn-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .chev {
     color: var(--textmuted);

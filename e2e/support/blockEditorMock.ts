@@ -284,6 +284,9 @@ export interface BlockEditorMock {
 export interface BlockEditorMockOptions {
   /** Give the mock a known firmware and active preset for the Block Library. */
   blockLibrary?: boolean;
+  /** The board's stored navigation preference: `top` (what most specs exercise), `side`, or `default`
+   *  (no stored prefs, so the built-in side list shows). */
+  nav?: 'top' | 'side' | 'default';
   /** Give the amp block channels, starting on this one (its live state then comes from /preset/blocks
    *  and /preset/scene-state and follows the captured channel / bypass writes). */
   channel?: string;
@@ -461,6 +464,35 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
     return json(route, {});
   });
   await page.route('**/api/events', (route) => route.abort());
+  // The block board's stored prefs decide its navigation. The product default is the SIDE list (see
+  // boardPersistence DEFAULT_PREFS); most specs exercise the TOP strip, so a stored preference pins it,
+  // while `nav: 'default'` leaves storage empty and proves the built-in default.
+  const nav = opts.nav ?? 'top';
+  if (nav !== 'default') {
+    await page.addInitScript(
+      ([slug, mode]) => {
+        try {
+          const doc = JSON.parse(window.localStorage.getItem('axs.surface.doc') ?? '{}') as Record<string, string>;
+          const metaKey = `axs.be1meta.${slug}`;
+          // seed only a fresh family: a stored meta (a nav / size click, a saved default) and the previous
+          // editor's meta must win - the legacy-migration specs depend on that
+          const legacy = Object.keys(doc).some((k) => k.startsWith('axs.surface3meta.') || k.startsWith('axs.surface2'));
+          if (doc[metaKey] === undefined && !legacy) {
+            doc[metaKey] = JSON.stringify({
+              active: 'Default',
+              names: ['Default', 'Blank'],
+              prefs: { desktop: { nav: mode, density: 'm' }, tablet: { nav: mode, density: 'm' } },
+              migrated: true
+            });
+            window.localStorage.setItem('axs.surface.doc', JSON.stringify(doc));
+          }
+        } catch {
+          /* storage unavailable: the board just uses the built-in default */
+        }
+      },
+      ['Amp', nav]
+    );
+  }
   await bootCleanWorkbench(page);
   await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
   return mock;

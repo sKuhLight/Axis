@@ -61,6 +61,7 @@ describe('buildMoreMenu', () => {
       'reset-page',
       'reset-all',
       'new-copy',
+      'reset-all-layouts',
       'save-default',
       'change-type',
       'remove'

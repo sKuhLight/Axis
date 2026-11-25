@@ -20,6 +20,16 @@ async function lastWrite(mock: BlockEditorMock, pid: number) {
 }
 
 test.describe('Block Editor board (slice 2)', () => {
+  test('fresh storage: the built-in navigation is the side list (not the top strip)', async ({ page }) => {
+    await bootBlockEditorMock(page, { nav: 'default' });
+    await openAmpEditor(page);
+    await expect(board(page)).toHaveAttribute('data-nav', 'side');
+    // the side list lists every page and still switches pages
+    await expect(page.locator('[data-be-tab]').first()).toBeVisible();
+    await page.locator('[data-be-tab="Power Amp"]').click();
+    await expect(page.locator('[data-be-tab="Power Amp"]')).toHaveAttribute('aria-selected', 'true');
+  });
+
   test('1366×768: the board fits without vertical scroll and shows the first page', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await bootBlockEditorMock(page);

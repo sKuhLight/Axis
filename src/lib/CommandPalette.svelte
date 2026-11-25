@@ -311,8 +311,9 @@
     else cat = id;
   }
 
-  function chipFor(r: { sub: string; kind: string }) {
-    if (r.kind === 'Block') return catFor(null, r.sub);
+  function chipFor(r: { sub: string; kind: string; name?: string }) {
+    // grid blocks: the same family catalog the Signal Grid tiles use (name -> pack), so the block's own accent + glyph show
+    if (r.kind === 'Block') return catFor(packFor(r.name ?? r.sub), r.name ?? r.sub);
     const c = editor.selected;
     return catFor(c?.pack ?? null, baseName(c?.display ?? ''));
   }
@@ -349,7 +350,7 @@
   placeholder={libraryMode ? 'Search saved blocks…' : retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
   inputLabel={libraryMode ? 'Search saved blocks' : undefined}
   count={libraryMode ? `${libraryMatches.length} saved` : `${results.length} result${results.length === 1 ? '' : 's'}`}
-  target={libraryMode ? 'Block library' : retype ? '↻ Change type' : target ? `✛ Place in cell ${target.row + 1},${target.col + 1}` : 'Grid full'}
+  target={libraryMode ? 'Block library' : retype ? '↻ Change type' : undefined}
   targetExtra={realNamesToggle}
   filters={libraryMode ? [] : shellFilters}
   filter={retype ? brand : cat}

@@ -81,7 +81,7 @@ export interface BeMeta {
   autoPack?: boolean;
 }
 
-export const DEFAULT_PREFS: BePrefs = { nav: 'top', density: 'm' };
+export const DEFAULT_PREFS: BePrefs = { nav: 'side', density: 'm' };
 
 const defaultMeta = (): BeMeta => ({ active: DEFAULT_PROFILE, names: [DEFAULT_PROFILE, BLANK_PROFILE], prefs: {}, migrated: false });
 

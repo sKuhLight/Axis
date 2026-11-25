@@ -15,7 +15,7 @@
   import type { EQBand } from '../EQGraph.svelte';
   import ModifierFlyout from '../ModifierFlyout.svelte';
   import { idealIds } from '../layouts';
-  import { surfGet, surfSet, surfRemove, surfRev } from '../surfaceStore.svelte';
+  import { surfGet, surfSet, surfRemove, surfRemovePrefix, surfRev } from '../surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from '../help';
   import { layoutVariantSig } from '../deviceLayoutBoard';
   import type { NamedParam } from '../types';
@@ -666,25 +666,15 @@
   let editBuf = $state('');
   /** The text the input was opened with: committing it unchanged writes nothing. */
   let editInit = '';
-  let tip = $state<{ pid: number; cx: number; cy: number } | null>(null);
-  let tipWidth = $state(0);
   const popupMargin = 8;
   const popupLeft = (left: number, width: number, z: number) =>
     Math.max(popupMargin, Math.min(left, window.innerWidth / z - width - popupMargin));
-  const tipLeft = $derived(tip ? popupLeft(tip.cx - tipWidth / 2, tipWidth, zoom()) : 0);
-  let adjusting = false;
-  function tipAt(el: HTMLElement, pid: number) {
-    const r = el.getBoundingClientRect();
-    const z = zoom();
-    tip = { pid, cx: (r.left + r.width / 2) / z, cy: r.top / z };
-  }
   function startType(itemId: string, ctl: BeCtl) {
     if (be.editMode || ctl.kind !== 'cont') return;
     const p = knobById.get(ctl.id);
     editBuf = p ? formatCentre(p) : '';
     editInit = editBuf;
     editingId = itemId;
-    tip = null;
   }
   function commitType(itemId: string, ctl: BeCtl) {
     if (editingId !== itemId) return;
@@ -775,8 +765,6 @@
       tipEl: tile.querySelector<HTMLElement>('.be-dial, .be-nval, .be-vtrack, .be-htrack') ?? tile
     };
     if (direct) return; // the bubble shows once the drag is a value drag
-    adjusting = true;
-    tipAt(vd.tipEl, ctl.id);
   }
   /** Mouse or pen on a fader / slider track: the value follows the pointer (touch goes through tileDown). */
   function trackDown(e: PointerEvent, ctl: BeCtl, vertical: boolean) {
@@ -806,8 +794,6 @@
         v.moved = true;
         v.lx = e.clientX;
         v.ly = e.clientY;
-        adjusting = true;
-        tipAt(v.tipEl, v.pid);
         return;
       }
     } else if (!v.moved) {
@@ -850,8 +836,6 @@
     const v = vd;
     if (v && v.pointerId === e.pointerId) {
       vd = null;
-      adjusting = false;
-      if (tip) tip = null;
       const back = v.direct ? restoreOnCancel(v, Date.now(), v.n) : null;
       if (back != null) setNorm(v.pid, back);
     }
@@ -864,8 +848,6 @@
   function cancelGestures() {
     vd = null;
     tk = null;
-    adjusting = false;
-    if (tip) tip = null;
     arr.cancel();
     if (pinDrag) pinDrag = null;
     pinPressAt = null;
@@ -916,8 +898,6 @@
       if (vd) {
         const v = vd;
         vd = null;
-        adjusting = false;
-        if (tip) tip = null;
         if (v.moved) return;
         if (v.track) setNorm(v.pid, trackNorm(v.sx, v.sy, v.track.rect, v.track.vertical)); // a tap on a track
         else if (v.clickVal) startType(v.itemId, v.ctl);
@@ -1095,6 +1075,13 @@
               editor.showToast(`Reset to ${builtInName(hasDeviceLayout)}`, 'var(--accent)');
             },
             newCopy: addProfile,
+  resetAllLayouts: () => {
+    // every block family: drop the stored boards, their meta (active profile + prefs) and the saved family
+    // seeds, so each regenerates from its device layout with the built-in navigation (side list)
+    const n =
+      surfRemovePrefix('axs.be1meta.') + surfRemovePrefix('axs.be1seed.') + surfRemovePrefix('axs.be1.');
+    editor.showToast(n ? `Reset every editor layout (${n} stored entries)` : 'Every editor layout was already the default', 'var(--accent)');
+  },
             deleteCopy: deleteProfile,
             saveDefault: () => {
               be.saveAsDefault();
@@ -1180,7 +1167,6 @@
   });
   function onBoardScroll() {
     if (sel) sel = null;
-    if (tip && !adjusting) tip = null;
   }
 
   // ── modifier (∿ on hover, "Edit modifier…" in the control menu): the docked modifier panel when one is
@@ -1343,8 +1329,6 @@
     // the same press may have armed a value adjust + bubble: drop them (nothing was written yet)
     vd = null;
     tk = null;
-    adjusting = false;
-    if (tip) tip = null;
     ctxMenu = null;
     pinDrag = { pointerId, c, source, x, y, target: resolvePinTarget(x, y) };
   }
@@ -1733,12 +1717,6 @@
     bypass: () => void editor.toggleBypass(),
     loop: pressLoop,
     eqSet: (p: NamedParam, n: number) => editor.setParam(p, n),
-    tipShow: (el, c) => {
-      if (!isPhone && !be.editMode && c.kind === 'cont') tipAt(el, c.id);
-    },
-    tipHide: () => {
-      if (!adjusting) tip = null;
-    },
     hover: (c) => {
       if (!isPhone && !be.editMode && c.id >= 0) void showParamHelp(c.id, c.label);
     },
@@ -1755,8 +1733,7 @@
   };
   setBeHost(host);
 
-  const tipValue = $derived(tip ? knobById.get(tip.pid) : undefined);
-  const RESULT_CELL = 40;
+    const RESULT_CELL = 40;
   const RESULT_GAP = 4;
 </script>
 
@@ -1893,7 +1870,6 @@
             {onVisible}
             onScroll={onBoardScroll}
             onBackgroundDown={() => {
-              if (tip && !adjusting) tip = null;
               if (be.editMode) arr.select(null); // a press on empty grid clears the selection
             }}
             onArrange={arrangeAndAdd}
@@ -1923,7 +1899,6 @@
             {resetKey}
             onScroll={onBoardScroll}
             onBackgroundDown={() => {
-              if (tip && !adjusting) tip = null;
               if (be.editMode) arr.select(null, true); // the area becomes the target of the tools
             }}
             onColsDown={(e, el, limits) => fixedLay && arr.colsDown(e, el, fixedLay.c + fixedLay.g, fixedLay.place === 'column' ? -1 : 1, limits)}
@@ -1983,16 +1958,6 @@
     <BeMenu open={barMenu === 'page'} items={pageMenuItems} anchor={barPageAnchor} touch={deviceClass === 'tablet'} label="Page options" onClose={() => (barMenu = null)} />
     <BeMenu open={barMenu === 'more'} items={barMoreItems} anchor={barMoreAnchor} touch={deviceClass === 'tablet'} label="More arrange tools" onClose={() => (barMenu = null)} />
 
-    <!-- value bubble: full value with unit, above the other floating parts -->
-    {#if tip}
-      <div
-        class="be-tip"
-        bind:offsetWidth={tipWidth}
-        style:left="{tipLeft}px"
-        style:top="{tip.cy}px"
-        style:--be-tip-arrow="{Math.max(8, Math.min(tipWidth - 8, tip.cx - tipLeft))}px"
-      >{tipValue ? formatFull(tipValue) : '-'}</div>
-    {/if}
 
     <!-- select popover -->
     {#if sel && selEnum}
@@ -2187,30 +2152,6 @@
     font-size: 13px;
   }
 
-  /* ── value bubble ── */
-  .be-tip {
-    position: fixed;
-    z-index: 3;
-    transform: translateY(calc(-100% - 11px));
-    padding: 7px 12px;
-    border-radius: 10px;
-    background: var(--input);
-    border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border2));
-    color: var(--text);
-    font: 700 15px/1 var(--font-mono);
-    white-space: nowrap;
-    pointer-events: none;
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent);
-  }
-  .be-tip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: var(--be-tip-arrow, 50%);
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--input);
-  }
 
   /* ── select popover ── */
   .be-selbg {

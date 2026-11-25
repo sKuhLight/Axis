@@ -94,8 +94,6 @@ export interface BeHost {
   bypass(): void;
   loop(action: string): void;
   eqSet(p: NamedParam, norm: number): void;
-  tipShow(el: HTMLElement, ctl: BeCtl): void;
-  tipHide(): void;
   hover(ctl: BeCtl): void;
   unhover(): void;
 
