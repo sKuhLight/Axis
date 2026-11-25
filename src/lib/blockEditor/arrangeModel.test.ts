@@ -300,14 +300,14 @@ describe('dividers', () => {
     const b = board({ P: [k('a', 'k1', 0, 0)] });
     const h = addDivider(b, 'P', 'hdiv', null, sequentialIdGen('d'));
     expect(h.id).toBe('d1');
-    expect(at(h.board, 'd1')).toMatchObject({ kind: 'hdiv', x: 2, y: 0, w: 6, h: 1 });
+    expect(at(h.board, 'd1')).toMatchObject({ kind: 'hdiv', x: 0, y: 0, w: 2, h: 0 }); // a line on the first row's top edge
     const labelled = setDividerLabel(h.board, 'd1', '  Tone stack ');
     expect(at(labelled.board, 'd1')).toMatchObject({ label: 'Tone stack' });
     expect(setDividerLabel(labelled.board, 'd1', 'Tone stack').board).toBe(labelled.board);
     expect(at(setDividerLabel(labelled.board, 'd1', '').board, 'd1')).not.toHaveProperty('label');
     const rotated = rotateDivider(labelled.board, 'd1');
     expect(rotated.ok).toBe(true);
-    expect(at(rotated.board, 'd1')).toMatchObject({ kind: 'vdiv', w: 1, h: 6, label: 'Tone stack' });
+    expect(at(rotated.board, 'd1')).toMatchObject({ kind: 'vdiv', w: 0, h: 2, label: 'Tone stack' });
     expect(setDividerLabel(b, 'a', 'x')).toMatchObject({ ok: false, reason: 'invalid' });
     expect(DIVIDER_NAME.hdiv).toBe('Horizontal divider');
   });

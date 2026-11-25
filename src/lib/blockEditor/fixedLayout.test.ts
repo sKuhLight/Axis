@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { CMIN, DENSITY, PHONE_END_PAD } from './boardGeometry';
+import { CMIN, DENSITY, fitBoardCell, PHONE_END_PAD } from './boardGeometry';
 import type { BeItem } from './boardModel';
 import { sharedCell, type BoardPage } from './boardView';
 import {
   BAND_CLEAR_W, BAND_PAD, BAND_SIDE_W, bandLayout, endPadOver, FIXED_DOCK_GUTTER, fixedColumnMax, fixedColumnW, fixedPlace,
-  fixedRightPad, fixedViewportInset, layoutEditor, pageRefCols, PAGES_MIN_W, widthCell, type EditorLayoutInput
+  fixedRightPad, fixedViewportInset, layoutEditor, PAGES_MIN_W, widthCell, type EditorLayoutInput
 } from './fixedLayout';
 
 const knob = (i: number, x: number, y: number): BeItem => ({ id: `i${i}`, key: `k${i}`, view: 'knob', x, y, w: 2, h: 2 });
@@ -12,15 +12,6 @@ const knob = (i: number, x: number, y: number): BeItem => ({ id: `i${i}`, key: `
 const page = (name: string, n: number, rows = 1): BoardPage => ({ page: name, items: Array.from({ length: n * rows }, (_, i) => knob(i, (i % n) * 2, Math.floor(i / n) * 2)) });
 const area = (n: number, cols = 4) => ({ cols, items: Array.from({ length: n }, (_, i) => knob(100 + i, (i % (cols / 2)) * 2, Math.floor(i / (cols / 2)) * 2)) });
 const input = (over: Partial<EditorLayoutInput> = {}): EditorLayoutInput => ({ mainW: 1382, bodyW: 1382, bodyH: 272, nav: 'top', density: 'm', editMode: false, ...over });
-
-describe('the pages’ share of the 24 cells', () => {
-  it('what the area leaves, or what the widest page needs', () => {
-    expect(pageRefCols([page('A', 6), page('B', 10)], 4)).toBe(20);
-    expect(pageRefCols([page('A', 12)], 4)).toBe(24); // a full page keeps its 24 cells
-    expect(pageRefCols([page('A', 11)], 4)).toBe(22); // and one in between only what it needs
-    expect(pageRefCols([], 8)).toBe(16);
-  });
-});
 
 describe('column', () => {
   for (const nav of ['top', 'side'] as const) {
@@ -32,11 +23,9 @@ describe('column', () => {
           expect(r.fixed!.place).toBe('column');
           expect(r.fixed!.c).toBe(sharedCell(r.layouts));
           expect(r.fixed!.width).toBe(fixedColumnW(4, r.fixed!.c, r.fixed!.g, nav));
-          // 24 cells in all, as without an area: never much smaller than the plain board's cell
-          const plain = sharedCell(layoutEditor([page('A', 6), page('B', 4)], null, { ...inp, bodyW: mainW }).layouts)!;
-          expect(r.fixed!.c).toBeGreaterThanOrEqual(Math.min(plain, Math.max(CMIN, plain - 2)));
+          expect(r.fixed!.c).toBe(fitBoardCell(density, widthCell(mainW, nav, r.fixed!.g, false, 4)));
           // both fit side by side
-          for (const L of Object.values(r.layouts)) if (!L.reflow && r.fixed!.c > CMIN) expect(L.W + r.fixed!.width).toBeLessThanOrEqual(mainW);
+          for (const L of Object.values(r.layouts)) if (!L.reflow && r.fixed!.c > DENSITY[density].cmin) expect(L.W + r.fixed!.width).toBeLessThanOrEqual(mainW);
           expect(r.fixed!.c).toBeLessThanOrEqual(DENSITY[density].cmax);
         }
       }
@@ -45,23 +34,22 @@ describe('column', () => {
 
   it('a 24-cell page keeps working: it takes a smaller cell, scrolls (top) or re-flows (side) below the minimum', () => {
     const wide = [page('A', 12)];
-    const roomy = layoutEditor(wide, area(4), input({ bodyH: 900 }));
+    const roomy = layoutEditor(wide, area(2, 2), input({ bodyH: 900 }));
     expect(roomy.layouts.A!.overflowX).toBe(false);
-    const c = Math.floor(widthCell(1382, 'top', 4, 24, 4));
-    expect(roomy.fixed!.c).toBe(Math.min(40, c));
+    expect(roomy.fixed!.c).toBe(fitBoardCell('m', widthCell(1382, 'top', DENSITY.m.gap)));
     const tight = layoutEditor(wide, area(4), input({ mainW: 640, bodyH: 900 }));
-    expect(tight.fixed!).toMatchObject({ place: 'column', c: CMIN });
+    expect(tight.fixed!).toMatchObject({ place: 'column', c: DENSITY.m.cmin });
     expect(tight.layouts.A!.overflowX).toBe(true);
     const side = layoutEditor(wide, area(4), input({ mainW: 600, nav: 'side', bodyH: 900 }));
     expect(side.layouts.A!.reflow).toBe(true);
-    expect(side.fixed!.c).toBe(CMIN);
+    expect(side.fixed!.c).toBe(DENSITY.m.cmin);
   });
 
   it('the pages’ height sets the cell; taller contents of the area scroll inside it', () => {
     const r = layoutEditor([page('A', 4, 4)], area(20), input());
     expect(r.fixed!.c).toBe(sharedCell(r.layouts));
-    expect(r.fixed!.c).toBeLessThan(40); // eight rows in 272 px
-    expect(r.layouts.A!.overflowY).toBe(false);
+    expect(r.fixed!.c).toBe(layoutEditor([page('A', 12, 2)], area(4), input()).fixed!.c);
+    expect(r.layouts.A!.overflowY).toBe(true);
     expect(r.fixed!.H).toBeGreaterThan(272);
     expect(layoutEditor([page('A', 4)], area(4), input()).fixed!.H).toBeLessThan(272);
   });
@@ -113,29 +101,34 @@ describe('column', () => {
     expect(layoutEditor([page('A', 4)], area(4), { ...arranging, mainW: 300, arrangePlace: 'column' }).fixed!.place).toBe('column');
   });
 
-  it('without a fixed area nothing changes', () => {
-    const r = layoutEditor([page('A', 6)], null, input());
-    expect(r.fixed).toBeNull();
-    expect(r.layouts.A!.cols).toBe(12);
+  it('one scale for the pages and the area, whatever the area width', () => {
+    const plain = layoutEditor([page('A', 6)], null, input());
+    expect(plain.fixed).toBeNull();
+    expect(plain.layouts.A!.cols).toBe(12);
+    for (const cols of [2, 4, 8]) {
+      const r = layoutEditor([page('A', 6)], area(4, cols), input());
+      expect(r.fixed!.c).toBe(sharedCell(r.layouts)); // pages and area, one cell
+      expect(r.layouts.A!.cols).toBe(12); // the pages keep their columns beside it
+      expect(r.fixed!.c).toBeLessThanOrEqual(plain.layouts.A!.c); // a wider area leaves a smaller cell
+    }
   });
 });
 
 describe('band', () => {
   it('always on the phone; elsewhere when a column would leave the pages less than 240 px', () => {
-    const at = (mainW: number, cols = 4, phone = false) => fixedPlace({ mainW, nav: 'top', density: 'm', phone, refCols: 24 - cols, cols });
+    const at = (mainW: number, cols = 4, phone = false) => fixedPlace({ mainW, nav: 'top', density: 'm', phone, cols });
     expect(at(1382, 4, true)).toBe('band');
-    expect(at(1382)).toBe('column');
-    const w = fixedColumnW(4, CMIN, 4, 'top');
-    expect(at(PAGES_MIN_W + w)).toBe('column');
-    expect(at(PAGES_MIN_W + w - 1)).toBe('band');
-    expect(at(500, 8)).toBe('column');
-    expect(at(460, 8)).toBe('band');
+    expect(at(1400)).toBe('column');
+    expect(at(PAGES_MIN_W)).toBe('band');
+    expect(at(2400)).toBe('column');
+    expect(at(600, 8)).toBe('column');
+    expect(at(380, 8)).toBe('band');
   });
 
   it('the place depends on the width only: a lower board never flips it', () => {
     for (const bodyH of [40, 120, 300, 900]) {
       expect(layoutEditor([page('A', 4)], area(4), input({ mainW: 300, bodyW: 300, bodyH })).fixed!.place).toBe('band');
-      expect(layoutEditor([page('A', 4)], area(4), input({ mainW: 420, bodyW: 420, bodyH })).fixed!.place).toBe('column');
+      expect(layoutEditor([page('A', 4)], area(4), input({ mainW: 620, bodyW: 620, bodyH })).fixed!.place).toBe('column');
     }
   });
 
@@ -160,7 +153,7 @@ describe('band', () => {
 
   it('too narrow for eight smallest cells: fewer columns, never an overflow', () => {
     const b = bandLayout(area(4).items, 150, 'm');
-    expect(b.cols).toBe(6);
+    expect(b.cols).toBe(4);
     expect(b.W).toBeLessThanOrEqual(150);
   });
 

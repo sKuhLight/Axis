@@ -33,7 +33,9 @@ export const AXIS_WIDGET_LABELS: Record<string, string> = {
   'axis.paramControl': 'Parameter control',
   'axis.hint': 'Hint line',
   'axis.legal': 'Support & imprint',
-  'axis.telemetry': 'Telemetry'
+  'axis.telemetry': 'Telemetry',
+  'axis.horizontalDivider': 'Horizontal divider',
+  'axis.verticalDivider': 'Vertical divider'
 };
 
 /**
@@ -45,7 +47,9 @@ const NOT_OFFERED = new Set(['axis.paramControl']);
 /** Default state a fresh instance starts with (matches the default document's seeds). */
 const DEFAULT_STATE: Record<string, CanonicalWidgetSpec['state']> = {
   'axis.gridMode': { mode: 'auto' },
-  'axis.blockSize': { size: 'M' }
+  'axis.blockSize': { size: 'M' },
+  'axis.horizontalDivider': { label: 'Section', grid: { fullRow: true } },
+  'axis.verticalDivider': { label: 'Section', grid: { rowSpan: 2 } }
 };
 
 const KEYWORDS: Record<string, string[]> = {
@@ -68,6 +72,7 @@ export function axisCanonicalWidgets(): CanonicalWidgetSpec[] {
       type,
       label: AXIS_WIDGET_LABELS[type] ?? kind,
       id: `axis.widget.${kind}`,
+      ...(type === 'axis.horizontalDivider' || type === 'axis.verticalDivider' ? { repeatable: true } : {}),
       ...(state ? { state: { ...state } } : {}),
       ...(KEYWORDS[type] ? { keywords: [...KEYWORDS[type]] } : {})
     };

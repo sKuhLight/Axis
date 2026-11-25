@@ -117,6 +117,9 @@ export interface LayoutPage {
   name: string;
   pageNum?: number;
   fw?: unknown;
+  /** Selector and value set for the active page alternative, when the device layout has one. */
+  selectorParamName?: string;
+  value?: string;
   rows: LayoutRow[];
   /** Controls placed directly on the page, outside its rows (document order; placement.positionExact, fw as
    *  for row controls). Absent on servers that do not serve them. Entries without a param (section titles,
@@ -157,6 +160,11 @@ export interface BlockParams {
  *  response (a served knob or selector) or of a read-only monitor; the client draws from the values it
  *  holds for those ids and never needs a catalog symbol. Role semantics per kind: forgefx-midi
  *  `src/visuals.ts`. */
+export interface VisualEqBand {
+  key: string; gain?: number; freq?: number; q?: number; type?: number; centerHz?: number;
+  label?: string;
+  shape?: 'bell' | 'lowshelf' | 'highshelf' | 'lowcut' | 'highcut';
+}
 export interface BlockVisual {
   /** Stable key, unique per block (`dynamics`, `lfo`, `lfo1`, `response`, `echo`, `adsr1`, `cabAlign`, …). */
   key: string;
@@ -166,8 +174,9 @@ export interface BlockVisual {
    *  `filter` / `wah`). */
   mode?: string;
   roles: Record<string, number>;
+  bands?: VisualEqBand[];
 }
-export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign';
+export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign' | 'eq';
 
 /** The block's Scene Ignore toggle on its ACTIVE channel (the device param is per channel). `paramId` is
  *  the same id as the block's own `enums[]` entry: a toggle is the ordinary enum write. */
@@ -313,6 +322,8 @@ export interface TelemetryConfig {
   mode: TelemetryMode;
   effective: Record<string, unknown>;
   modes: TelemetryMode[];
+  /** The server's meter round-robin is on (only while a client asks for it). */
+  meters?: boolean;
 }
 /** Cumulative device-traffic counters pushed on the DeviceEvent bus (`traffic` event). Rates are computed
  *  client-side from deltas between successive snapshots. `loops` = the currently-active poll loops. */
@@ -726,6 +737,8 @@ export interface DeviceCaps {
    *  slots carry `graphKey`. True on the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older
    *  servers → no graph tiles. */
   blockVisuals?: boolean;
+  /** The server can poll the open Looper's waveform and playhead. */
+  looperTelemetry?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */

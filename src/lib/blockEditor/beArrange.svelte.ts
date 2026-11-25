@@ -545,7 +545,15 @@ export class BeArrange {
     const minW = moved ? BE_SPEC[isDivider(moved) ? moved.kind : moved.view].minW : m.kind === 'lib' ? BE_SPEC[m.view].minW : m.w;
     const cols = pageCols(b, page);
     const size = { w: m.w > cols && minW <= cols ? cols : m.w, h: m.h };
-    const { x, y } = dropCell(px, py, hit, size, { cx: Math.min(m.grab.cx, size.w - 1), cy: m.grab.cy });
+    let { x, y } = dropCell(px, py, hit, size, { cx: Math.min(m.grab.cx, size.w - 1), cy: m.grab.cy });
+    // A divider snaps to a grid LINE, not to a cell: its y (hdiv) or x (vdiv) is the nearest boundary.
+    if (moved && isDivider(moved)) {
+      const st = hit.c + hit.g;
+      const z = hit.zoom > 0 ? hit.zoom : 1;
+      const pick = (v: number, max: number) => Math.max(0, Math.min(max, Math.round(v)));
+      if (moved.kind === 'hdiv') y = pick((py - hit.top) / z / st, hit.rows);
+      else x = pick((px - hit.left) / z / st, Math.max(0, hit.cols - 1));
+    }
     const valid =
       m.kind === 'move'
         ? this.#drawn(b, (dd) => moveItem(dd, m.id, page, x, y)).ok

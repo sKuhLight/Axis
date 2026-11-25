@@ -29,6 +29,7 @@
     STRIP_PAD_RIGHT,
     visiblePages,
     wheelToStrip,
+    revealScroll,
     type BoardPage
   } from './boardView';
   import { effectiveZoom } from '../workbench';
@@ -120,26 +121,35 @@
     if (!el) return;
     const t = scrollTargetFor(sections, page, nav === 'top' ? el.clientWidth : el.clientHeight);
     if (t == null) return;
-    const opt: ScrollToOptions = nav === 'top' ? { left: t } : { top: t };
+    const opt: ScrollToOptions = nav === 'top' ? { left: t, top: 0 } : { top: t };
     try {
       el.scrollTo({ ...opt, behavior: smooth ? 'smooth' : 'auto' });
     } catch {
-      if (nav === 'top') el.scrollLeft = t;
-      else el.scrollTop = t;
+      if (nav === 'top') {
+        el.scrollLeft = t;
+        el.scrollTop = 0;
+      } else el.scrollTop = t;
     }
   }
 
   /** Bring an item into view (a "Find a control…" jump): stacked pages scroll to the item itself (a phone
-   *  page is tall), the strip to its page. */
+   *  page is tall). The strip goes to the page and reveals controls below its viewport. */
   export function scrollToItem(page: string, id: string, smooth: boolean): void {
     const L = layouts[page];
     const it = pages.find((p) => p.page === page)?.items.find((x) => x.id === id);
     const pos = L?.pos ? L.pos[id] : it;
-    if (!el || nav !== 'side' || !L || !pos) {
+    if (!el || !L || !pos) {
       scrollToPage(page, smooth);
       return;
     }
     const st = L.c + L.g;
+    if (nav === 'top') {
+      const left = scrollTargetFor(sections, page, el.clientWidth);
+      if (left == null) return;
+      const top = revealScroll(el.scrollTop, el.clientHeight, PAD_Y + pos.y * st, pos.h * st - L.g);
+      el.scrollTo({ left, top, behavior: smooth ? 'smooth' : 'auto' });
+      return;
+    }
     const t = itemScrollTarget(sections, page, PAD_Y + SEC_HEAD + pos.y * st, pos.h * st - L.g, el.clientHeight);
     if (t == null) return;
     try {
@@ -416,6 +426,10 @@
   }
   .be-board.top.ovy {
     overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .be-board.top.ovy::-webkit-scrollbar {
+    display: initial;
   }
   .be-board.side {
     overflow-y: auto;

@@ -1,15 +1,14 @@
 // Block Editor board view: how the pages of a board are laid out on screen and how the scroll position
 // maps back to pages.
 //
-// - One cell size for every page (the smallest "always fit" cell of the pages that are not re-flowed), so a
-//   knob has the same size wherever it sits.
+// - One cell size for every page, including when its controls wrap into fewer columns.
 // - Top navigation: pages side by side in one horizontal strip, each with the page name on a vertical
 //   "spine" in front of it. Side navigation: pages stacked, each at least one board height tall (they snap).
 // - Section extents are computed here (not measured from the DOM): the component sizes every section with
 //   exactly these numbers, so the visible-page and scroll-target maths stay pure.
 // Pure numbers in, numbers out — no DOM (boardView.test.ts).
 
-import { availableArea, layoutForPage, PAD_Y, SEC_HEAD, visiblePages, type BeNav, type BeSection, type PageLayout, type PageLayoutInput } from './boardGeometry';
+import { layoutForPage, PAD_Y, SEC_HEAD, visiblePages, type BeNav, type BeSection, type PageLayout, type PageLayoutInput } from './boardGeometry';
 import { hasPage, pageItems, regions, writePage, type BeBoard, type BeItem } from './boardModel';
 
 // ── strip chrome (top navigation) ────────────────────────────────────────────────────────────────
@@ -44,13 +43,6 @@ export type BoardLayoutInput = Omit<PageLayoutInput, 'frozenCell'> & {
   frozenCell?: number;
 };
 
-/** Re-size a layout to another cell (grid dimensions kept). */
-function withCell(L: PageLayout, c: number, area: { Wa: number; Ha: number }): PageLayout {
-  const W = L.cols * (c + L.g) - L.g;
-  const H = L.rows * (c + L.g) - L.g;
-  return { ...L, c, W, H, overflowX: W > area.Wa + 1, overflowY: H > area.Ha + 1 };
-}
-
 /** Tallest item of the board (at least 1): in arrange mode every page keeps that many spare rows under
  *  its content, so any item — also one dragged over from another page — can be dropped below it. */
 export function spareRowsFor(pages: readonly BoardPage[]): number {
@@ -59,31 +51,18 @@ export function spareRowsFor(pages: readonly BoardPage[]): number {
   return h;
 }
 
-/** Layout of every page with ONE cell size: each page is fitted on its own first, then every page that
- *  is not re-flowed takes the smallest of those cells. In arrange mode the frozen cell is used as is. */
+/** Lay out every page at the same viewport-derived scale. */
 export function layoutBoardPages(pages: readonly BoardPage[], input: BoardLayoutInput): Record<string, PageLayout> {
   const bodyW = input.nav === 'top' ? Math.max(0, input.bodyW - STRIP_EXTRA) : input.bodyW;
   const inp: PageLayoutInput = { ...input, bodyW, ...(input.editMode ? { spareRows: input.spareRows ?? spareRowsFor(pages) } : {}) };
   const out: Record<string, PageLayout> = {};
   for (const p of pages) out[p.page] = layoutForPage(inp, p.items);
-  if (input.editMode) return out;
-  const fitted = pages.map((p) => out[p.page]!).filter((L) => !L.reflow);
-  if (!fitted.length) return out;
-  const shared = Math.min(...fitted.map((L) => L.c));
-  const area = availableArea(bodyW, input.bodyH, input.nav);
-  for (const p of pages) {
-    const L = out[p.page]!;
-    if (!L.reflow && L.c !== shared) out[p.page] = withCell(L, shared, area);
-  }
   return out;
 }
 
-/** The cell shown right now (what arrange mode freezes): the shared cell of the non-reflowed pages. */
+/** The cell shown right now (what arrange mode freezes): the shared cell of the pages. */
 export function sharedCell(layouts: Readonly<Record<string, PageLayout>>): number | null {
-  const cells = Object.values(layouts)
-    .filter((L) => !L.reflow)
-    .map((L) => L.c);
-  return cells.length ? Math.min(...cells) : null;
+  return Object.values(layouts)[0]?.c ?? null;
 }
 
 // ── sections along the scroll axis ───────────────────────────────────────────────────────────────

@@ -12,12 +12,8 @@
 // board's fixed area once (fixedSeed.ts has the rules); nothing repeated = no fixed area. The header's
 // controls (headerControls.ts) are on no page and not in the area; a page that held only those goes away.
 //
-// Height budget: a taller page can shrink the shared cell size. The tallest remaining rows-only page
-// sets the floor. Up to two extra lines for titles and dividers can use the height freed by the fixed area
-// and header. A page over budget drops inserted title lines, then section dividers, then positions,
-// and finally falls back to rows only (`fitLayoutPage`).
-// (The fixed area has a width of its own: a block that is limited by the panel's width can get smaller cells
-// than before it.)
+// Prefer a two-row page when its controls fit. Taller layouts preserve their controls and use the
+// regular placement budget for titles and dividers. The viewport sets the scale independently.
 //
 // Previous defaults are still built for recognition only (the persistence layer finds a stored board that is
 // still exactly one of them): `rowFlowOnly` = before positions were used (rows only, no dividers; it also
@@ -27,11 +23,12 @@
 
 import { layoutVariantSig, resolveControl, withoutCrossBlockRefs, type LayoutOwner } from '../deviceLayoutBoard';
 import type { DeviceLayout, LayoutPage } from '../types';
+import { PAGE_REFERENCE_ROWS } from './boardGeometry';
 import { bbox, BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeItem, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
 import { packFixed, pickFixed } from './fixedSeed';
 import { headerKeys, type HeaderBlockState } from './headerControls';
-import { fitLayoutPage, GAP_CELLS, itemId, measureLayoutPitch, pageEntries, pageRows, pitchSamples, rowKeys, type PageMode, type PlacedRow } from './layoutPlacement';
+import { compactLayoutPage, fitLayoutPage, GAP_CELLS, itemId, measureLayoutPitch, pageEntries, pageRows, pitchSamples, rowKeys, type PageMode, type PlacedRow } from './layoutPlacement';
 
 export { GAP_CELLS, itemId };
 
@@ -40,9 +37,9 @@ export const TITLE_LINES = 2;
 
 const sizeFor = (view: BeView): { w: number; h: number } => ({ w: Math.min(BE_SPEC[view].w, MAXC), h: BE_SPEC[view].h });
 
-/** Left→right sweep in catalog order, wrapping at `maxC` cells (the "More" page). */
-function packSequential(ctls: readonly BeCtl[], pageIndex: number, maxC: number): BeControl[] {
-  const out: BeControl[] = [];
+/** Left→right sweep in catalog order, wrapping to another page if the control would exceed maxR. */
+function packSequential(ctls: readonly BeCtl[], pageIndex: number, maxC: number, maxR: number): BeControl[][] {
+  const pages: BeControl[][] = [[]];
   let x = 0;
   let y = 0;
   let rowH = 1;
@@ -53,11 +50,17 @@ function packSequential(ctls: readonly BeCtl[], pageIndex: number, maxC: number)
       x = 0;
       rowH = 1;
     }
-    out.push({ id: itemId(pageIndex, c.key), key: c.key, view: c.view, x, y, w, h });
+    if (y > 0 && y + h > maxR) {
+      pages.push([]);
+      x = 0;
+      y = 0;
+      rowH = 1;
+    }
+    pages.at(-1)!.push({ id: itemId(pageIndex + pages.length - 1, c.key), key: c.key, view: c.view, x, y, w, h });
     x += w;
     rowH = Math.max(rowH, h);
   }
-  return out;
+  return pages;
 }
 
 /** One page by rows only (no placement data, no dividers), a gap = one knob slot. A control in `skip` leaves
@@ -105,6 +108,10 @@ export interface DeviceLayoutBoardOptions {
    *  header's controls and the repeated mixer included), no page-level controls — only to recognise an
    *  untouched stored Default board (boardPersistence `previousSeed`), never for a drawn board. */
   withoutFixed?: boolean;
+  /** Recognise untouched defaults from before two-row pages used the full width beside Fixed. */
+  legacyFixedLayout?: boolean;
+  /** Recognise the stacked mixer and tall row heights of the preceding default. */
+  legacyStackedLayout?: boolean;
   /** The served block state (its params are the header's); absent = the server tags none. */
   blockState?: HeaderBlockState | null;
   /** Told how every page was laid out (diagnostics and tests). */
@@ -162,14 +169,31 @@ export function buildDeviceLayoutBoardV2(
   const rows = pages.map((pg): readonly PlacedRow[] => (previous ? (pg.rows ?? []) : pageRows(pg)));
   // what is not on the pages: the header's controls, and what the fixed area takes
   const header: ReadonlySet<string> = previous ? new Set<string>() : headerKeys(catalog, { layout, blockState: opts.blockState, effectId: opts.effectId });
-  const picks = previous ? [] : pickFixed(rows.map((r) => pageEntries(r, byKey, owner, header)));
+  const useMixerRail = !previous && !opts.legacyFixedLayout && !opts.legacyStackedLayout;
+  const picks = previous ? [] : pickFixed(rows.map((r) => pageEntries(r, byKey, owner, header)), useMixerRail);
   const skip: ReadonlySet<string> = new Set([...header, ...picks.map((p) => p.key)]);
-  const entries = opts.rowFlowOnly ? [] : rows.map((r) => pageEntries(r, byKey, owner, skip));
+  const represented = new Set<string>();
+  const entries = opts.rowFlowOnly ? [] : rows.map((r) => {
+    const page = pageEntries(r, byKey, owner, skip);
+    if (!useMixerRail) return page;
+    const gains = new Set(page.flatMap((entry) => {
+      const visual = entry.key == null ? undefined : byKey.get(entry.key)?.visual;
+      return entry.kind === 'tile' && visual?.kind === 'eq' && visual.mode === 'graphic'
+        ? (visual.bands ?? []).flatMap((band) => band.gain == null ? [] : [`k${band.gain}`])
+        : [];
+    }));
+    return page.map((entry) => {
+      if (entry.kind !== 'tile' || !entry.key || !gains.has(entry.key)) return entry;
+      represented.add(entry.key);
+      return { ...entry, kind: 'gone' as const };
+    });
+  });
   const layoutPitch = opts.rowFlowOnly ? null : measureLayoutPitch(entries.map(pitchSamples));
   // the height budget (see above): previous defaults kept to their own rows-only height
   const full = opts.rowFlowOnly ? 0 : tallestPage(buildDeviceLayoutBoardV2(layout, catalog, { rowFlowOnly: true, effectId: opts.effectId }));
   const left = previous ? full : tallest(rows.map((r) => rowFlowPage(r, byKey, 0, owner, skip)));
   const budget = Math.max(left, Math.min(full, left + TITLE_LINES));
+  const useTwoRows = !previous && !opts.legacyFixedLayout;
 
   const boards: Record<string, BeItem[]> = {};
   const pageOrder: string[] = [];
@@ -177,8 +201,39 @@ export function buildDeviceLayoutBoardV2(
     const pageIndex = pageOrder.length;
     let items: BeItem[];
     let mode: PageMode = 'rows-only';
-    if (opts.rowFlowOnly) items = rowFlowPage(rows[i]!, byKey, pageIndex, owner, skip);
-    else ({ items, mode } = fitLayoutPage(entries[i]!, { pageIndex, layoutPitch }, budget, () => rowFlowPage(rows[i]!, byKey, pageIndex, owner, skip)));
+    const rowsOnly = () => {
+      const hidden = entries[i]?.flatMap((e) => e.kind === 'gone' && e.key != null ? [e.key] : []) ?? [];
+      return rowFlowPage(rows[i]!, byKey, pageIndex, owner, new Set([...skip, ...hidden]));
+    };
+    if (opts.rowFlowOnly) items = rowsOnly();
+    else {
+      const options = { pageIndex, layoutPitch };
+      ({ items, mode } = fitLayoutPage(entries[i]!, options, budget, rowsOnly));
+      if (useTwoRows && bbox(items).R > PAGE_REFERENCE_ROWS) {
+        const compact = fitLayoutPage(entries[i]!, options, PAGE_REFERENCE_ROWS, rowsOnly);
+        // The two-row preference may re-flow controls, never lose a title or divider the page shows:
+        // those are the block editor's group labels. A page that only fits two rows without them keeps
+        // its own (taller) placement.
+        const keepsEverything = (candidate: BeItem[]) => {
+          const sig = (it: BeItem) => ('key' in it ? `${it.key}:${it.view}` : `div:${it.label === 'Mixer' && useMixerRail ? 'rail' : it.kind}:${it.label ?? ''}`);
+          const have = new Map<string, number>();
+          for (const it of candidate) have.set(sig(it), (have.get(sig(it)) ?? 0) + 1);
+          return items.every((it) => {
+            const s = sig(it);
+            const n = have.get(s) ?? 0;
+            if (!n) return false;
+            have.set(s, n - 1);
+            return true;
+          });
+        };
+        if (bbox(compact.items).R <= PAGE_REFERENCE_ROWS && keepsEverything(compact.items)) ({ items, mode } = compact);
+        else if (useMixerRail) {
+          const sideBySide = compactLayoutPage(entries[i]!, options, PAGE_REFERENCE_ROWS, items)
+            .find((candidate) => bbox(candidate).R < bbox(items).R && keepsEverything(candidate));
+          if (sideBySide) ({ items, mode } = { items: sideBySide, mode: 'compact' });
+        }
+      }
+    }
     if (!items.some((it) => 'key' in it)) return;
     const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
     boards[name] = items;
@@ -190,16 +245,18 @@ export function buildDeviceLayoutBoardV2(
   const placedKeys = new Set(pageOrder.flatMap((p) => boards[p]!.flatMap((it) => ('key' in it ? [it.key] : []))));
   // graph displays the layout does not anchor are not added (no page just for a graph): the Arrange
   // library offers them
-  const rest = catalog.filter((c) => !placedKeys.has(c.key) && !skip.has(c.key) && c.kind !== 'graph');
+  const rest = catalog.filter((c) => !placedKeys.has(c.key) && !represented.has(c.key) && !skip.has(c.key) && c.kind !== 'graph');
   const device = tallest(pageOrder.map((p) => boards[p]!));
-  // "More" uses the same 24-cell reference as the fixed area beside it.
-  const more = (cols: number): BeControl[] => packSequential(rest, pageOrder.length, MAXC - cols);
-  const fixed = packFixed(picks, (key) => byKey.get(key)?.label ?? key, (cols) => Math.max(device, tallest([more(cols)])));
+  const more = (cols: number) => packSequential(rest, pageOrder.length, useTwoRows ? MAXC : MAXC - cols, useMixerRail ? PAGE_REFERENCE_ROWS : Infinity);
+  const fixed = packFixed(picks, (key) => byKey.get(key)?.label ?? key, (cols) =>
+    useMixerRail ? PAGE_REFERENCE_ROWS : Math.max(device, tallest(more(cols)))
+  );
   if (rest.length) {
-    const items = more(fixed?.cols ?? 0);
-    const name = uniqName('More');
-    boards[name] = items;
-    pageOrder.push(name);
+    for (const items of more(fixed?.cols ?? 0)) {
+      const name = uniqName('More');
+      boards[name] = items;
+      pageOrder.push(name);
+    }
   }
   return { v: 2, pageOrder, page: pageOrder[0]!, boards, ...(fixed ? { fixed } : {}), variantSig: layoutVariantSig(layout) };
 }

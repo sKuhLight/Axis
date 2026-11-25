@@ -183,6 +183,15 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
   // ── layout ──
   if (layout && it) {
     if (s.ctl.views.length > 1) push(viewSubmenu(it.view, s.ctl.views, (v) => a.view(v), cls));
+    if (s.ctl.kind === 'meter') {
+      const horizontal = it.w > it.h;
+      const short = Math.min(it.w, it.h, 4);
+      const long = Math.max(short + 1, Math.max(it.w, it.h));
+      push({ id: 'orientation', kind: 'submenu', label: 'Orientation', hint: horizontal ? 'Horizontal' : 'Vertical', className: cls('orientation'), run: noop, items: [
+        { id: 'orientation.horizontal', kind: 'radio', label: 'Horizontal meter', checked: horizontal, run: () => a.size(long, short) },
+        { id: 'orientation.vertical', kind: 'radio', label: 'Vertical meter', checked: !horizontal, run: () => a.size(short, Math.min(long, BE_SPEC.meter.maxH)) }
+      ] });
+    }
     push(sizeSubmenu(it.view, it.w, it.h, (w, h) => a.size(w, h), cls));
     const others = s.pageOrder.filter((pg) => pg !== s.page);
     const targets: WorkbenchMenuItem[] = others.map((pg) => {

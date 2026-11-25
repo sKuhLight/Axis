@@ -25,6 +25,7 @@ import { clickNav } from './support/workbench';
 const board = (page: Page) => page.locator('[data-be-board]');
 const tile = (page: Page, key: string) => page.locator(`[data-be-key="${key}"]`).first();
 const dot = (page: Page) => page.locator('[data-be-more-dot]');
+const searchButton = (page: Page) => page.locator('[data-be-find-toggle]');
 
 /** A page tab click scrolls the board smoothly; wait until it rests (a select opened mid-scroll closes). */
 async function gotoPage(page: Page, name: string) {
@@ -343,8 +344,9 @@ test.describe('Block Editor header (slice 3)', () => {
       expect(Math.abs((await top('[data-be-engaged]')) - (await top('[data-be-more]')))).toBeLessThan(8);
       expect(Math.abs((await top('[data-be-scene]')) - (await top('[data-be-more]')))).toBeLessThan(8);
       expect(await head.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
-      // and the chip keeps a readable type name (not cut to a letter)
-      expect((await page.locator('[data-be-chip]').boundingBox())!.width).toBeGreaterThanOrEqual(160);
+      // and the chip keeps a readable type name. At 540 the bypass segment is also in the header, so the
+      // joined search · state · ⋯ group leaves the chip ~146 px instead of the ~160 px it had apart.
+      expect((await page.locator('[data-be-chip]').boundingBox())!.width).toBeGreaterThanOrEqual(inHeader ? 140 : 160);
     });
   }
 
@@ -529,9 +531,10 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(page.locator('section[data-be-page="Dynamics"]')).not.toBeInViewport({ ratio: 0.5 });
 
     const input = page.locator('[data-be-find-input]');
-    await input.click();
+    await searchButton(page).click();
     const pop = page.locator('[data-be-find]');
     await expect(pop).toBeVisible();
+    await expect(input).toBeFocused();
     await input.fill('thresh');
     await expect(pop.locator('[data-be-find-row]')).toHaveCount(1);
     const row = pop.locator('[data-be-find-row="k22"]');
@@ -544,7 +547,7 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(page.locator('section[data-be-page="Dynamics"] [data-be-key="k22"]')).toHaveClass(/flash/);
 
     // "Show all" → the flat, operable results replace the board
-    await input.click();
+    await searchButton(page).click();
     await expect(pop).toBeVisible();
     await input.fill('a');
     await pop.locator('[data-be-find-all]').click();
@@ -553,27 +556,31 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(results).toBeVisible();
     await expect(board(page)).toHaveCount(0);
     await expect(results.locator('[data-be-key="k1"]')).toBeVisible(); // Bass
+    await searchButton(page).click();
     await input.fill('treb');
     await expect(results.locator('[data-be-key]')).toHaveCount(1);
     await page.locator('[data-be-results-close]').click();
     await expect(board(page)).toBeVisible();
 
-    // Enter shows the results too; Escape clears them
+    // Enter shows the results too; Escape closes the search and restores focus.
+    await searchButton(page).click();
     await input.fill('mid');
     await input.press('Enter');
     await expect(page.locator('[data-be-results] [data-be-key="k2"]')).toBeVisible();
+    await searchButton(page).click();
     await input.press('Escape');
+    await expect(searchButton(page)).toBeFocused();
+    await page.locator('[data-be-results-close]').click();
     await expect(board(page)).toBeVisible();
-    await expect(input).toHaveValue('');
 
     // a search ends Arrange
     await pickMore(page, 'arrange');
     await expect(page.locator('[data-be-arrange-done]')).toBeVisible();
-    await input.click();
+    await searchButton(page).click();
     await expect(page.locator('[data-be-arrange-done]')).toHaveCount(0);
   });
 
-  test('the header is one row from ~1240 px of editor width and two rows below', async ({ page }) => {
+  test('the header keeps scrolling tabs on one row down to 940 px, then gives them a row', async ({ page }) => {
     await bootBlockEditorMock(page, { channel: 'A' });
     await openAmpEditor(page);
     const head = page.locator('[data-be-head]');
@@ -585,11 +592,11 @@ test.describe('Block Editor header (slice 3)', () => {
 
     // a narrower window (this flips the workbench to its tablet profile, deliberately: there the default
     // panel is narrower than the one-row width): the tabs and the search move to a second row
-    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.setViewportSize({ width: 850, height: 800 });
     await expect(head).toHaveAttribute('data-be-head-rows', '2');
-    expect(await head.evaluate((el) => el.clientWidth)).toBeLessThan(1240);
+    expect(await head.evaluate((el) => el.clientWidth)).toBeLessThan(940);
     expect(await top('[data-be-tab]')).toBeGreaterThan((await top('[data-be-chip]')) + 20);
-    expect(await top('[data-be-find-input]')).toBeGreaterThan((await top('[data-be-engaged]')) + 20);
+    expect(Math.abs((await top('[data-be-find-toggle]')) - (await top('[data-be-engaged]')))).toBeLessThan(8);
     // chip, state and ⋯ stay on the first row
     expect(Math.abs((await top('[data-be-more]')) - (await top('[data-be-engaged]')))).toBeLessThan(8);
   });
@@ -635,7 +642,7 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(screen.locator('[data-be-head]')).toBeVisible();
     await expect(screen.locator('[data-be-chip], [data-be-engaged]')).toHaveCount(0);
     await expect(screen.locator('[data-be-tab]').first()).toBeVisible();
-    await expect(screen.locator('[data-be-find-input]')).toBeVisible();
+    await expect(screen.locator('[data-be-find-toggle]')).toBeVisible();
     const menu = await openMore(page, screen);
     for (const id of ['arrange', 'nav-side', 'size-m', 'new-copy', 'save-default']) await expect(menu.locator(`.be-mi-${id}`)).toBeVisible();
     await expect(menu.locator('.be-mi-save-default')).toHaveText(/Save as default for Setup/);
@@ -675,14 +682,13 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     const restore = page.getByRole('button', { name: 'Restore Block Editor' });
     await expect(restore).toBeVisible();
 
-    const input = page.locator('[data-be-find-input]');
-    await input.click();
+    await searchButton(page).click();
     const pop = page.locator('[data-be-find]');
     await expect(pop).toBeVisible();
     await pop.getByRole('button', { name: 'Unused' }).focus();
     await page.keyboard.press('Escape');
     await expect(pop).toHaveCount(0);
-    await expect(input).toBeFocused();
+    await expect(searchButton(page)).toBeFocused();
     await expect(restore).toBeVisible();
     await expect(page.locator('[data-be-board]')).toBeVisible();
 
@@ -701,14 +707,15 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await pickMore(page, 'arrange');
     await expect(page.locator('[data-be-arrange-done]')).toBeVisible();
     // in arrange mode a seventh ＋ tab follows the page tabs
-    const walk = await tabWalk(page, '[data-be-type]', 12);
-    expect(walk).toEqual(['beType', 'beChannelToggle', ...TABS, 'button', 'beFindInput', 'beEngaged', 'beBypassMode', 'beScene']);
+    const walk = await tabWalk(page, '[data-be-type]', 7);
+    expect(walk).toEqual(['beType', 'beChannelToggle', TABS[0], 'button', 'beFindToggle', 'beEngaged', 'beBypassMode', 'beScene']);
     await page.keyboard.press('Tab');
     expect(await focusedPart(page)).toBe('beMore');
     await expect(page.locator('[data-be-find]')).toHaveCount(0); // focus alone never opens it
     await expect(page.locator('[data-be-arrange-done]')).toBeVisible(); // …nor ends Arrange
-    // ArrowDown in the field opens it (by intent) and walks into the rows
-    await page.locator('[data-be-find-input]').focus();
+    // Keyboard activation opens the search and focuses the field. ArrowDown enters the results.
+    await searchButton(page).press('Enter');
+    await expect(page.locator('[data-be-find-input]')).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(page.locator('[data-be-find]')).toBeVisible();
     await expect(page.locator('[data-be-find] .be-fmain').first()).toBeFocused();
@@ -718,24 +725,22 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await expect(page.locator('[data-be-find]')).toHaveCount(0);
   });
 
-  test('two rows (tablet profile at 1100 px): Tab walks row 1 (chip, state, ⋯) before row 2 (tabs, search)', async ({ page }) => {
+  test('two rows: Tab walks the joined controls before the active page tab', async ({ page }) => {
     // a narrower window flips the workbench to its tablet profile on purpose: that is where the default
     // Block Editor panel is narrower than the one-row width
-    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.setViewportSize({ width: 850, height: 800 });
     await bootBlockEditorMock(page, { channel: 'A' });
     await openAmpEditor(page);
     await expect(page.locator('[data-be-head]')).toHaveAttribute('data-be-head-rows', '2');
-    const walk = await tabWalk(page, '[data-be-type]', 11);
-    expect(walk).toEqual(['beType', 'beChannelToggle', 'beEngaged', 'beBypassMode', 'beScene', 'beMore', ...TABS]);
-    await page.keyboard.press('Tab');
-    expect(await focusedPart(page)).toBe('beFindInput');
+    const walk = await tabWalk(page, '[data-be-type]', 7);
+    expect(walk).toEqual(['beType', 'beChannelToggle', 'beFindToggle', 'beEngaged', 'beBypassMode', 'beScene', 'beMore', TABS[0]]);
   });
 
   test('page tabs and ⋯ Arrange work while the flat results show', async ({ page }) => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
     const input = page.locator('[data-be-find-input]');
-    await input.click();
+    await searchButton(page).click();
     await input.fill('a');
     await input.press('Enter');
     await expect(page.locator('[data-be-results]')).toBeVisible();
@@ -744,7 +749,7 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await expect(page.locator('section[data-be-page="Dynamics"]')).toBeInViewport({ ratio: 0.5 });
     await expect(page.locator('[data-be-tab="Dynamics"]')).toHaveAttribute('data-active', 'true');
 
-    await input.click();
+    await searchButton(page).click();
     await page.locator('[data-be-find-all]').click();
     await expect(page.locator('[data-be-results]')).toBeVisible();
     await pickMore(page, 'arrange');
@@ -757,16 +762,17 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
     const input = page.locator('[data-be-find-input]');
-    await input.click();
+    await searchButton(page).click();
     await input.fill('bass');
     await page.locator('[data-be-find-row="k1"] [data-be-find-pin]').click();
     await expect(page.locator('.toast')).toContainText('Pinned Bass');
     await expect(page.locator('.custom-panel .axis-widget.param').filter({ hasText: 'Bass' })).toHaveCount(1);
 
-    // Drive leaves every page, then Unused + Show all lists it — beside the header's own three controls, which
+    // Drive leaves every page, then Unused + Show all lists it - beside the header's own three controls, which
     // are on no page of the default board
     await removeInArrange(page, 'k0');
-    await input.click();
+    // the pinned control adds a panel, so the editor is narrower: search lives behind its toggle then
+    if ((await input.count()) === 0) await page.locator('[data-be-find-toggle]').click();
     await input.fill('');
     const pop = page.locator('[data-be-find]');
     await pop.getByRole('button', { name: 'Unused' }).click();

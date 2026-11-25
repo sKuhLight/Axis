@@ -197,7 +197,7 @@ export interface PlacedRow extends LayoutRow {
 export function pageRows(pg: LayoutPage | null | undefined): PlacedRow[] {
   const rows: PlacedRow[] = Array.isArray(pg?.rows) ? pg.rows : [];
   const extra = (Array.isArray(pg?.pageControls) ? pg.pageControls : []).filter(
-    (c) => !!c && typeof c === 'object' && typeof c.paramId === 'number' && !/^label(sep|bold)|^sectionlabel/i.test(c.rawWidget ?? '')
+    (c) => !!c && typeof c === 'object' && (typeof c.paramId === 'number' || c.widget === 'graph' || c.widget === 'meter') && !/^label(sep|bold)|^sectionlabel/i.test(c.rawWidget ?? '')
   );
   if (!extra.length) return rows;
   const mixer = (r: PlacedRow): boolean => /^mixer$/i.test((r?.section ?? '').trim());
@@ -486,7 +486,7 @@ export function placeLayoutPage(entries: readonly LayoutEntry[], opts: PlacePage
   return layoutPage(entries, opts).items;
 }
 
-export type PageMode = 'positioned' | 'positioned-compact' | 'positioned-plain' | 'rows' | 'rows-compact' | 'rows-plain' | 'rows-only';
+export type PageMode = 'positioned' | 'positioned-compact' | 'positioned-plain' | 'rows' | 'rows-compact' | 'rows-plain' | 'rows-only' | 'compact';
 
 /** Lay out one page within a height budget (in cells): the first of these that fits — with positions
  *  (titles may insert lines, section dividers on lines of their own), then without inserted title lines,
@@ -521,6 +521,116 @@ export function fitLayoutPage(
     if (height(items) <= budget) return { items, mode };
   }
   return { items: rowsOnly(), mode: 'rows-only' };
+}
+
+/** Try placing the mixer beside the parameters and letting tall controls span two source rows.
+ *  The caller compares controls and titles before accepting a compact arrangement. */
+export function compactLayoutPage(
+  entries: readonly LayoutEntry[],
+  opts: PlacePageOptions,
+  budget: number,
+  original: readonly BeItem[]
+): BeItem[][] {
+  const candidates: BeItem[][] = [];
+  const headings = new Set(original.filter((it) => isDivider(it) && it.kind === 'hdiv' && it.label !== 'Mixer').map((it) => it.y));
+  const limit = budget + headings.size;
+  const within = (items: readonly BeItem[]) => bbox(items).R <= limit;
+  const compact = (list: readonly LayoutEntry[]) => {
+    const compactOptions: PlacePageOptions = { ...opts, titles: headings.size ? 'insert' : 'free', sections: 'gap' };
+    const result = layoutPage(list, compactOptions).items;
+    if (within(result) && result.length) return result;
+
+    const spanning = list.filter((e) => e.kind === 'tile' && sizeOf(e.view!).h > SLOT);
+    if (!spanning.length) return null;
+    const spanSet = new Set(spanning);
+    const base = layoutPage(list.filter((e) => !spanSet.has(e)), compactOptions).items;
+    if (!within(base)) return null;
+
+    for (const e of spanning.sort((a, b) => sizeOf(b.view!).w - sizeOf(a.view!).w)) {
+      const { w, h } = sizeOf(e.view!);
+      const old = original.find((it): it is BeControl => isControl(it) && it.key === e.key);
+      // Keep the source column where possible. Place wider visuals first so a narrow meter can
+      // take one of the remaining gaps rather than blocking a full-width visual.
+      const preferredX = old?.x ?? bbox(base).C;
+      let spot: { x: number; y: number } | undefined;
+      let cost = Infinity;
+      for (let y = 0; y <= limit - h; y++) {
+        for (let x = 0; x <= MAXC - w; x++) {
+          const distance = Math.abs(x - preferredX) + Math.abs(y - (old?.y ?? 0)) * MAXC;
+          if (distance < cost && fits(base, x, y, w, h)) {
+            spot = { x, y };
+            cost = distance;
+          }
+        }
+      }
+      if (!spot) return null;
+      base.push({ id: itemId(opts.pageIndex, e.key!), key: e.key!, view: e.view!, ...spot, w, h, row: old?.row ?? e.row });
+    }
+    return base;
+  };
+
+  const mixerSection = (e: LayoutEntry) => e.section.toLowerCase() === 'mixer';
+  if (entries.some((e) => e.kind === 'tile' && mixerSection(e)) && entries.some((e) => e.kind === 'tile' && !mixerSection(e))) {
+    const main = compact(entries.filter((e) => !mixerSection(e)));
+    const mixer = compact(entries.filter(mixerSection));
+    if (main && mixer) {
+      const x = bbox(main).C;
+      if (x + 1 + bbox(mixer).C <= MAXC) {
+        candidates.push([
+          ...main,
+          { id: dividerId(opts.pageIndex, 1000), kind: 'vdiv', label: 'Mixer', x, y: 0, w: 1, h: Math.max(bbox(main).R, bbox(mixer).R) },
+          ...mixer.map((it) => ({ ...it, id: isDivider(it) ? `${it.id}.mixer` : it.id, x: it.x + x + 1 }))
+        ]);
+      }
+    }
+  }
+  const all = compact(entries);
+  if (all) candidates.push(all);
+
+  // Explicit separators can define independent control groups with a different vertical scale.
+  // Pack each group into two rows when the measured pixel projection would add visual rows.
+  const split = entries.findIndex((e) => e.kind === 'sep');
+  if (split > 0 && headings.size === 0) {
+    for (let leftWidth = SLOT; leftWidth < MAXC - SLOT; leftWidth += SLOT) {
+      const left = compactGroup(entries.slice(0, split), leftWidth, opts.pageIndex);
+      if (!left) continue;
+      const right = compactGroup(entries.slice(split + 1), MAXC - leftWidth - 1, opts.pageIndex);
+      if (!right) continue;
+      candidates.push([
+        ...left,
+        { id: dividerId(opts.pageIndex, 1000), kind: 'vdiv', x: leftWidth, y: 0, w: 1, h: budget },
+        ...right.map((it) => ({ ...it, x: it.x + leftWidth + 1 }))
+      ]);
+      break;
+    }
+  }
+  return candidates;
+}
+
+function compactGroup(entries: readonly LayoutEntry[], width: number, pageIndex: number): BeControl[] | null {
+  const tiles = entries.filter((e) => e.kind === 'tile');
+  if (!tiles.length || entries.some((e) => e.kind === 'label')) return null;
+  const items: BeControl[] = [];
+  let shortWidth = width;
+  for (const e of tiles.filter((e) => sizeOf(e.view!).h > SLOT)) {
+    const { w, h } = sizeOf(e.view!);
+    shortWidth -= w;
+    if (shortWidth < 0 || h > 2 * SLOT) return null;
+    items.push({ id: itemId(pageIndex, e.key!), key: e.key!, view: e.view!, x: shortWidth, y: 0, w, h, row: 0 });
+  }
+  let x = 0;
+  let row = 0;
+  for (const e of tiles.filter((e) => sizeOf(e.view!).h <= SLOT)) {
+    const { w, h } = sizeOf(e.view!);
+    if (w > shortWidth) return null;
+    if (x + w > shortWidth) {
+      x = 0;
+      if (++row > 1) return null;
+    }
+    items.push({ id: itemId(pageIndex, e.key!), key: e.key!, view: e.view!, x, y: row * SLOT, w, h, row });
+    x += w;
+  }
+  return items;
 }
 
 /** One exact control of a positioned page in cells (before collisions). */
@@ -575,6 +685,36 @@ export function wrapAnchors<T extends { x: number; y: number; w: number; h: numb
     }
     shift += part * H;
   }
+}
+
+/**
+ * Dividers take no grid space (device layouts and user layouts alike): a divider sits ON the line it heads,
+ * so it never pushes a control down or adds a row. Rows that hold dividers only are dropped, every control
+ * moves up by the number of dropped rows above it, and each divider moves to the top edge of the next control
+ * row (or the page's bottom edge) with zero thickness (`hdiv` h = 0, `vdiv` w = 0). A divider that shared a
+ * row with controls stays on that row's top edge. The item order is kept: the phone layout re-wraps in that
+ * order, so a title must stay ahead of the controls it heads. Pure.
+ */
+export function compactDividers(items: readonly BeItem[]): BeItem[] {
+  const divs = items.filter(isDivider);
+  if (!divs.length) return items as BeItem[];
+  const controls = items.filter(isControl);
+  const controlRows = new Set(controls.map((c) => c.y));
+  const dividerRows = [...new Set(divs.map((d) => d.y))].filter((y) => !controlRows.has(y)).sort((a, b) => a - b);
+  const droppedAbove = (y: number): number => dividerRows.filter((r) => r < y).length;
+  const bottom = controls.reduce((n, c) => Math.max(n, c.y + c.h), 0);
+  const moved = new Map<string, BeItem>();
+  for (const it of controls) moved.set(it.id, { ...it, y: it.y - droppedAbove(it.y) });
+  for (const d of divs) {
+    if (d.kind === 'vdiv') {
+      moved.set(d.id, { ...d, y: 0, h: Math.max(1, bottom), w: 0 });
+      continue;
+    }
+    const next = [...controlRows].filter((y) => y >= d.y).sort((a, b) => a - b)[0];
+    const y = next != null ? next - droppedAbove(next) : Math.max(0, bottom);
+    moved.set(d.id, { ...d, y, h: 0 });
+  }
+  return items.map((it) => moved.get(it.id) ?? it);
 }
 
 /** Places one page. `positioned()` returns null when the safety net turns the page down. */
@@ -641,7 +781,7 @@ class PagePlacer {
         d.w = w;
       }
     }
-    return this.placed;
+    return compactDividers(this.placed);
   }
 
   // ── rows ──

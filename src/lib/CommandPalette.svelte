@@ -1,9 +1,19 @@
 <script lang="ts">
+  import BlockGlyph from './BlockGlyph.svelte';
+  import { tick } from 'svelte';
   import { editor, baseName } from './editor.svelte';
   import { forgefx } from './forgefx';
   import { catFor, shade } from './catalog';
   import { categoryOf, packFor } from './blocks';
   import PaletteShell, { type PaletteShellFilter } from './PaletteShell.svelte';
+  import {
+    BLOCK_LIBRARY_NAME_LIMIT,
+    compatibleLibraryEntry,
+    putBlockLibraryEntry,
+    readBlockLibrary,
+    removeBlockLibraryEntry,
+    type BlockLibraryEntry
+  } from './blockLibrary';
 
   const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };
   const catOf = (name: string) => categoryOf(packFor(name) ?? name);
@@ -22,6 +32,83 @@
   const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
 
   const retype = $derived(editor.paletteMode === 'retype');
+  const libraryTarget = $derived(retype ? editor.blockLibraryTarget : null);
+  const libraryMode = $derived(retype ? editor.blockLibraryMode : null);
+  let libraryEntries = $state<BlockLibraryEntry[]>([]);
+  let selectedLibraryEntry = $state<BlockLibraryEntry | null>(null);
+  let libraryName = $state('');
+  let libraryNameInput = $state<HTMLInputElement | null>(null);
+  let libraryError = $state('');
+  let confirmRemoval = $state(false);
+  const libraryMatches = $derived(libraryEntries.filter((entry) =>
+    entry.family === libraryTarget?.family &&
+    `${entry.name} ${entry.type?.name ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())
+  ));
+
+  $effect(() => {
+    if (!editor.paletteOpen || !libraryMode) return;
+    void libraryTarget?.key;
+    libraryEntries = readBlockLibrary(localStorage);
+    selectedLibraryEntry = null;
+    confirmRemoval = false;
+    libraryError = '';
+    libraryName = '';
+    query = '';
+    hi = 0;
+  });
+  $effect(() => {
+    if (editor.paletteOpen && libraryMode === 'save') {
+      void tick().then(() => libraryNameInput?.focus());
+    }
+  });
+
+  function selectLibraryEntry(entry: BlockLibraryEntry | undefined) {
+    if (!entry || editor.blockLibraryBusy) return;
+    selectedLibraryEntry = entry;
+    confirmRemoval = false;
+    libraryError = '';
+  }
+
+  async function saveLibraryEntry(event: SubmitEvent) {
+    event.preventDefault();
+    const target = libraryTarget;
+    const name = libraryName.trim();
+    if (!name || !target || editor.blockLibraryBusy) return;
+    libraryError = '';
+    try {
+      const entry = await editor.captureBlockLibrary(name, target);
+      putBlockLibraryEntry(localStorage, entry);
+      editor.showToast(`Saved “${entry.name}” to the block library`);
+      editor.blockLibraryMode = 'browse';
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Could not save this block.';
+    }
+  }
+
+  async function loadLibraryEntry(entry: BlockLibraryEntry) {
+    const target = libraryTarget;
+    if (!target || editor.blockLibraryBusy) return;
+    libraryError = '';
+    try {
+      await editor.applyBlockLibrary(entry, target);
+      editor.showToast(`Loaded “${entry.name}” into ${target.display}`);
+      editor.paletteOpen = false;
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Could not load this block.';
+    }
+  }
+
+  function deleteLibraryEntry(entry: BlockLibraryEntry) {
+    try {
+      removeBlockLibraryEntry(localStorage, entry.id);
+      libraryEntries = readBlockLibrary(localStorage);
+      selectedLibraryEntry = null;
+      confirmRemoval = false;
+    } catch {
+      libraryError = 'Could not remove this entry.';
+    }
+  }
+
   const target = $derived(editor.placeTarget ?? editor.firstEmptyCell);
   let cat = $state('all');
   const categories = $derived.by(() => {
@@ -199,7 +286,6 @@
     if (retype) {
       editor.retype(r.value);
       pushTypeRecent(r.value);
-      editor.showToast('Type changed', '#35c9d6');
     } else {
       const t = target;
       if (!t) {
@@ -234,28 +320,102 @@
 
 {#snippet realNamesToggle()}
   {#if retype}
-    <label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>
+    <div class="type-extras">
+      {#if !libraryMode}<label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>{/if}
+      {#if libraryMode || libraryTarget}
+        <button
+          class="library-button"
+          type="button"
+          disabled={editor.blockLibraryBusy}
+          onclick={() => {
+            if (libraryMode) {
+              editor.blockLibraryMode = null;
+              query = '';
+              hi = 0;
+            } else editor.openBlockLibrary('browse');
+          }}
+        >{libraryMode ? 'Types' : 'Library'}</button>
+      {/if}
+    </div>
   {/if}
 {/snippet}
 
 <PaletteShell
   open={editor.paletteOpen}
   mobile={editor.isMobile}
+  label={libraryMode ? 'Block library' : undefined}
   bind:query
   bind:hi
-  placeholder={retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
-  count={`${results.length} result${results.length === 1 ? '' : 's'}`}
-  target={retype ? '↻ Change type' : target ? `✛ Place in cell ${target.row + 1},${target.col + 1}` : 'Grid full'}
+  placeholder={libraryMode ? 'Search saved blocks…' : retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
+  inputLabel={libraryMode ? 'Search saved blocks' : undefined}
+  count={libraryMode ? `${libraryMatches.length} saved` : `${results.length} result${results.length === 1 ? '' : 's'}`}
+  target={libraryMode ? 'Block library' : retype ? '↻ Change type' : target ? `✛ Place in cell ${target.row + 1},${target.col + 1}` : 'Grid full'}
   targetExtra={realNamesToggle}
-  filters={shellFilters}
+  filters={libraryMode ? [] : shellFilters}
   filter={retype ? brand : cat}
   onFilter={setFilter}
-  itemCount={view.flat.length}
-  onPick={(index) => pick(view.flat[index])}
-  onClose={() => (editor.paletteOpen = false)}
-  hints={['↑↓ Navigate', `⏎ ${retype ? 'Change' : 'Place'}`, ...(retype ? [] : ['★ Favorite']), 'Esc Close']}
+  itemCount={libraryMode === 'browse' ? libraryMatches.length : libraryMode === 'save' ? 0 : view.flat.length}
+  onPick={(index) => libraryMode === 'browse' ? selectLibraryEntry(libraryMatches[index]) : libraryMode === null ? pick(view.flat[index]) : undefined}
+  onClose={() => { if (!editor.blockLibraryBusy) editor.paletteOpen = false; }}
+  escapeAnywhere={!!libraryMode}
+  hints={libraryMode ? ['↑↓ Navigate', 'Esc Close'] : ['↑↓ Navigate', `⏎ ${retype ? 'Change' : 'Place'}`, ...(retype ? [] : ['★ Favorite']), 'Esc Close']}
 >
-  {#if loading}
+  {#if libraryMode}
+    <div class="library-panel">
+      {#if libraryError}<p class="library-error" role="alert">{libraryError}</p>{/if}
+      {#if !libraryTarget}
+        <p>Open a block on the connected device to use the library.</p>
+      {:else if libraryMode === 'save'}
+        <form class="library-save" onsubmit={saveLibraryEntry}>
+          <p>Save the current settings of {libraryTarget.display}{libraryTarget.channel ? `, channel ${libraryTarget.channel}` : ''}.</p>
+          <label>
+            Name
+            <input bind:this={libraryNameInput} bind:value={libraryName} maxlength={BLOCK_LIBRARY_NAME_LIMIT} required placeholder={editor.blockType?.name ?? libraryTarget.display} />
+          </label>
+          <div class="library-actions">
+            <button type="submit" class="library-button primary" disabled={!libraryName.trim() || editor.blockLibraryBusy}>{editor.blockLibraryBusy ? 'Saving…' : 'Save'}</button>
+            <button type="button" class="library-button" disabled={editor.blockLibraryBusy} onclick={() => (editor.blockLibraryMode = 'browse')}>Back to library</button>
+          </div>
+        </form>
+      {:else}
+        <button type="button" class="library-button" disabled={editor.blockLibraryBusy} onclick={() => (editor.blockLibraryMode = 'save')}>Save current block</button>
+        {#each libraryMatches as entry, i (entry.id)}
+          <button
+            type="button"
+            class="library-row"
+            class:hi={hi === i}
+            aria-pressed={selectedLibraryEntry?.id === entry.id}
+            onmouseenter={() => (hi = i)}
+            onclick={() => selectLibraryEntry(entry)}
+          >
+            <strong>{entry.name}</strong>
+            <span>{entry.type?.name ?? libraryTarget.display} · firmware {entry.firmware}</span>
+          </button>
+        {:else}
+          <p>{query.trim() ? 'No matching saved blocks.' : 'No saved settings for this block family.'}</p>
+        {/each}
+        {#if selectedLibraryEntry}
+          {@const selected = selectedLibraryEntry}
+          <div class="library-selection">
+            {#if compatibleLibraryEntry(selected, libraryTarget)}
+              <p>Load “{selected.name}” into {libraryTarget.display}{libraryTarget.channel ? `, channel ${libraryTarget.channel}` : ''}.</p>
+            {:else}
+              <p>This entry needs its original device model and firmware.</p>
+            {/if}
+            <div class="library-actions">
+              <button type="button" class="library-button primary" disabled={editor.blockLibraryBusy || !compatibleLibraryEntry(selected, libraryTarget)} onclick={() => loadLibraryEntry(selected)}>{editor.blockLibraryBusy ? 'Loading…' : 'Load'}</button>
+              {#if confirmRemoval}
+                <button type="button" class="library-button" disabled={editor.blockLibraryBusy} onclick={() => deleteLibraryEntry(selected)}>Confirm removal</button>
+                <button type="button" class="library-button" disabled={editor.blockLibraryBusy} onclick={() => (confirmRemoval = false)}>Cancel</button>
+              {:else}
+                <button type="button" class="library-button" disabled={editor.blockLibraryBusy} onclick={() => (confirmRemoval = true)}>Remove entry</button>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      {/if}
+    </div>
+  {:else if loading}
     <div class="empty">Loading…</div>
   {:else if view.flat.length === 0}
     <div class="empty">No matches for “{query}”.</div>
@@ -266,7 +426,7 @@
         {@const cat = chipFor(r)}
         <div class="rowwrap" class:hi={r.fi === hi} class:isplaced={isPlaced(r)}>
           <button class="row" disabled={isPlaced(r)} onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
-            <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
+            <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};"><BlockGlyph glyph={cat.glyph} /></span>
             <span class="rtext">
               <span class="rname">{r.name}</span>
               {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
@@ -287,6 +447,51 @@
 </PaletteShell>
 
 <style>
+  .type-extras {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .library-panel {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+  }
+  .library-panel p {
+    margin: 0;
+    color: var(--textdim);
+    font-size: 13px;
+  }
+  .library-panel .library-error { color: var(--danger); }
+  .library-button,
+  .library-row,
+  .library-save input {
+    min-height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 6px 10px;
+    color: var(--text);
+    font: inherit;
+  }
+  .library-button { justify-self: start; cursor: pointer; }
+  .library-button:disabled { opacity: 0.55; cursor: default; }
+  .library-button.primary,
+  .library-row[aria-pressed='true'] { border-color: var(--accent-border); color: var(--accent); }
+  .library-row {
+    display: grid;
+    gap: 4px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .library-row span { color: var(--textdim); font-size: 11px; }
+  .library-row.hi { background: var(--surface2); }
+  .library-selection,
+  .library-save,
+  .library-save label { display: grid; gap: 8px; }
+  .library-selection { padding-top: 8px; }
+  .library-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .rn {
     margin-left: auto;
     font-size: 11px;

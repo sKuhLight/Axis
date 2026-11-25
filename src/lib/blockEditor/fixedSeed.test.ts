@@ -36,6 +36,15 @@ describe('pickFixed', () => {
     expect(pickFixed([page(['a'], ['x', 'mixer']), page(['b'], ['x', 'mixer']), page(['c'])])).toEqual([]);
   });
 
+  it('can use the common full mixer when an alternate page carries only its subset', () => {
+    const full = (key: string) => page([key], ['level', 'mixer'], ['pan', 'mixer'], ['input', 'mixer', 'select']);
+    const reduced = page(['c'], ['level', 'mixer'], ['pan', 'mixer']);
+    expect(keys(pickFixed([full('a'), full('b'), reduced], true))).toEqual(['level', 'pan', 'input']);
+    expect(keys(pickFixed([full('a'), full('b'), reduced]))).toEqual(['level', 'pan']);
+    expect(keys(pickFixed([full('a'), full('b'), page(['c'], ['level', 'mixer'], ['send', 'mixer'])], true))).toEqual(['level']);
+    expect(keys(pickFixed([full('a'), full('b'), page(['c'])], true))).toEqual([]);
+  });
+
   it('a) moving parameter controls that would empty a page: those stay, the mixer and page-level ones move', () => {
     const pages = [page(['s'], ['a'], ['x', 'mixer']), page(['s'], ['x', 'mixer'])];
     expect(keys(pickFixed(pages))).toEqual(['x']);

@@ -91,6 +91,33 @@ const centre = async (l: Locator) => {
 const pageGrid = (page: Page, name: string) => page.locator(`[data-be-grid][data-page="${name}"]`);
 
 test.describe('Block Editor fixed area', () => {
+  test('a shallow dock uses the selected scale across pages and Fixed and respects the editor minimum', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await bootBlockEditorMock(page, { fixed: true });
+    await openAmpEditor(page);
+    await pickMore(page, 'nav-side');
+    const dock = page.locator('.aw-region-bottom').filter({ has: board(page) });
+    await dock.evaluate((el) => { el.style.height = '225px'; });
+    const values: number[] = [];
+    for (const size of ['s', 'm', 'l']) {
+      await pickMore(page, `size-${size}`);
+      const grid = pageGrid(page, 'Authentic');
+      const cell = Number(await grid.getAttribute('data-c'));
+      values.push(cell);
+      await expect(pageGrid(page, 'Power Amp')).toHaveAttribute('data-c', String(cell));
+      await expect(fixedGrid(page)).toHaveAttribute('data-c', String(cell));
+    }
+    expect(values[1]).toBeGreaterThan(values[0]!);
+    expect(values[2]).toBeGreaterThan(values[1]!);
+    await dock.evaluate((el) => { el.style.height = '120px'; });
+    const height = () => dock.evaluate((el) => el.clientHeight);
+    await expect.poll(height).toBeGreaterThan(120);
+    const large = await height();
+    await pickMore(page, 'size-s');
+    await expect.poll(height).toBeLessThan(large);
+    await expect.poll(height).toBeGreaterThan(120);
+  });
+
   for (const nav of ['top', 'side'] as const) {
     test(`${nav} navigation: the repeated controls show once at the far right and stay put on page changes and scrolling`, async ({ page }) => {
       await countBoardSaves(page);
@@ -112,7 +139,7 @@ test.describe('Block Editor fixed area', () => {
       expect(Math.abs(b.x + b.width - at.x)).toBeLessThan(1.5);
       expect(Math.abs(main.x + main.width - (at.x + at.width))).toBeLessThan(1.5);
       expect(await fixedGrid(page).getAttribute('data-c')).toBe(await pageGrid(page, 'Authentic').getAttribute('data-c'));
-      expect(await fixedGrid(page).getAttribute('data-cols')).toBe('4');
+      expect(await fixedGrid(page).getAttribute('data-cols')).toBe('6');
 
       // every page change and a scroll of the pages leave it where it is
       const knobAt = (await inFixed(page, 'k7').boundingBox())!;
@@ -206,7 +233,7 @@ test.describe('Block Editor fixed area', () => {
     await bootBlockEditorMock(page, { fixed: true });
     await openAmpEditor(page);
     for (const k of HEADER_KEYS) await expect(page.locator(`[data-be-item][data-be-key="${k}"]`)).toHaveCount(0);
-    await page.locator('[data-be-find-input]').click();
+    await page.locator('[data-be-find-toggle]').click();
     for (const k of HEADER_KEYS) await expect(page.locator(`[data-be-find-row="${k}"]`)).toHaveCount(1);
     await page.keyboard.press('Escape');
     await arrange(page);
@@ -280,21 +307,21 @@ test.describe('Block Editor fixed area', () => {
     await expect(lib.locator('[data-be-lib-row="k8"]')).toHaveAttribute('data-on-page', 'true');
     await lib.locator('[data-be-lib-row="k13"]').click(); // Sag, also on Power Amp: allowed
     await expect(inFixed(page, 'k13')).toHaveCount(1);
-    expect(await cellOf(inFixed(page, 'k13'))).toEqual([0, 6, 2, 2]);
+    expect(await cellOf(inFixed(page, 'k13'))).toEqual([0, 4, 2, 2]);
     await expect(page.locator('section[data-be-page="Power Amp"] [data-be-key="k13"]')).toHaveCount(1);
     // keyboard: move, refused past the area's edge, resize, remove — and undo
     await expect(inFixed(page, 'k13')).toHaveClass(/\bsel\b/);
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
-    expect(await cellOf(inFixed(page, 'k13'))).toEqual([2, 6, 2, 2]);
+    expect(await cellOf(inFixed(page, 'k13'))).toEqual([3, 4, 2, 2]);
     await page.keyboard.press('Shift+ArrowDown');
-    expect(await cellOf(inFixed(page, 'k13'))).toEqual([2, 6, 2, 3]);
+    expect(await cellOf(inFixed(page, 'k13'))).toEqual([3, 4, 2, 3]);
     await page.keyboard.press('Delete');
     await expect(inFixed(page, 'k13')).toHaveCount(0);
     await expect(page.locator('.toast')).toContainText('from the fixed area');
     await page.keyboard.press('Control+z');
-    expect(await cellOf(inFixed(page, 'k13'))).toEqual([2, 6, 2, 3]);
+    expect(await cellOf(inFixed(page, 'k13'))).toEqual([3, 4, 2, 3]);
     // a page's tile makes the page the target again
     await selectTile(page, 'k0', board(page));
     await expect(lib.locator('.be-lhint b')).toHaveText('Authentic');
@@ -317,7 +344,7 @@ test.describe('Block Editor fixed area', () => {
     await page.locator('.be-root').first().evaluate((el) => (el.style.maxWidth = '900px'));
     await arrange(page);
     const handle = page.getByRole('separator', { name: 'Width of the fixed area' });
-    await expect(handle).toHaveAttribute('aria-valuenow', '4');
+    await expect(handle).toHaveAttribute('aria-valuenow', '6');
     const c = await fixedGrid(page).getAttribute('data-c');
     await expect.poll(() => board(page).evaluate((el) => el.scrollWidth - el.clientWidth)).toBeGreaterThan(0);
     await board(page).evaluate((el) => (el.scrollLeft = 48));
@@ -326,15 +353,15 @@ test.describe('Block Editor fixed area', () => {
     expect(offset).toBeGreaterThan(0);
     await handle.focus();
     await page.keyboard.press('ArrowLeft'); // the edge moves left: wider
-    await expect(handle).toHaveAttribute('aria-valuenow', '5');
+    await expect(handle).toHaveAttribute('aria-valuenow', '7');
     await expect(handle).toBeFocused();
     expect(await board(page).evaluate((el) => el.scrollLeft)).toBe(offset);
     await page.keyboard.press('ArrowRight');
-    await expect(handle).toHaveAttribute('aria-valuenow', '4');
+    await expect(handle).toHaveAttribute('aria-valuenow', '6');
     await page.keyboard.press('End');
     await expect(handle).toHaveAttribute('aria-valuenow', '8');
     await page.keyboard.press('Control+z');
-    await expect(handle).toHaveAttribute('aria-valuenow', '4');
+    await expect(handle).toHaveAttribute('aria-valuenow', '6');
     // drag it two cells to the left
     const box = (await handle.boundingBox())!;
     const step = Number(c) + Number(await fixedGrid(page).getAttribute('data-g'));
@@ -342,12 +369,12 @@ test.describe('Block Editor fixed area', () => {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 - 2 * step, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
-    await expect(handle).toHaveAttribute('aria-valuenow', '6');
-    expect(await fixedGrid(page).getAttribute('data-cols')).toBe('6');
+    await expect(handle).toHaveAttribute('aria-valuenow', '8');
+    expect(await fixedGrid(page).getAttribute('data-cols')).toBe('8');
     expect(await fixedGrid(page).getAttribute('data-c')).toBe(c); // the frozen cell
-    expect((await storedBoard(page))!.fixed!.cols).toBe(6);
+    expect((await storedBoard(page))!.fixed!.cols).toBe(8);
     await page.locator('[data-be-ab="undo"]').click();
-    await expect(handle).toHaveAttribute('aria-valuenow', '4');
+    await expect(handle).toHaveAttribute('aria-valuenow', '6');
     // narrower: the controls pack again, nothing overlaps or leaves
     await handle.focus();
     await page.keyboard.press('Home');
@@ -413,11 +440,11 @@ test.describe('Block Editor fixed area', () => {
     expect(w).toBeGreaterThanOrEqual(325);
     await page.getByRole('button', { name: 'Maximize Block Editor' }).click();
     await pickMore(page, 'arrange');
-    await expect(fixedGrid(page)).toHaveAttribute('data-cols', '4');
+    await expect(fixedGrid(page)).toHaveAttribute('data-cols', '6');
     const handle = page.getByRole('separator', { name: 'Width of the fixed area' });
     await handle.focus();
     await page.keyboard.press('ArrowRight'); // the edge is on the right here: wider
-    await expect(handle).toHaveAttribute('aria-valuenow', '5');
+    await expect(handle).toHaveAttribute('aria-valuenow', '7');
   });
 
   test('"Find a control…" flashes a control of the area without changing the page', async ({ page }) => {
@@ -425,6 +452,7 @@ test.describe('Block Editor fixed area', () => {
     await openAmpEditor(page);
     await page.locator('[data-be-tab="EQ"]').click();
     await settle(page);
+    await page.locator('[data-be-find-toggle]').click();
     await page.locator('[data-be-find-input]').fill('balance');
     const row = page.locator('[data-be-find-row="k8"]');
     await expect(row.locator('[data-be-find-page="fixed"]')).toHaveText('Fixed area');
@@ -568,7 +596,9 @@ for (const vp of [
       expect(Math.abs(a.width - b.width)).toBeLessThan(1.5);
       const toggle = page.locator('[data-be-fixed-toggle]');
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      expect(await keysIn(band)).toEqual([`e${TRACKING_PID}`, 'k7', 'k8']);
+      // the first line is full: Tracking Mode (two knobs wide) and as many knobs as the band's columns hold
+      const cols = Number(await band.locator('[data-be-grid]').getAttribute('data-cols'));
+      expect(await keysIn(band)).toEqual([`e${TRACKING_PID}`, 'k7', ...(cols >= 8 ? ['k8'] : [])]);
       const t = (await toggle.boundingBox())!;
       expect(Math.min(t.width, t.height)).toBeGreaterThanOrEqual(40);
       await toggle.click();

@@ -197,8 +197,14 @@ describe('buildControlMenu', () => {
   it('nothing to do = no menu (a meter on a phone, or without a workbench)', () => {
     const meter = knob({ ctl: { key: 'meter', kind: 'meter', label: 'Meter', views: ['meter'] }, item: { id: 'm', view: 'meter', w: 2, h: 4 }, pinTargets: null, canSwipe: false });
     expect(buildControlMenu({ ...meter, canLayout: false }, actions())).toEqual([]);
-    // on desktop a meter still has size / move / remove
-    expect(ids(buildControlMenu(meter, actions()))).toEqual(['head', 'size', 'move', 'remove']);
+    const a = actions();
+    const orientation = row(buildControlMenu(meter, a), 'orientation');
+    orientation.items![0]!.run();
+    expect(a.size).toHaveBeenCalledWith(4, 2);
+    orientation.items![1]!.run();
+    expect(a.size).toHaveBeenCalledWith(2, 4);
+    // on desktop a meter has orientation / size / move / remove
+    expect(ids(buildControlMenu(meter, actions()))).toEqual(['head', 'orientation', 'size', 'move', 'remove']);
   });
 
   it('a graph: its notes under the header (the tooltip does not reach touch); notes alone still open the menu', () => {

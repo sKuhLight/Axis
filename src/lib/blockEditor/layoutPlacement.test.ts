@@ -71,8 +71,10 @@ const pos = (items: BeItem[], key: string) => {
 };
 const dividers = (items: BeItem[]) => items.filter(isDivider) as BeDivider[];
 const overlaps = (a: BeItem, b: BeItem) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+/** A line divider covers no cell, so only solid items are compared. */
 const noOverlaps = (items: BeItem[]) => {
-  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) if (overlaps(items[i]!, items[j]!)) return `${items[i]!.id} × ${items[j]!.id}`;
+  const cells = items.filter((it) => it.w > 0 && it.h > 0);
+  for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) if (overlaps(cells[i]!, cells[j]!)) return `${cells[i]!.id} × ${cells[j]!.id}`;
   return null;
 };
 const insidePage = (items: BeItem[]) => items.every((i) => i.x >= 0 && i.y >= 0 && i.x + i.w <= MAXC);
@@ -299,8 +301,8 @@ describe('positioned pages', () => {
 
   it('a section title above the controls gets a line of its own and spans the run below it', () => {
     const items = place([row([title('TONE', at(kx(1), 29)), ...[0, 1, 2, 3, 4].map((k) => knob(k, at(kx(k), 50)))])]);
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 2, y: 0, w: 8, h: 1, label: 'TONE' }]);
-    expect(pos(items, 'k0')).toEqual({ x: 0, y: 1 });
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 2, y: 0, w: 8, h: 0, label: 'TONE' }]);
+    expect(pos(items, 'k0')).toEqual({ x: 0, y: 0 });
     expect(noOverlaps(items)).toBeNull();
   });
 
@@ -313,7 +315,7 @@ describe('positioned pages', () => {
     const [range, lfo] = dividers(roomy);
     expect(range).toMatchObject({ label: 'RANGE', x: 2 });
     expect(lfo).toMatchObject({ label: 'LFO', x: 6, w: 6, y: range!.y }); // over Mode, P2, P3
-    expect(pos(roomy, 'k0').y).toBe(range!.y + 1);
+    expect(pos(roomy, 'k0').y).toBe(range!.y); // the line sits on the row's top edge
     expect(noOverlaps(roomy)).toBeNull();
 
     // two tightly packed knob lines: a line is inserted for the title, the lower line moves down
@@ -321,8 +323,8 @@ describe('positioned pages', () => {
       row([0, 1, 2, 3].map((k) => knob(k, at(kx(k), 50)))),
       row([title('DYNAMICS', at(kx(1), 140)), ...[4, 5, 6, 7].map((k, i) => knob(k, at(kx(i), 160)))])
     ]);
-    expect(dividers(tight)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 2, y: 2, w: 6, h: 1, label: 'DYNAMICS' }]);
-    expect(pos(tight, 'k4')).toEqual({ x: 0, y: 3 });
+    expect(dividers(tight)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 2, y: 2, w: 6, h: 0, label: 'DYNAMICS' }]);
+    expect(pos(tight, 'k4')).toEqual({ x: 0, y: 2 });
 
     // two titles over the same controls: the second would stack under the first — it is left out
     const stacked = place([row([title('A', at(kx(0), 10)), title('B', at(kx(0), 29)), ...[0, 1].map((k) => knob(k, at(kx(k), 50)))])]);
@@ -347,14 +349,14 @@ describe('positioned pages', () => {
     ]);
     expect(dividers(items).map((d) => [d.label, d.x, d.w])).toEqual([['CONFIG', 0, 4]]);
     orderKept(items, ['k0', 'k1']);
-    expect(pos(items, 'k2')).toEqual({ x: 0, y: 3 });
+    expect(pos(items, 'k2')).toEqual({ x: 0, y: 2 });
     // long text is a note, not a title
     expect(entriesOf([row([title('x'.repeat(MAX_TITLE_CHARS + 1)), knob(0)])]).map((e) => e.kind)).toEqual(['gap', 'tile']);
   });
 
   it('bold headings are titles too, unless they show a live parameter of the block', () => {
     const items = place([row([bold('CAB 1', at(kx(0), 29)), ...[0, 1, 2].map((k) => knob(k, at(kx(k), 50))), ctl('label', 5, at(kx(4), 50), 'labelBold', 'Level')])]);
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 0, w: 6, h: 1, label: 'CAB 1' }]);
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 0, w: 6, h: 0, label: 'CAB 1' }]);
     expect(ctlOf(items, 'k5')).toBeTruthy(); // bound to a live parameter: stays a control
     const noEq = new Map([...byKey].filter(([k]) => k !== 'eq')); // (on a block with an EQ graph a label stands for the graph)
     expect(pageEntries([row([ctl('label', null, undefined, 'labelSliderTicks', '0 5 10'), knob(0)])], noEq).map((e) => e.kind)).toEqual(['gap', 'tile']);
@@ -376,8 +378,8 @@ describe('positioned pages', () => {
     const items = place([row([knob(0, at(305, 50)), knob(1, at(397, 50)), sep(at(520, 50)), knob(2, at(535, 50)), knob(3, at(627, 50)), sep(at(750, 50)), knob(4, at(765, 50))])]);
     expect(pos(items, 'k2')).toEqual({ x: 5, y: 0 });
     expect(dividers(items)).toEqual([
-      { id: 'w0.div0', kind: 'vdiv', x: 4, y: 0, w: 1, h: 2 },
-      { id: 'w0.div1', kind: 'vdiv', x: 9, y: 0, w: 1, h: 2 }
+      { id: 'w0.div0', kind: 'vdiv', x: 4, y: 0, w: 0, h: 2 },
+      { id: 'w0.div1', kind: 'vdiv', x: 9, y: 0, w: 0, h: 2 }
     ]);
     // the second separator has no free column (its groups touch): neither is drawn
     const none = place([row([knob(0, at(305, 50)), knob(1, at(397, 50)), sep(at(520, 50)), knob(2, at(535, 50)), knob(3, at(627, 50)), sep(at(710, 50)), knob(4, at(719, 50))])]);
@@ -394,10 +396,10 @@ describe('positioned pages', () => {
       row([knob(4, at(1179, 185)), ctl('button', null, undefined, 'btnBypass', 'Bypass')], 'mixer')
     ]);
     expect([0, 1, 2].map((k) => pos(items, `k${k}`))).toEqual([0, 2, 4].map((x) => ({ x, y: 0 })));
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 2, w: 6, h: 1, label: 'Mixer' }]);
-    expect(pos(items, 'k3')).toEqual({ x: 0, y: 3 });
-    expect(pos(items, 'k4')).toEqual({ x: 0, y: 5 }); // Balance in its own row, not split off
-    expect(pos(items, 'bypass')).toEqual({ x: 2, y: 5 });
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 2, w: 6, h: 0, label: 'Mixer' }]);
+    expect(pos(items, 'k3')).toEqual({ x: 0, y: 2 });
+    expect(pos(items, 'k4')).toEqual({ x: 0, y: 4 }); // Balance in its own row, not split off
+    expect(pos(items, 'bypass')).toEqual({ x: 2, y: 4 });
   });
 
   it('the remainder: gaps before the first flowing control of a row do not count', () => {
@@ -424,9 +426,9 @@ describe('positioned pages', () => {
     expect(isPositionedPage(entriesOf([row([knob(0, at(1, 1)), knob(1)])]))).toBe(false);
     expect([0, 1, 2, 3].map((k) => pos(items, `k${k}`))).toEqual([0, 2, 4, 6].map((x) => ({ x, y: 0 })));
     expect(pos(items, 'k4')).toEqual({ x: 0, y: 2 });
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 4, w: 8, h: 1, label: 'Mixer' }]);
-    expect(pos(items, 'k5')).toEqual({ x: 0, y: 5 });
-    expect(pos(items, 'bypass')).toEqual({ x: 0, y: 7 });
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 4, w: 8, h: 0, label: 'Mixer' }]);
+    expect(pos(items, 'k5')).toEqual({ x: 0, y: 4 });
+    expect(pos(items, 'bypass')).toEqual({ x: 0, y: 6 });
     expect(noOverlaps(items)).toBeNull();
   });
 
@@ -467,8 +469,8 @@ describe('pages laid out by rows', () => {
 
   it('a section change becomes a labelled divider as wide as the controls', () => {
     const items = place([row([knob(0), knob(1), knob(2), knob(3)]), row([knob(4), knob(5)], 'mixer')]);
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 2, w: 8, h: 1, label: 'Mixer' }]);
-    expect(pos(items, 'k4')).toEqual({ x: 0, y: 3 });
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 0, y: 2, w: 8, h: 0, label: 'Mixer' }]);
+    expect(pos(items, 'k4')).toEqual({ x: 0, y: 2 });
     expect(dividers(place([row([knob(0)], 'mixer'), row([knob(1)], 'mixer')]))).toEqual([]);
     expect(dividers(place([{ controls: [knob(0)] }, { controls: [knob(1)] }]))).toEqual([]);
     // sections 'gap': no divider line; a divider only in a free row
@@ -477,9 +479,9 @@ describe('pages laid out by rows', () => {
 
   it('a section title in a row takes a line above it, from the control it precedes over its run', () => {
     const items = place([row([knob(0, col(0)), title('VOICES', at(475, 29)), knob(1, col(2)), knob(2, col(3)), knob(3, col(4)), knob(4, col(6))])]);
-    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 4, y: 0, w: 6, h: 1, label: 'VOICES' }]);
-    expect(pos(items, 'k0')).toEqual({ x: 0, y: 1 });
-    expect(pos(items, 'k4')).toEqual({ x: 12, y: 1 });
+    expect(dividers(items)).toEqual([{ id: 'w0.div0', kind: 'hdiv', x: 4, y: 0, w: 6, h: 0, label: 'VOICES' }]);
+    expect(pos(items, 'k0')).toEqual({ x: 0, y: 0 });
+    expect(pos(items, 'k4')).toEqual({ x: 12, y: 0 });
     const two = place([row([title('LOW'), knob(0, col(0)), title('BAND'), knob(1, col(1)), knob(2, col(2))])]);
     expect(dividers(two).map((d) => [d.label, d.x, d.w])).toEqual([
       ['LOW', 0, 2],
@@ -496,21 +498,21 @@ describe('pages laid out by rows', () => {
     ]);
     expect(dividers(items).map((d) => [d.label, d.x, d.y, d.w])).toEqual([
       ['CAB 1', 6, 0, 8],
-      ['CAB 2', 6, 3, 8],
-      ['Mixer', 0, 6, 14]
+      ['CAB 2', 6, 2, 8],
+      ['Mixer', 0, 4, 14]
     ]);
-    expect([0, 1, 2].map((k) => pos(items, `k${k}`))).toEqual([6, 8, 10].map((x) => ({ x, y: 1 })));
-    expect(pos(items, 'e41')).toEqual({ x: 12, y: 1 }); // end of the CAB 1 row
-    expect(pos(items, 'e42')).toEqual({ x: 12, y: 4 }); // end of the CAB 2 row
-    expect(pos(items, 'k6')).toEqual({ x: 0, y: 7 });
+    expect([0, 1, 2].map((k) => pos(items, `k${k}`))).toEqual([6, 8, 10].map((x) => ({ x, y: 0 })));
+    expect(pos(items, 'e41')).toEqual({ x: 12, y: 0 }); // end of the CAB 1 row
+    expect(pos(items, 'e42')).toEqual({ x: 12, y: 2 }); // end of the CAB 2 row
+    expect(pos(items, 'k6')).toEqual({ x: 0, y: 4 });
   });
 
   it('a row of exact controls on a row page still starts its section (divider first)', () => {
     const items = place([row([knob(0, col(0)), knob(1, col(1))]), row([ctl('meter', 30, at(465, 370), 'meterGainHeadroom')], 'mixer'), row([knob(2)], 'mixer')]);
     expect(isPositionedPage(entriesOf([row([knob(0, col(0)), knob(1, col(1))]), row([ctl('meter', 30, at(465, 370))], 'mixer')]))).toBe(false);
     expect(dividers(items)).toMatchObject([{ y: 2, label: 'Mixer' }]);
-    expect(ctlOf(items, 'meter')).toMatchObject({ x: 0, y: 3, w: 2, h: 4 });
-    expect(pos(items, 'k2')).toEqual({ x: 0, y: 7 });
+    expect(ctlOf(items, 'meter')).toMatchObject({ x: 0, y: 2, w: 2, h: 4 });
+    expect(pos(items, 'k2')).toEqual({ x: 0, y: 6 });
   });
 
   it('garbage positions are ignored (the page flows by rows)', () => {
@@ -530,32 +532,22 @@ describe('height budget (fitLayoutPage)', () => {
   const fit = (budget: number) => fitLayoutPage(entries, { pageIndex: 0 }, budget, rowsOnly);
   const height = (items: BeItem[]) => bbox(items).R;
 
-  it('titles and section dividers while they fit; then without title lines; then without divider lines; then rows; then the rows-only page', () => {
-    const full = fit(6);
+  it('dividers never change the height: the richest placement is chosen whenever its controls fit', () => {
+    const full = fit(30);
     expect(full.mode).toBe('positioned');
-    expect(height(full.items)).toBe(6);
     expect(dividers(full.items).map((d) => d.label)).toEqual(['GAIN', 'TONE', 'Mixer']);
-
-    const compact = fit(5);
-    expect(compact.mode).toBe('positioned-compact');
-    expect(dividers(compact.items).map((d) => d.label)).toEqual(['Mixer']);
-    expect(height(compact.items)).toBe(5);
-
-    const plain = fit(4);
-    expect(plain.mode).toBe('positioned-plain');
-    expect(dividers(plain.items)).toEqual([]);
-    expect(height(plain.items)).toBe(4);
-    expect(pos(plain.items, 'k4')).toEqual({ x: 0, y: 2 }); // the section break is a new line
-
+    expect(dividers(full.items).every((d) => d.h === 0)).toBe(true);
+    const need = height(full.items);
+    expect(fit(need).items).toEqual(full.items); // the budget is the control rows only
+    expect(fit(need - 1).mode).not.toBe('positioned'); // one row short: no longer positioned
     expect(fit(1).mode).toBe('rows-only');
-    expect(fit(1).items).toEqual(rowsOnly());
   });
 
-  it('a page without positions: rows, then rows without title / divider lines', () => {
+  it('a page without positions: rows once its controls fit, whether or not titles are drawn', () => {
     const rowsPage = entriesOf([row([title('T'), knob(0), knob(1)]), row([knob(2)], 'mixer')]);
-    expect(fitLayoutPage(rowsPage, { pageIndex: 0 }, 6, rowsOnly).mode).toBe('rows');
-    expect(fitLayoutPage(rowsPage, { pageIndex: 0 }, 5, rowsOnly).mode).toBe('rows-compact');
-    expect(fitLayoutPage(rowsPage, { pageIndex: 0 }, 4, rowsOnly).mode).toBe('rows-plain');
+    const rows = fitLayoutPage(rowsPage, { pageIndex: 0 }, 30, rowsOnly);
+    expect(rows.mode).toBe('rows');
+    expect(fitLayoutPage(rowsPage, { pageIndex: 0 }, height(rows.items), rowsOnly).items).toEqual(rows.items);
   });
 });
 
@@ -601,7 +593,7 @@ describe('controls that are gone (the header’s, the fixed area’s)', () => {
     expect(items.map((i) => (isDivider(i) ? i.kind : i.key))).toEqual(['k0']);
     const some = without([row([knob(0)]), row([knob(1), knob(2)], 'mixer')], ['k1']);
     expect(dividers(some).map((d) => d.label)).toEqual(['Mixer']);
-    expect(pos(some, 'k2')).toEqual({ x: 0, y: 3 });
+    expect(pos(some, 'k2')).toEqual({ x: 0, y: 2 });
   });
 
   it('a title heads what is left of its group; with nothing left it goes', () => {
@@ -645,9 +637,11 @@ describe('page-level controls', () => {
     expect(pageRows(page([], [drop(41)])).map((r) => r.pageLevel)).toEqual([true]);
   });
 
-  it('entries without a param, titles and separators are not used; without any the rows are the page’s own', () => {
+  it('titles and separators are not used; an unbound graph or meter slot still is', () => {
     const rows = [row([knob(0)])];
-    expect(pageRows(page(rows, [title('X', at(1, 1)), sep(at(1, 1)), bold('Y'), graph(at(1, 1))]))).toBe(rows);
+    const out = pageRows(page(rows, [title('X', at(1, 1)), sep(at(1, 1)), bold('Y'), graph(at(1, 1))]));
+    expect(out.map((r) => !!r.pageLevel)).toEqual([false, true]);
+    expect(out[1]!.controls.map((c) => c.rawWidget)).toEqual(['graph_eq']);
     expect(pageRows({ name: 'P', rows })).toBe(rows);
     expect(pageRows(null)).toEqual([]);
     expect(pageRows(page(rows, [null as never, 'x' as never]))).toBe(rows);

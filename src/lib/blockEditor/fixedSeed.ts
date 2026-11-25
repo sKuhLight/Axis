@@ -6,7 +6,8 @@
 //   a) two pages or more: a control that is on EVERY page moves, whatever its section — unless moving the
 //      parameters-section ones would leave a page without any control: then those stay;
 //   b) exactly one page: the controls of its mixer section move, unless nothing would be left on the page;
-//   c) everything else stays on its page (no "most pages" rule).
+//   c) a repeated complete mixer can supply the rail when other pages have a nonempty subset of it.
+//      Distinct mixer configurations and controls confined to a single page stay on their pages.
 // A page that held nothing but moved mixer / page-level controls goes away (they are in view anyway); when
 // that would be every page, nothing moves at all. Never moved: the header's controls, the EQ graph, graph
 // displays and the loop waveform (bigger than the area), and a control that a page shows under another block's
@@ -39,7 +40,7 @@ const tilesOf = (entries: readonly LayoutEntry[]): LayoutEntry[] => entries.filt
 
 /** The controls that move to the fixed area, in its order (empty = no fixed area). `pages`: the resolved
  *  entries of every page, the header's controls already left out. */
-export function pickFixed(pages: readonly (readonly LayoutEntry[])[]): FixedPick[] {
+export function pickFixed(pages: readonly (readonly LayoutEntry[])[], allowReducedMixer = false): FixedPick[] {
   const shown = pages.map(tilesOf).filter((t) => t.length > 0);
   if (!shown.length) return [];
   const first = shown[0]!;
@@ -50,6 +51,18 @@ export function pickFixed(pages: readonly (readonly LayoutEntry[])[]): FixedPick
   if (shown.length === 1) moved = first.filter((e) => movable(e) && !e.pageLevel && isMixerSection(e.section));
   else {
     moved = first.filter((e) => movable(e) && keysOf.every((k) => k.has(e.key!)));
+    if (allowReducedMixer) {
+      const mixers = shown.map((tiles) => tiles.filter((e) => !e.pageLevel && isMixerSection(e.section)));
+      const complete = mixers.reduce((a, b) => (a.length >= b.length ? a : b));
+      const matches = (e: LayoutEntry) => complete.some((c) => c.key === e.key && c.view === e.view);
+      // A reduced mixer still has at least one of the same controls. If a page swaps in a different
+      // control, its mixer stays local. Require the complete set on more than one page.
+      if (mixers.every((m) => m.length && m.every(matches)) && mixers.filter((m) => m.length === complete.length).length > 1) {
+        const already = new Set(moved.map((e) => e.key!));
+        moved.push(...complete.filter((e) => movable(e) && !already.has(e.key!) &&
+          shown.every((page) => page.every((entry) => entry.key !== e.key || isMixerSection(entry.section)))));
+      }
+    }
     const set = new Set(moved.map((e) => e.key!));
     if (keysOf.some((k) => [...k].every((key) => set.has(key)))) moved = moved.filter((e) => rank(e) !== 2);
   }

@@ -193,7 +193,7 @@ describe('add / remove', () => {
     expect(addControl(r.board, 'A', { key: 'k1', view: 'knob' }, null, ids)).toMatchObject({ ok: false, reason: 'duplicate' });
     expect(addControl(r.board, 'A', { key: 'k3', view: 'knob' }, { x: 1, y: 0 }, ids)).toMatchObject({ ok: false, reason: 'collision' });
     const d = addDivider(r.board, 'A', 'hdiv', null, ids, 'Mix');
-    expect(locate(d.board, d.id!)!.item).toMatchObject({ kind: 'hdiv', label: 'Mix', w: 6, h: 1 });
+    expect(locate(d.board, d.id!)!.item).toMatchObject({ kind: 'hdiv', label: 'Mix', w: 4, h: 0 }); // a line, not a cell
     expect(removeItem(d.board, 'a').board.boards.A!.some((i) => i.id === 'a')).toBe(false);
   });
 });

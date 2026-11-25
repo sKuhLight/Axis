@@ -2744,3 +2744,52 @@ Branch `feature/block-editor-fixed-area`, on top of ROUND BE-9 (`a830d76`). The 
 - `npm run check`: 0 errors and 0 warnings. `npm test`: 2,924 passed across 184 files. `npm run build`: passed.
 - Chromium exercised the built app through an in-process mock harness for the 5197 origin because Windows denied socket connections to localhost. The full set covered 279 cases. 278 passed in one run, then the tablet target-size test passed on three repeats with a tolerance for Chromium sub-pixel rounding. Spec 46 passed 63/63 across three repeats.
 - Reviewed dark and light screenshots of Top and Side at 1440, 1024 and 834 px, the closed and expanded 390×664 band, and the right-edge select.
+
+## Block Editor scale in the desktop and tablet dock
+
+- The scale uses the room available for two standard control rows and a full 12-control page. Fixed has its own width and shares the page scale. Pages with extra rows scroll, and a taller page no longer determines the scale for the block.
+- Small, Medium and Large set distinct scale factors, cell limits and minimum editor heights. The dock minimum accounts for the measured editor chrome and leaves room for the Signal Grid. The phone still wraps at four controls per row.
+- Device defaults prefer two rows where the controls fit. More can use all 12 slots on each row beside Fixed. Earlier untouched defaults can migrate, and edited layouts keep their placements.
+
+## Header feedback, meter telemetry, AMP EQ and custom-panel dividers
+
+- Page tabs scroll and drag without changing the page (wheel, Arrow/Home/End, pointer capture), the active tab is revealed after navigation or resize, and the strip is centred while the top controls stop re-flowing at 940 px.
+- Search, Engaged | Bypass mode | Scene Ignore and ⋯ are one joined group at the type picker's 36 px (42 px on touch). The search field widens only while the header is one row and at least 1240 px.
+- The block accent reaches the tab highlight and every editable control: tiles map the block colour onto the shared accent variables, so faders and sliders follow it like knobs.
+- A parameter the layout serves as a meter becomes a read-only meter entry with no knob/fader/slider views. Its reading is bound by the served monitor symbol; a named reading with a normalized value is the only fallback.
+- The Amp Input EQ is drawn as a parametric EQ graph (peak, low cut, high cut) from `DISTORT_INEQ*`; the Output EQ is a graphic EQ over the fixed-frequency Output EQ page. Both are resolved per device from the shipped catalogs and layouts (`feature/block-editor-eq-visuals` in forgefx-midi and ForgeFX), never from ids in Axis. Pages that name their positions (Low/Mid/High) have no frequencies to draw.
+- The two-row default re-flows a page only when every title and divider survives: a positioned page that would fit two rows only by losing its group labels keeps its own placement.
+- AMP layout graph slots key to `inputEq`; the graphic Output EQ slot is added only to an Output EQ page with at least three fixed frequencies.
+- Block glyphs are inline SVG from the PTN icon set, with the licences in `legal/icons/`; the grid, type chip, pickers, palette and convert view all render them through `BlockGlyph`.
+- Custom panels have horizontal and vertical dividers with a label and, for the vertical one, a row span; both are repeatable (a second divider is a new widget, not a move).
+
+### Verification
+- `npm run check`: 0 errors and 0 warnings. `npm test`: 2,946 passed across 188 files. `npm run build`: passed.
+- Playwright specs 40-47 (the whole Block Editor set): 153 passed on the system Chrome (the bundled Chromium revision for this Playwright version is not installed here; a local-only config supplied `channel: chrome`, not committed).
+- forgefx-midi `feature/block-editor-eq-visuals`: `npm run build` and 102 tests pass (15 visuals cases, including the new AMP EQ case). ForgeFX `feature/block-editor-eq-visuals`: typecheck and 41 suites pass against that codec build (block-visuals suite now pins the AMP Input/Output EQ on all three gen-3 devices).
+
+## Redesign review follow-up
+
+- The control search uses an icon at every width. It opens a 320 px popover and moves focus into the field. Closing the search returns focus to the button. Reopening it lets the user refine the flat results in place.
+- The left navigation uses the PTN SVGs for Grid, Presets, Footswitches, Controllers, Live, Setup and Account. Scenes and Theme use matching SVGs.
+
+## FM3 preset loading and live meter demand
+
+- METER starts off. Axis requests live block monitors when METER is on and a visible tile uses the readings. Scrolling the last consumer out of view stops the requests. The Looper waveform still follows its own visibility.
+- ForgeFX device reads recovered on Windows under Node 20. The FM3 returned all 512 full summaries in 12.4 seconds and the three post-switch grid requests each completed in 1.1–1.5 seconds. The Axis Preset Browser rebuilt the cache in 27.1 seconds with zero failed reads and zero live block monitor requests during the scan.
+- Four focused browser tests passed for the meter toggle, the off-screen Amp meter, compressor gain reduction, and the Looper waveform.
+
+## Dividers take no grid space
+
+- A divider now sits ON a grid line instead of occupying a cell: `addDivider` gives an `hdiv` h = 0 and a `vdiv` w = 0, spanning the controls' own extent, and "Add divider" walks to the first line that has none so repeated dividers stack instead of overlapping. Rotating keeps it a line (the fixed area keeps cell-sized dividers, which it has to pack).
+- `BeControl` draws a divider as an absolutely positioned band centred on that line (`divBox`), outside the CSS grid flow, so adding or removing one changes neither the page height nor any control's position.
+- Verified in the browser: adding a divider leaves `data-rows`, the page height and every control's top unchanged; the arrange spec 43 (27 tests) passes; Axis check clean, 189 files / 2,965 tests pass.
+- Device layouts are compacted too: `compactDividers` (layoutPlacement, the one `Placement` exit) drops rows that hold only dividers, moves every control up by the dropped rows above it and puts each divider on the next control row's top edge (or the page's bottom edge) with zero thickness. `cleanDivider` keeps that zero thickness through `normalizeBoard`, and `fits` lets a zero-thickness divider share a row edge with a control (it covers no cell). Device pages therefore no longer keep an empty line under a section title.
+- Divider labels are never clipped any more: the band lets its label overflow (`.be-tile.divider { overflow: visible }`, vertical labels start at the band's top edge).
+- The band IS the grid gap (`divBox` uses `g`), so it can never cover the row above or beside it: a horizontal divider's band fills the gap between two rows, a vertical one the gap between two columns, and `PAD_Y` 10 → 16 gives a title heading the first row the room it needs above the grid (the grid itself moves down, so a top title stops overlapping the first row).
+- Gap 4 → 6 px (5 → 7 for Large) with the pitch kept: `cmax` drops by the same 2 px (52 → 50, 70 → 68) and `phoneMax` likewise, so the controls get 2 px narrower and the space between them 2 px wider, while no page re-flows, spills a control onto "More" or changes width. `widthCell` now takes the fixed area's real column count (it assumed a knob's 2), so pages keep their 24 columns beside a wider area instead of being squeezed.
+- The gap is now the divider band itself: 4 → 12 px (s), 4 → 14 (m), 5 → 16 (l), with `cmax`/`phoneMax` lowered by the same delta (50 → 42, 68 → 59, 40 → 40) so the pitch at the cap does not grow and no page re-flows or spills. The phone keeps a slightly smaller knob (74 px at 390) and the band's first line holds two knobs instead of three at 360 px.
+- Arrange shows a divider's drop preview as the LINE it becomes (`be-ghost.line`), not a one-row cell: the pointer snaps to the nearest grid line, and the preview draws centred in that gap.
+- `phoneWrap` puts a compacted heading back on a line of its own (one inserted line per heading row, everything below shifts), so the phone keeps every title above the rows it heads; `compactDividers` no longer reorders the page (it maps the input order), which the phone's re-wrap depends on.
+
+

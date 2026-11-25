@@ -1,7 +1,7 @@
 <script lang="ts">
   // A read-only graph tile's content: one served block visual drawn from the block's live values (the same
   // ones its knobs show). All reading and math live in visuals/graphModel.ts; this only renders the plot it
-  // returns, the live gain-reduction bar of a dynamics graph (while metering is on) and the LFO playhead.
+  // returns, the live gain-reduction bar and the LFO playhead.
   // The playhead runs on the surface's shared clock (≤ 30 fps), only while this tile is on screen, the page
   // is visible, nothing is being arranged and no reduced motion is asked for; it shows the RATE, not the
   // device's real LFO phase (the tooltip says so). Reading never writes. Colours: theme tokens only.
@@ -59,10 +59,10 @@
     return () => io.disconnect();
   });
 
-  // ── live gain reduction (dynamics, only while metering is on) with a peak hold ──
+  const monitors = $derived(host.mons);
   /** Scale floor (dB): the served monitor's own range where it has one, else the kind's fallback. */
-  const grMinDb = $derived(plot.gr ? grScaleMinDb(host.mons, plot.gr.minDb) : GR_FALLBACK_MIN_DB.compressor);
-  const grDb = $derived(plot.gr && host.meteringOn ? gainReductionDb(host.mons, grMinDb) : null);
+  const grMinDb = $derived(plot.gr ? grScaleMinDb(monitors, plot.gr.minDb) : GR_FALLBACK_MIN_DB.compressor);
+  const grDb = $derived(plot.gr ? gainReductionDb(monitors, grMinDb) : null);
   let peak = $state<GrPeak | null>(null);
   /** A slow tick while a reading is shown, so the held peak falls back while the reading stays steady. */
   let nowMs = $state(Date.now());

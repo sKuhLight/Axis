@@ -1,9 +1,8 @@
 // Block Editor fixed area on screen: where it goes, how big it is, and what that leaves for the pages.
 //
 // - Column (desktop and tablet): at the far right of the board area, outside the pages' scroller. Pages and
-//   column share the 24-cell reference: the pages are measured against 24 − the area's cells (a wider page
-//   takes as many as it needs), so the one cell size does not drop needlessly — and the column is drawn with
-//   exactly the pages' cell. The column scrolls inside its own viewport, which stops above a dock opener.
+//   column share one cell size. The scale reserves width for a full 24-cell page and one Fixed control per row.
+//   The column scrolls inside its own viewport, which stops above a dock opener.
 // - Band (phone, and an editor so narrow that a column would leave the pages less than PAGES_MIN_W): pinned at
 //   the bottom, re-packed to at most four knobs a row; the first row always shows, the rest behind a toggle.
 //   The room on its right holds the toggle; on the workbench's phone it also keeps the controls clear of the
@@ -12,9 +11,9 @@
 //   themselves (a band takes board height, a column takes board width): the same input always settles.
 // Pure numbers in, numbers out — no DOM (fixedLayout.test.ts).
 
-import { availableArea, CMIN, DENSITY, PAD_X, type BeDensity, type BeNav, type PageLayout } from './boardGeometry';
-import { bbox, FIXED_MAX_COLS, MAXC, PHONE_COLS, reflowPack, type BeItem, type BeRect } from './boardModel';
-import { layoutBoardPages, sharedCell, SPINE_W, spareRowsFor, STRIP_EXTRA, type BoardLayoutInput, type BoardPage } from './boardView';
+import { availableArea, CMIN, DENSITY, fitBoardCell, PAD_X, referenceHeightCell, type BeDensity, type BeNav, type PageLayout } from './boardGeometry';
+import { bbox, BE_SPEC, FIXED_MAX_COLS, MAXC, PHONE_COLS, reflowPack, type BeItem, type BeRect } from './boardModel';
+import { layoutBoardPages, SPINE_W, spareRowsFor, STRIP_EXTRA, type BoardLayoutInput, type BoardPage } from './boardView';
 
 /** The column's divider line, and its padding (the top navigation's spine carries the label, like a page's). */
 export const FIXED_DIVIDER = 1;
@@ -46,17 +45,12 @@ export const fixedColumnW = (cols: number, c: number, g: number, nav: BeNav, doc
 /** Horizontal chrome the pages keep beside their grid (padding, and in the strip the spine). */
 const pagesChrome = (nav: BeNav): number => 2 * PAD_X + (nav === 'top' ? STRIP_EXTRA : 0);
 
-/** The pages' share of the 24-cell reference: what the fixed area leaves, or as many cells as the widest page
- *  needs. */
-export function pageRefCols(pages: readonly BoardPage[], fixedCols: number): number {
-  const widest = Math.max(1, ...pages.map((p) => (p.items.length ? bbox(p.items).C : 1)));
-  return Math.min(MAXC, Math.max(1, MAXC - fixedCols, widest));
-}
-
-/** Cell size the width gives pages and column together (not rounded, no limits). */
-export function widthCell(mainW: number, nav: BeNav, gap: number, refCols: number, fixedCols: number, dockGutter = false): number {
-  const room = (mainW || 800) - pagesChrome(nav) - fixedChrome(nav, dockGutter) - (refCols - 1) * gap - (fixedCols - 1) * gap;
-  return room / (refCols + fixedCols);
+/** Cell size the width gives pages and column together (not rounded, no limits). `cols` is the fixed
+ *  area's real width, so the pages always keep their MAXC columns beside it. */
+export function widthCell(mainW: number, nav: BeNav, gap: number, dockGutter = false, cols = BE_SPEC.knob.w): number {
+  const fixedCols = Math.max(1, cols);
+  const room = (mainW || 800) - pagesChrome(nav) - fixedChrome(nav, dockGutter) - (MAXC - 1) * gap - (fixedCols - 1) * gap;
+  return room / (MAXC + fixedCols);
 }
 
 export interface FixedPlaceInput {
@@ -64,7 +58,6 @@ export interface FixedPlaceInput {
   nav: BeNav;
   density: BeDensity;
   phone: boolean;
-  refCols: number;
   cols: number;
   dockGutter?: boolean;
 }
@@ -74,7 +67,7 @@ export function fixedPlace(i: FixedPlaceInput): 'column' | 'band' {
   if (i.phone) return 'band';
   if (!i.mainW) return 'column';
   const d = DENSITY[i.density] ?? DENSITY.m;
-  const c = Math.max(CMIN, Math.min(d.cmax, Math.floor(widthCell(i.mainW, i.nav, d.gap, i.refCols, i.cols, i.dockGutter))));
+  const c = fitBoardCell(i.density, widthCell(i.mainW, i.nav, d.gap, i.dockGutter, i.cols));
   return i.mainW - fixedColumnW(i.cols, c, d.gap, i.nav, i.dockGutter) < PAGES_MIN_W ? 'band' : 'column';
 }
 
@@ -120,7 +113,7 @@ export function bandLayout(items: readonly BeItem[], contentW: number, density: 
   const g = d.gap;
   const fit = 2 * Math.floor((contentW + g) / (CMIN + g) / 2);
   const cols = Math.max(2, Math.min(PHONE_COLS, fit));
-  const c = Math.max(CMIN, Math.min(d.cmax, Math.floor((contentW - (cols - 1) * g) / cols)));
+  const c = Math.max(CMIN, Math.min(d.phoneMax, Math.floor((contentW - (cols - 1) * g) / cols)));
   const r = reflowPack(items, cols);
   const rects = Object.values(r.pos);
   const firstRows = Math.max(1, ...rects.filter((p) => p.y === 0).map((p) => p.h));
@@ -147,19 +140,22 @@ export interface EditorLayout {
 /** Pages and fixed area with ONE cell size. `fixed` = the area's width and drawn items; null = none. */
 export function layoutEditor(pages: readonly BoardPage[], fixed: { cols: number; items: readonly BeItem[] } | null, input: EditorLayoutInput): EditorLayout {
   const { mainW, clearCorner, dockGutter, arrangePlace, ...base } = input;
-  if (!fixed) return { layouts: layoutBoardPages(pages, base), fixed: null };
   const d = DENSITY[input.density] ?? DENSITY.m;
   const g = d.gap;
-  const refCols = pageRefCols(pages, fixed.cols);
-  const place = (input.editMode && arrangePlace) || fixedPlace({ mainW, nav: input.nav, density: input.density, phone: !!input.phone, refCols, cols: fixed.cols, dockGutter });
+  const area = availableArea(mainW || 800, input.bodyH, input.nav);
+  const c = input.editMode && input.frozenCell
+    ? input.frozenCell
+    : fitBoardCell(input.density, widthCell(mainW, input.nav, g, dockGutter, fixed?.cols), referenceHeightCell(area.Ha, g));
+  const pageInput = { ...base, sharedCell: c };
+  if (!fixed) return { layouts: layoutBoardPages(pages, pageInput), fixed: null };
+  const place = (input.editMode && arrangePlace) || fixedPlace({ mainW, nav: input.nav, density: input.density, phone: !!input.phone, cols: fixed.cols, dockGutter });
   const spare = input.editMode ? spareRowsFor([...pages, { page: '', items: fixed.items }]) : 0;
   const content = fixed.items.length ? bbox(fixed.items).R : 0;
 
   if (place === 'band') {
-    const layouts = layoutBoardPages(pages, { ...base, ...(input.editMode ? { spareRows: spare } : {}) });
+    const layouts = layoutBoardPages(pages, { ...pageInput, ...(input.editMode ? { spareRows: spare } : {}) });
     const side = clearCorner ? BAND_CLEAR_W : BAND_SIDE_W;
     if (input.editMode) {
-      const c = input.frozenCell && input.frozenCell > 0 ? input.frozenCell : CMIN;
       const rows = Math.max(1, content + spare);
       const H = rows * (c + g) - g;
       return { layouts, fixed: { place, c, g, cols: fixed.cols, rows, W: fixed.cols * (c + g) - g, H, width: 0, side: 0, firstRows: rows, more: 0 } };
@@ -168,21 +164,12 @@ export function layoutEditor(pages: readonly BoardPage[], fixed: { cols: number;
     return { layouts, fixed: { place, ...b, width: 0, side } };
   }
 
-  const area = availableArea(mainW || 800, input.bodyH, input.nav);
-  const heights = pages.map((p) => (p.items.length ? bbox(p.items).R : 1));
-  const fit = Math.min(d.cmax, widthCell(mainW, input.nav, g, refCols, fixed.cols, dockGutter), ...heights.map((R) => (area.Ha - (R - 1) * g) / R));
-  let c = Math.max(CMIN, Math.floor(fit));
-  if (input.editMode && input.frozenCell && input.frozenCell > 0) c = input.frozenCell;
   const width = fixedColumnW(fixed.cols, c, g, input.nav, dockGutter);
   const layouts = layoutBoardPages(pages, {
-    ...base,
+    ...pageInput,
     bodyW: Math.max(1, (mainW || 800) - width),
-    refCols,
-    maxCell: c,
     ...(input.editMode ? { spareRows: spare } : {})
   });
-  // pages and column agree on the cell by construction; a board of re-flowed pages keeps the smallest one
-  if (!input.editMode) c = sharedCell(layouts) ?? c;
   const room = Math.floor((area.Ha + g) / (c + g));
   const rows = input.editMode ? Math.max(content + spare, room) : Math.max(1, content);
   const H = rows * (c + g) - g;

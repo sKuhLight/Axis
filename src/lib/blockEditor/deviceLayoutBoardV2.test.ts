@@ -46,12 +46,11 @@ describe('buildDeviceLayoutBoardV2', () => {
     const G = b.boards.Gate!;
     expect(find(G, 'k0')).toMatchObject({ id: 'w0.k0', view: 'knob', x: 0, y: 0, w: 2, h: 2, row: 0 });
     expect(find(G, 'k1')).toMatchObject({ x: 2, y: 0, row: 0 });
-    // the spacer advances one knob slot (2 cells)
-    expect(find(G, 'meter')).toMatchObject({ view: 'meter', x: 4 + GAP_CELLS, y: 0, w: 2, h: 4, row: 0 });
-    // the next row starts below the tallest item of the previous one (meter, 4 cells)
-    expect(find(G, 'e4')).toMatchObject({ view: 'select', x: 0, y: 4, row: 1 });
-    expect(find(G, 'e9')).toMatchObject({ view: 'switch', x: 2, y: 4, row: 1 });
-    expect(find(G, 'k5')).toMatchObject({ view: 'slider', x: 4, y: 4, w: 6, h: 1, row: 1 });
+    // The meter spans both rows and moves right to clear the slider.
+    expect(find(G, 'meter')).toMatchObject({ view: 'meter', x: 10, y: 0, w: 2, h: 4, row: 0 });
+    expect(find(G, 'e4')).toMatchObject({ view: 'select', x: 0, y: 2, row: 1 });
+    expect(find(G, 'e9')).toMatchObject({ view: 'switch', x: 2, y: 2, row: 1 });
+    expect(find(G, 'k5')).toMatchObject({ view: 'slider', x: 4, y: 2, w: 6, h: 1, row: 1 });
     expect(G.some((i) => 'key' in i && i.key === 'bypass')).toBe(false); // the header shows it
     expect(b.variantSig).toBe(layoutVariantSig(lay));
     // as before the fixed area: the bypass button on its row
@@ -80,6 +79,31 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(more.map((i) => ('key' in i ? i.key : ''))).toEqual(['k1', 'k5', 'e4', 'e9', 'meter']);
     expect(find(more, 'k1')).toMatchObject({ x: 0, y: 0, w: 2, h: 2 });
     expect(find(more, 'meter')).toMatchObject({ x: 8, y: 0, w: 2, h: 4 });
+  });
+
+  it('keeps overflow controls reachable in additional two-row pages', () => {
+    const params = Array.from({ length: 30 }, (_, id) => ({ id, name: `P${id}` }));
+    const l = layout([{ name: 'P', rows: [{ controls: [ctl('knob', 0)] }] }]);
+    const b = buildDeviceLayoutBoardV2(l, buildCatalog({ params, enums: [] }))!;
+    expect(b.pageOrder).toEqual(['P', 'More', 'More 2']);
+    expect(bbox(b.boards.More!).R).toBe(4);
+    expect(bbox(b.boards['More 2']!).R).toBe(2);
+    expect([...b.boards.More!, ...b.boards['More 2']!].map((c) => 'key' in c && c.key)).toEqual(params.slice(1).map(({ id }) => `k${id}`));
+  });
+
+  it('uses the graphic EQ controls for the live gains once and keeps unrelated page choices', () => {
+    const eqPage = { name: 'Output EQ', rows: [{ controls: [ctl('slider', 0), ctl('slider', 1)] }],
+      pageControls: [ctl('dropdown', 4, 'Type'), ctl('graph', null, 'Output EQ', { graphKey: 'outputEq' })] };
+    const c = buildCatalog({
+      params: [{ id: 0, name: '120 Hz' }, { id: 1, name: '240 Hz' }], enums: [{ id: 4, name: 'Type', options: opts(4) }],
+      visuals: [{ key: 'outputEq', title: 'Output EQ', kind: 'eq', mode: 'graphic', roles: {}, bands: [
+        { key: 'low', centerHz: 120, gain: 0 }, { key: 'high', centerHz: 240, gain: 1 }
+      ] }]
+    });
+    const b = buildDeviceLayoutBoardV2(layout([eqPage]), c)!;
+    expect(b.pageOrder).toEqual(['Output EQ']);
+    expect(b.boards['Output EQ']!.flatMap((it) => 'key' in it ? [it.key] : [])).toEqual(['e4', 'graph:outputEq']);
+    expect(bbox(b.boards['Output EQ']!).R).toBe(4);
   });
 
   it('makes repeated page names unique and skips empty pages', () => {
@@ -151,13 +175,13 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(b.pageOrder).toEqual(['Amp', 'Tall', 'More']);
     const A = b.boards.Amp!;
     expect(A.find((i) => 'kind' in i && i.kind === 'hdiv' && i.label === 'GAIN')).toMatchObject({ x: 0, y: 0, w: 4 });
-    expect(find(A, 'k0')).toMatchObject({ x: 0, y: 1 });
-    expect(find(A, 'k1')).toMatchObject({ x: 2, y: 1 });
-    expect(find(A, 'e9')).toMatchObject({ x: 0, y: 3, view: 'switch' });
-    expect(find(A, 'k5')).toMatchObject({ x: 2, y: 3 });
-    expect(A.find((i) => 'kind' in i && i.label === 'Mixer')).toMatchObject({ kind: 'hdiv', x: 0, y: 5, h: 1 });
-    expect(find(A, 'e4')).toMatchObject({ x: 0, y: 6, view: 'select' });
-    expect(find(A, 'bypass')).toMatchObject({ x: 2, y: 6, view: 'action' });
+    expect(find(A, 'k0')).toMatchObject({ x: 0, y: 0 });
+    expect(find(A, 'k1')).toMatchObject({ x: 2, y: 0 });
+    expect(find(A, 'e9')).toMatchObject({ x: 0, y: 2, view: 'switch' });
+    expect(find(A, 'k5')).toMatchObject({ x: 2, y: 2 });
+    expect(A.find((i) => 'kind' in i && i.label === 'Mixer')).toMatchObject({ kind: 'hdiv', x: 0, y: 4, h: 0 });
+    expect(find(A, 'e4')).toMatchObject({ x: 0, y: 4, view: 'select' });
+    expect(find(A, 'bypass')).toMatchObject({ x: 2, y: 4, view: 'action' });
     expect(b.boards.More!.map((i) => ('key' in i ? i.key : ''))).toEqual(['meter']);
     expect(b.variantSig).toBe(layoutVariantSig(positioned));
     const keys = catalog.map((c) => c.key);
@@ -165,17 +189,18 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(buildDeviceLayoutBoardV2(positioned, catalog, { withoutFixed: true })).toEqual(b);
   });
 
-  it('the default: the repeated mixer control is in the fixed area, the rest keeps its exact positions and titles', () => {
+  it('the default: the repeated mixer control is in the fixed area, the rest keeps its positions and its title line', () => {
     const modes: string[] = [];
     const b = buildDeviceLayoutBoardV2(positioned, catalog, { onPage: (p, m) => modes.push(`${p}:${m}`) })!;
     expect(modes).toEqual(['Amp:positioned', 'Tall:rows']);
     const A = b.boards.Amp!;
-    expect(A.find((i) => 'kind' in i && i.kind === 'hdiv' && i.label === 'GAIN')).toMatchObject({ x: 0, y: 0, w: 4 });
-    expect(find(A, 'k0')).toMatchObject({ x: 0, y: 1 });
-    expect(find(A, 'k5')).toMatchObject({ x: 2, y: 3 });
+    expect(find(A, 'k0')).toMatchObject({ x: 0, y: 0 });
+    expect(find(A, 'k5')).toMatchObject({ x: 2, y: 2 });
+    // the GAIN title stays: a two-row re-flow that dropped it would not be the device layout
+    expect(A.find((i) => 'kind' in i && i.label === 'GAIN')).toMatchObject({ kind: 'hdiv', x: 0, y: 0 });
     // the mixer row is gone: no divider for it, nothing under the knobs
     expect(A.some((i) => 'kind' in i && i.label === 'Mixer')).toBe(false);
-    expect(bbox(A).R).toBe(5);
+    expect(bbox(A).R).toBe(4);
     // the shared parameter controls (k0, k1, k5) would leave "Tall" empty: they stay, only the mixer's moves
     expect(b.fixed).toEqual({ cols: 2, items: [{ id: 'wf.e4', key: 'e4', view: 'select', x: 0, y: 0, w: 2, h: 2 }] });
     expect(b.boards.Tall!.map((i) => ('key' in i ? i.key : ''))).toEqual(['k0', 'k1', 'k5']);
@@ -195,13 +220,14 @@ describe('buildDeviceLayoutBoardV2', () => {
     // before: rows only with everything is 4 high (the Amp page and the meter on "More"), and the positioned
     // page (7 rows with its title line and divider, 6 / 6 without) gave way to plain rows
     expect(tallest(buildDeviceLayoutBoardV2(alone, catalog, { rowFlowOnly: true }))).toBe(4);
-    expect(modes({ withoutFixed: true })).toEqual(['Amp:rows-plain']);
-    // now the mixer is off the page: its positions fit the same height (the title line would be a fifth row)
-    expect(modes({})).toEqual(['Amp:positioned-compact']);
+    expect(modes({ withoutFixed: true })).toEqual(['Amp:rows']);
+    // now the mixer is off the page: its positions fit the same height (the title line would be a fifth row).
+    // This page has no titles to lose, so the two-row re-flow applies.
+    expect(modes({})).toEqual(['Amp:positioned']);
     expect(tallest(buildDeviceLayoutBoardV2(alone, catalog))).toBeLessThanOrEqual(4);
-    // what remains on the Amp page is 4 high, on the tall one 6 (it was 8): the title line is in, nothing grows
+    // Amp keeps its title row. Tall needs six cells and retains its layout.
     const both = buildDeviceLayoutBoardV2(positioned, catalog)!;
-    expect(bbox(both.boards.Amp!).R).toBe(5);
+    expect(bbox(both.boards.Amp!).R).toBe(4);
     expect(tallest(both)).toBe(6);
     expect(tallest(buildDeviceLayoutBoardV2(positioned, catalog, { withoutFixed: true }))).toBe(8);
   });
@@ -430,13 +456,13 @@ describe('the default board with a fixed area', () => {
     expect(allKeys(b)).not.toContain('k20');
   });
 
-  it('packs More to the width left by the fixed area even when that adds a row', () => {
+  it('packs twelve knobs into a row of More beside Fixed', () => {
     const c = buildCatalog({ params: Array.from({ length: 14 }, (_, id) => ({ id, name: `P${id}` })), enums: [] });
     const l = layout([{ name: 'Main', rows: [{ controls: [ctl('knob', 0)] }, { section: 'mixer', controls: [ctl('knob', 1)] }] }]);
     const b = buildDeviceLayoutBoardV2(l, c)!;
     expect(b.fixed?.cols).toBe(2);
-    expect(bbox(b.boards.More!)).toMatchObject({ C: 22, R: 4 });
-    expect(find(b.boards.More!, 'k13')).toMatchObject({ x: 0, y: 2 });
+    expect(bbox(b.boards.More!)).toMatchObject({ C: 24, R: 2 });
+    expect(find(b.boards.More!, 'k13')).toMatchObject({ x: 22, y: 0 });
   });
 
   it('a page of header controls only goes away; a part’s own bypass stays in the layout', () => {
@@ -529,7 +555,7 @@ describe('the default board with a fixed area', () => {
     expect(keysOf(b.boards.More!)).not.toContain('k20');
   });
 
-  it('without usable positions it flows in a row of its own after the parameter rows, before the mixer', () => {
+  it('without usable positions page-level controls flow below the parameters and a local mixer can fit beside them', () => {
     const l = layout([
       { name: 'A', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'P0'), ctl('knob', 1, 'P1'), ctl('knob', 2, 'P2')] }, { section: 'mixer', controls: [ctl('knob', 10, 'Mix')] }], pageControls: [ctl('knob', 20, 'Own', at(10, 10)), ctl('knob', 77, 'Unknown', at(20, 10)), ctl('knob', 0, 'Again', at(30, 10)), ctl('knob', 10, 'Mix', at(40, 10))] },
       { name: 'B', rows: [{ section: 'parameters', controls: [ctl('knob', 3, 'P3')] }] }
@@ -537,7 +563,8 @@ describe('the default board with a fixed area', () => {
     const A = buildDeviceLayoutBoardV2(l, cat)!.boards.A!;
     expect(keysOf(A)).toEqual(['k0', 'k1', 'k2', 'k20', 'k10']);
     expect(find(A, 'k20')).toMatchObject({ x: 0, y: 2 });
-    expect(find(A, 'k10').y).toBeGreaterThan(2);
+    expect(find(A, 'k10')).toMatchObject({ x: 7, y: 0 });
+    expect(A).toContainEqual(expect.objectContaining({ kind: 'vdiv', label: 'Mixer', x: 6 }));
   });
 
   it('the cross-block guard holds for page-level controls; a page of page-level controls only is a page', () => {

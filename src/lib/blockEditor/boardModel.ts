@@ -210,13 +210,19 @@ export function bbox(list: readonly BeRect[]): { C: number; R: number } {
   return { C, R };
 }
 
-const overlaps = (a: BeRect, b: BeRect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+// Page dividers can lie on a grid line. Only a positive-area intersection occupies cells.
+const overlaps = (a: BeRect, b: BeRect): boolean =>
+  Math.max(a.x, b.x) < Math.min(a.x + a.w, b.x + b.w) &&
+  Math.max(a.y, b.y) < Math.min(a.y + a.h, b.y + b.h);
 
 /** True when a w×h rect at (x,y) stays inside the page (`cols` cells wide) and touches nothing else on it. */
 export function fits(list: readonly Placed[], x: number, y: number, w: number, h: number, exceptId?: string, cols: number = MAXC): boolean {
   if (x < 0 || y < 0 || x + w > cols) return false;
+  // A line divider (h = 0 / w = 0) covers no cell: it always fits and never blocks a control, even where it
+  // sits on the same row edge.
+  if (w === 0 || h === 0) return true;
   const r = { x, y, w, h };
-  return !list.some((o) => o.id !== exceptId && overlaps(r, o));
+  return !list.some((o) => o.id !== exceptId && o.w > 0 && o.h > 0 && overlaps(r, o));
 }
 
 /** First free spot (row-major from the top-left) for a w×h rect; below everything if the page is full. */
@@ -404,9 +410,28 @@ export const PHONE_COLS = 8;
  *  Pure and deterministic (stable sorts by y, x, list order). */
 export function phoneWrap(list: readonly BeItem[], cols: number = PHONE_COLS): BeReflow {
   const C = Math.max(1, Math.floor(cols));
+  // A horizontal divider heads its group, but a compacted one sits ON the group's line (layoutPlacement
+  // `compactDividers` gives it h = 0 at that row). The phone puts the heading back on a line of its own,
+  // so every title stays over the rows it heads.
+  const heads = new Set(
+    list.filter((it) => isDivider(it) && it.kind === 'hdiv' && list.some((o) => isControl(o) && o.y === it.y)).map((it) => Math.max(0, it.y))
+  );
+  /** Lines the headings above `y` take. */
+  const above = (y: number): number => {
+    let n = 0;
+    for (const r of heads) if (r < y) n++;
+    return n;
+  };
   const items = list
     // a graph display is always one full-width row on the phone (whatever its board width)
-    .map((it, i) => ({ it, i, x: Math.max(0, it.x), y: Math.max(0, it.y), w: !isDivider(it) && it.view === 'graph' ? C : Math.max(1, Math.min(it.w, C)), h: Math.max(1, it.h) }))
+    .map((it, i) => {
+      const y0 = Math.max(0, it.y);
+      const head = isDivider(it) && it.kind === 'hdiv';
+      // the heading keeps its line; the controls of that row move below it
+      const y = y0 + above(y0) + (head || !heads.has(y0) ? 0 : 1);
+      const w = !isDivider(it) && it.view === 'graph' ? C : Math.max(1, Math.min(it.w, C));
+      return { it, i, x: Math.max(0, it.x), y, w, h: Math.max(1, it.h) };
+    })
     .sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
   type Cell = (typeof items)[number];
   const isH = (c: Cell) => isDivider(c.it) && c.it.kind === 'hdiv';
@@ -666,8 +691,17 @@ export function rotateDivider(board: BeBoard, id: string): BeOpResult {
   const it = f.item;
   if (!isDivider(it)) return fail(board, 'invalid');
   const kind: BeDividerKind = it.kind === 'hdiv' ? 'vdiv' : 'hdiv';
-  const s = clampSize(BE_SPEC[kind], it.h, it.w);
   const cols = pageCols(board, f.page);
+  // A line divider stays a line when rotated (h = 0 / w = 0); the fixed area packs cells, so it keeps the
+  // old cell-sized divider there.
+  if (f.page !== FIXED_PAGE && (it.h === 0 || it.w === 0)) {
+    const span = it.h || it.w;
+    const w = kind === 'hdiv' ? Math.max(BE_SPEC.hdiv.minW, span) : 0;
+    const h = kind === 'vdiv' ? span : 0;
+    if (w > cols) return fail(board, 'bounds');
+    return ok(replaceItem(board, f.page, id, { ...it, kind, w, h }));
+  }
+  const s = clampSize(BE_SPEC[kind], it.h, it.w);
   if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id, cols)) return fail(board, it.x + s.w > cols ? 'bounds' : 'collision');
   return ok(replaceItem(board, f.page, id, { ...it, kind, w: s.w, h: s.h }));
 }
@@ -728,11 +762,26 @@ export function addDivider(
   if (!hasPage(board, page)) return fail(board, 'missing');
   const list = pageItems(board, page);
   const cols = pageCols(board, page);
-  const sp = { w: Math.min(BE_SPEC[kind].w, cols), h: BE_SPEC[kind].h };
-  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, sp.w, sp.h, undefined, cols);
-  if (at && !fits(list, p.x, p.y, sp.w, sp.h, undefined, cols)) return fail(board, p.x < 0 || p.y < 0 || p.x + sp.w > cols ? 'bounds' : 'collision');
+  // A divider takes no cell: it sits ON a grid line (h = 0 for an hdiv, w = 0 for a vdiv) so adding one
+  // never moves a control or changes the page height. It spans the controls' own extent.
+  const controls = list.filter(isControl);
+  const left = controls.length ? Math.min(...controls.map((c) => c.x)) : 0;
+  const right = controls.length ? Math.max(...controls.map((c) => c.x + c.w)) : cols;
+  const top = controls.length ? Math.min(...controls.map((c) => c.y)) : 0;
+  const bottom = controls.reduce((n, c) => Math.max(n, c.y + c.h), top + 1);
   const id = idGen();
-  const item: BeDivider = { id, kind, x: p.x, y: p.y, w: sp.w, h: sp.h };
+  // Without a drop point: the first grid line that has no divider yet (row tops for an hdiv, column edges
+  // for a vdiv), so repeated "Add divider" stacks lines instead of piling them on top of each other.
+  const taken = (line: number): boolean =>
+    list.some((it) => isDivider(it) && it.kind === kind && (kind === 'hdiv' ? it.y === line : it.x === line));
+  const rowLines = [...new Set([...controls.map((c) => c.y), bottom])].sort((a, b) => a - b);
+  const colLines = [...new Set([...controls.map((c) => c.x), right])].sort((a, b) => a - b);
+  const line = kind === 'hdiv'
+    ? (rowLines.find((y) => !taken(y)) ?? bottom)
+    : (colLines.find((x) => !taken(x)) ?? right);
+  const item: BeDivider = kind === 'hdiv'
+    ? { id, kind, x: at ? clamp(int(at.x), 0, Math.max(0, cols - 1)) : Math.max(0, left), y: at ? Math.max(0, int(at.y)) : line, w: Math.max(BE_SPEC.hdiv.minW, Math.min(cols, at ? cols - int(at.x) : right) - (at ? int(at.x) : left)), h: 0 }
+    : { id, kind, x: at ? clamp(int(at.x), 0, Math.max(0, cols - 1)) : line, y: at ? Math.max(0, int(at.y)) : top, w: 0, h: Math.max(1, at ? bottom - int(at.y) : bottom - top) };
   if (label?.trim()) item.label = label.trim();
   return { ...ok(writePage(board, page, [...list, item])), id };
 }
@@ -977,8 +1026,12 @@ function cleanControl(it: BeControl, viewsByKey: ReadonlyMap<string, readonly Be
   return out;
 }
 function cleanDivider(it: BeDivider, cols: number): BeDivider {
+  // A line divider keeps its zero thickness (h = 0 for an hdiv, w = 0 for a vdiv); only a cell-sized
+  // divider (the fixed area's) is clamped to the spec.
   const c = clampSize(BE_SPEC[it.kind], it.w, it.h);
-  const s = { w: Math.min(c.w, cols), h: c.h };
+  const s = it.h === 0 || it.w === 0
+    ? { w: it.kind === 'vdiv' ? 0 : Math.max(1, Math.min(cols, int(it.w))), h: it.kind === 'hdiv' ? 0 : Math.max(1, int(it.h)) }
+    : { w: Math.min(c.w, cols), h: c.h };
   const out: BeDivider = {
     id: typeof it.id === 'string' ? it.id : '',
     kind: it.kind,

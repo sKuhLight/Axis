@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BlockGlyph from '../../BlockGlyph.svelte';
   // Cross-device converter BLOCK EDITOR (Phase 2 · META-24 · AXIS-48). Unlike the live editor this is a
   // conflict-resolution surface: it reads the OFFLINE convertScratch buffer + the convertConflicts
   // foundation (NOT a device) and renders, per the design mockup — a header (glyph · name · "was <src>" ·
@@ -95,7 +96,7 @@
   {:else}
     <!-- header -->
     <header class="cbe-head">
-      <div class="hicon" style="--c:{cat?.accent};">{cat?.glyph}</div>
+      <div class="hicon" style="--c:{cat?.accent};"><BlockGlyph glyph={cat?.glyph} /></div>
       <div class="htitle">
         <div class="hname">{displayName}</div>
         <div class="hsub">{famLabel.toUpperCase()}{srcType ? ` · was ${srcType}` : ''}</div>

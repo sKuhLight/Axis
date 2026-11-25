@@ -1,6 +1,6 @@
 import { expect, type Page, type Route } from '@playwright/test';
 import { bootCleanWorkbench } from './workbench';
-import { GRAPH_BPM, GRAPH_CELLS, GRAPH_EIDS, GRAPH_MONITORS, graphBlockParams } from './graphBlocks';
+import { GRAPH_BPM, GRAPH_CELLS, GRAPH_EIDS, GRAPH_MONITORS, LOOPER_EID, graphBlockParams } from './graphBlocks';
 
 // A fully mocked backend with one amp-like block whose params carry a multi-page device layout, for the
 // Block Editor board specs. Nothing reaches a real device: every /api call is answered here (or aborted
@@ -247,7 +247,7 @@ export const AMP_PARAMS_FIXED = {
         row(ctl('Drive', 0, 'knob'), ctl('Bass', 1, 'knob'), ctl('Mid', 2, 'knob'), ctl('Treble', 3, 'knob'), ctl('Presence', 4, 'knob'), ctl('Master', 5, 'knob')),
         row(ctl('Input Trim', 6, 'knob'), ctl('Bright', 10, 'toggle'))
       ),
-      fixedPage('Power Amp', row(ctl('Sag', 13, 'knob'), ctl('Bias', 14, 'knob'), ctl('Hum', 15, 'fader'), ctl('Boost', 20, 'button'))),
+      fixedPage('Power Amp', row(ctl('Sag', 13, 'knob'), ctl('Bias', 14, 'knob'), ctl('Hum', 15, 'fader'), ctl('Boost', 20, 'button'), ctl('Output', 30, 'meter', 'meterGainVert'))),
       fixedPage('EQ', row(ctl('Low Cut', 16, 'number'), ctl('High Cut', 17, 'number'), ctl('Lo Freq', 18, 'knob'), ctl('Hi Freq', 19, 'knob'))),
       fixedPage('Dynamics', row(ctl('Comp', 21, 'knob'), ctl('Threshold', 22, 'knob')), row(ctl('Ratio', 23, 'knob'), ctl('Attack', 24, 'knob')), row(ctl('Release', 25, 'knob'))),
       fixedPage('Advanced', row(ctl('Speaker Drive', 26, 'knob'), ctl('Speaker Comp', 27, 'knob'), ctl('Saturation', 28, 'knob')))
@@ -282,6 +282,8 @@ export interface BlockEditorMock {
 }
 
 export interface BlockEditorMockOptions {
+  /** Give the mock a known firmware and active preset for the Block Library. */
+  blockLibrary?: boolean;
   /** Give the amp block channels, starting on this one (its live state then comes from /preset/blocks
    *  and /preset/scene-state and follows the captured channel / bypass writes). */
   channel?: string;
@@ -343,12 +345,17 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
   const grid = { ...GRID, cells: [...GRID.cells, ...(opts.extraBlocks ? EXTRA_CELLS : []), ...(opts.graphs ? GRAPH_CELLS : [])] };
   const bsCap = opts.blockState ?? true;
   const bvCap = opts.blockVisuals ?? true;
-  const baseCaps: Record<string, unknown> = { ...CAPS, ...(opts.graphs ? { tempo: true, ...(bvCap === 'absent' ? {} : { blockVisuals: bvCap }) } : {}) };
+  const baseCaps: Record<string, unknown> = { ...CAPS, ...(opts.graphs ? { tempo: true, looperTelemetry: true, ...(bvCap === 'absent' ? {} : { blockVisuals: bvCap }) } : {}) };
+  if (opts.blockLibrary) baseCaps.presets = { count: 512, liveQuery: true };
   if (bsCap === false) baseCaps.blockState = false;
   if (bsCap === 'absent') delete baseCaps.blockState;
-  const device = { ...DEVICE, capabilities: baseCaps };
+  const device = {
+    ...DEVICE, capabilities: baseCaps,
+    ...(opts.blockLibrary ? { firmware: { version: '12.00', build: '' } } : {})
+  };
   // the amp's enum values as the device holds them (the captured enum writes land here)
   const enumValues = new Map<number, number>();
+  const knobValues = new Map<number, number>();
   const ampParams = () => {
     const base = opts.fixed ? AMP_PARAMS_FIXED : opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS;
     const enums = base.enums.map((e) => (enumValues.has(e.id) ? { ...e, value: enumValues.get(e.id)! } : e));
@@ -365,7 +372,8 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
             bypassMode: { ...bs.bypassMode, value: valueOf(bs.bypassMode.paramId) }
           }
         : undefined;
-    const out: Record<string, unknown> = { ...base, enums };
+    const named = opts.blockLibrary ? base.named.map((p) => ({ ...p, norm: knobValues.get(p.id) ?? p.norm })) : base.named;
+    const out: Record<string, unknown> = { ...base, named, enums };
     if (blockState) out.blockState = blockState;
     else delete out.blockState;
     return out;
@@ -378,7 +386,11 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
     const path = new URL(req.url()).pathname.replace(/^\/api/, '');
     if (path === '/device') return json(route, device);
     if (path === '/device/detect') return json(route, DETECT);
+    if (path === '/preset/monitors') return json(route, {
+      AMP_OUTPUT: { family: 'AMP', pid: 30, role: 'level', widgetConfirmed: true }
+    });
     if (path === '/healthz') return json(route, { ok: true, api: { version: 2 }, device: 'FM3' });
+    if (path === '/preset' && opts.blockLibrary) return json(route, { number: 42, name: GRID.name });
     if (path === '/preset/grid') return json(route, grid);
     if (path === '/preset/blocks') return json(route, opts.channel ? blockState() : []);
     if (path === '/preset/scene-state' && opts.channel) return json(route, blockState().map(({ effectId, bypassed, channel }) => ({ effectId, bypassed, channel })));
@@ -415,7 +427,10 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
         (mock.graphWrites[Number(gw[1])] ??= []).push({ pid: Number(gw[2]), value: body.value, continuous: body.continuous });
         return json(route, { ok: true });
       }
-      if (path === '/preset/monitors/live') return json(route, GRAPH_MONITORS);
+      if (path === '/preset/monitors/live' && new URL(req.url()).searchParams.get('eid') !== String(AMP_EID))
+        return json(route, GRAPH_MONITORS);
+      if (path === '/preset/looper' && new URL(req.url()).searchParams.get('eid') === String(LOOPER_EID))
+        return json(route, { wave: [0, 0.25, 0.75, 0.25, 0], position: 0.5, level: 0.25 });
     }
     if (path === '/ports') return json(route, { chosen: null, override: null, profileOverride: null, ports: [] });
     if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, ampParams());
@@ -431,6 +446,8 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
           return json(route, { error: 'device timeout' }, 500);
         }
         enumValues.set(pid, body.value);
+      } else if (opts.blockLibrary) {
+        knobValues.set(pid, body.value);
       }
       return json(route, { ok: true });
     }

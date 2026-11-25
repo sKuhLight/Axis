@@ -235,8 +235,9 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
     const value = tile(page, 'k3').locator('[data-be-value]');
     await value.click();
     await expect(tile(page, 'k3').locator('input.be-vin')).toBeFocused();
-    await page.locator('[data-be-find-input]').click(); // the input loses focus with its text untouched
+    await page.locator('[data-be-find-toggle]').click(); // the value loses focus with its text untouched
     await expect(tile(page, 'k3').locator('input.be-vin')).toHaveCount(0);
+    await page.keyboard.press('Escape');
     // the same with Enter on the untouched text
     await value.click();
     await tile(page, 'k3').locator('input.be-vin').press('Enter');

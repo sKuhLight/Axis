@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isForeignControl, layoutVariantSig, resolveControl, withoutCrossBlockRefs, type BoardCtl } from './deviceLayoutBoard';
+import { isForeignControl, isLayoutPageSelector, layoutVariantSig, resolveControl, sameLayoutVariant, withoutCrossBlockRefs, type BoardCtl } from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
 // ── catalog builders (the Block Editor's live catalog entries, blockEditor/catalog.ts) ──
@@ -23,6 +23,27 @@ const layout = (pages: DeviceLayout['pages'], extra: Partial<DeviceLayout> = {})
   family: 'INPUT',
   pages,
   ...extra
+});
+
+describe('selected layout pages', () => {
+  const a = { name: 'Authentic', selectorParamName: 'X_TYPE', value: '1', rows: [{ controls: [ctl('knob', 4)] }] };
+  const b = { ...a, value: '2', rows: [{ controls: [ctl('knob', 5)] }] };
+
+  it('recognizes a new page choice even with the same page names and control count, and keeps legacy identity', () => {
+    const old = layout([{ ...a, selectorParamName: undefined, value: undefined }]);
+    const first = layoutVariantSig(layout([a]));
+    const next = layoutVariantSig(layout([b]));
+    expect(sameLayoutVariant(first, next)).toBe(false);
+    expect(sameLayoutVariant(layoutVariantSig(old), first)).toBe(true);
+  });
+
+  it('reloads only a selector of the open block, including page-level selectors', () => {
+    const select = ctl('dropdown', 7, 'Type', { paramName: 'X_TYPE' });
+    expect(isLayoutPageSelector(layout([{ ...a, pageControls: [select] }]), 7, 42)).toBe(true);
+    expect(isLayoutPageSelector(layout([{ ...a, pageControls: [select] }]), 4, 42)).toBe(false);
+    const foreign = { ...select, crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'X_TYPE', paramId: 7, effectId: 1 } };
+    expect(isLayoutPageSelector(layout([{ ...a, pageControls: [foreign] }]), 7, 42)).toBe(false);
+  });
 });
 
 describe('resolveControl — layout widget → catalog key + view', () => {

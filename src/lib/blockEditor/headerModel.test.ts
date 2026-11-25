@@ -6,7 +6,6 @@ import {
   HEADER_PARTS,
   HEADER_TINY_W,
   HEADER_XS_W,
-  SEARCH_FIELD_MIN_W,
   CHIP_READABLE_W,
   CHIP_ROW_MIN_W,
   STATE_NARROW_W,
@@ -27,32 +26,21 @@ import {
 import type { BlockState } from '../types';
 
 describe('headerRows / oneRowMinWidth', () => {
-  it('one row from ~1240 px with the top navigation, two below', () => {
-    expect(HEADER_ONE_ROW_MIN_W).toBe(1240);
-    expect(oneRowMinWidth({ nav: 'top' })).toBe(1240);
-    expect(headerRows(1240, 'top')).toBe(1);
-    expect(headerRows(2560, 'top')).toBe(1);
-    expect(headerRows(1239, 'top')).toBe(2);
+  it('lets the navigation scroll while the other controls still fit', () => {
+    expect(HEADER_ONE_ROW_MIN_W).toBe(940);
+    expect(headerRows(1100, 'top')).toBe(1);
+    expect(headerRows(940, 'top')).toBe(1);
+    expect(headerRows(939, 'top')).toBe(2);
     expect(headerRows(390, 'top')).toBe(2);
   });
-  it('side navigation: one row as soon as every part fits at its widest (nothing wraps)', () => {
-    const p = HEADER_PARTS;
+  it('reserves room for a readable chip, state, icon search and close button', () => {
     const side = oneRowMinWidth({ nav: 'side' });
-    expect(side).toBe(p.pad + p.chip + p.search + p.state + p.more + p.spacerMin + 4 * p.gap);
-    expect(side).toBeGreaterThan(960); // a long cab summary + search + segments + ⋯ (was 860, which wrapped)
+    expect(side).toBeGreaterThan(600);
+    expect(side).toBeLessThan(oneRowMinWidth({ nav: 'top' }));
     expect(headerRows(side, 'side')).toBe(1);
     expect(headerRows(side - 1, 'side')).toBe(2);
-    expect(headerRows(1200, 'side')).toBe(1);
-    expect(headerRows(1200, 'top')).toBe(2);
-  });
-  it('a close button (monolith) needs its room too', () => {
-    const side = oneRowMinWidth({ nav: 'side' });
-    expect(oneRowMinWidth({ nav: 'side', hasEnd: true })).toBe(side + HEADER_PARTS.gap + HEADER_PARTS.end);
     expect(headerRows(side, 'side', true)).toBe(2);
-    // with the Bypass mode control the parts with ✕ need a little more than the 1240 floor
-    const p = HEADER_PARTS;
-    expect(oneRowMinWidth({ nav: 'top', hasEnd: true })).toBe(Math.max(1240, side + p.gap + p.end + p.gap + p.tabsMin));
-    expect(oneRowMinWidth({ nav: 'top', hasEnd: true })).toBe(1262);
+    expect(oneRowMinWidth({ nav: 'side', hasEnd: true })).toBe(side + HEADER_PARTS.gap + HEADER_PARTS.end);
   });
   it('an unmeasured editor gets two rows', () => {
     expect(headerRows(0, 'top')).toBe(2);
@@ -62,19 +50,19 @@ describe('headerRows / oneRowMinWidth', () => {
 
 describe('headerOrder (document = visual = Tab order)', () => {
   it('one row: chip · tabs · ⟷ · search · state · ⋯ · ✕', () => {
-    expect(headerOrder({ rows: 1, block: true, tabs: true, end: true, tiny: false })).toEqual(['chip', 'tabs', 'spB', 'tools', 'state', 'more', 'end']);
-    expect(headerOrder({ rows: 1, block: true, tabs: false, end: false, tiny: false })).toEqual(['chip', 'spB', 'tools', 'state', 'more']);
+    expect(headerOrder({ rows: 1, block: true, tabs: true, end: true, tiny: false })).toEqual(['chip', 'tabs', 'actions', 'end']);
+    expect(headerOrder({ rows: 1, block: true, tabs: false, end: false, tiny: false })).toEqual(['chip', 'spB', 'actions']);
   });
   it('two rows: row 1 before row 2', () => {
-    expect(headerOrder({ rows: 2, block: true, tabs: true, end: false, tiny: false })).toEqual(['chip', 'spA', 'state', 'more', 'break', 'tabs', 'spB', 'tools']);
-    expect(headerOrder({ rows: 2, block: true, tabs: true, end: true, tiny: false })).toEqual(['chip', 'spA', 'state', 'more', 'end', 'break', 'tabs', 'spB', 'tools']);
+    expect(headerOrder({ rows: 2, block: true, tabs: true, end: false, tiny: false })).toEqual(['chip', 'spA', 'actions', 'break', 'tabs']);
+    expect(headerOrder({ rows: 2, block: true, tabs: true, end: true, tiny: false })).toEqual(['chip', 'spA', 'actions', 'end', 'break', 'tabs']);
   });
   it('a phone with a close button: chip · ✕, then state · ⋯, then tabs · search', () => {
-    expect(headerOrder({ rows: 2, block: true, tabs: true, end: true, tiny: true })).toEqual(['chip', 'spA', 'end', 'breakEnd', 'state', 'more', 'break', 'tabs', 'spB', 'tools']);
+    expect(headerOrder({ rows: 2, block: true, tabs: true, end: true, tiny: true })).toEqual(['chip', 'spA', 'end', 'breakEnd', 'spB', 'actions', 'break', 'tabs']);
   });
   it('no block (virtual screens): tabs · ⟷ · search · ⋯', () => {
-    expect(headerOrder({ rows: 1, block: false, tabs: true, end: false, tiny: false })).toEqual(['tabs', 'spB', 'tools', 'more']);
-    expect(headerOrder({ rows: 1, block: false, tabs: false, end: false, tiny: false })).toEqual(['spB', 'tools', 'more']);
+    expect(headerOrder({ rows: 1, block: false, tabs: true, end: false, tiny: false })).toEqual(['tabs', 'spB', 'actions']);
+    expect(headerOrder({ rows: 1, block: false, tabs: false, end: false, tiny: false })).toEqual(['spB', 'actions']);
   });
 });
 
@@ -90,15 +78,14 @@ describe('familyLabel ("Save as default for …")', () => {
 });
 
 describe('headerFit / stateLabels', () => {
-  it('search field vs icon, narrow and tiny labels', () => {
-    expect(headerFit(SEARCH_FIELD_MIN_W)).toEqual({ searchField: true, narrow: true, tiny: false, xs: false });
-    expect(headerFit(SEARCH_FIELD_MIN_W - 1).searchField).toBe(false);
+  it('fits narrow and tiny labels', () => {
+    expect(headerFit(640)).toEqual({ narrow: true, tiny: false, xs: false });
     expect(headerFit(HEADER_NARROW_W)).toMatchObject({ narrow: false });
-    expect(headerFit(HEADER_TINY_W - 1)).toEqual({ searchField: false, narrow: true, tiny: true, xs: false });
+    expect(headerFit(HEADER_TINY_W - 1)).toEqual({ narrow: true, tiny: true, xs: false });
     expect(headerFit(390)).toMatchObject({ tiny: true, xs: false });
     expect(headerFit(HEADER_XS_W - 1)).toMatchObject({ tiny: true, xs: true });
     expect(headerFit(360).xs).toBe(true);
-    expect(headerFit(0)).toEqual({ searchField: true, narrow: false, tiny: false, xs: false });
+    expect(headerFit(0)).toEqual({ narrow: false, tiny: false, xs: false });
   });
   it('segment labels follow the width and the bypass state', () => {
     expect(stateLabels(1300, false)).toEqual({ engaged: 'Engaged', scene: 'Scene Ignore' });
@@ -230,7 +217,7 @@ describe('blockStateView (Scene Ignore + Bypass mode from the device)', () => {
       expect(bypassModeInMenu(min, o), JSON.stringify(o)).toBe(false);
       expect(bypassModeInMenu(min - 1, o), JSON.stringify(o)).toBe(true);
     }
-    expect([row(p.more), row(TOUCH_BUTTON_W), row(p.more, p.end), row(TOUCH_BUTTON_W, TOUCH_BUTTON_W)]).toEqual([528, 538, 566, 586]);
+    expect([row(p.more), row(TOUCH_BUTTON_W), row(p.more, p.end), row(TOUCH_BUTTON_W, TOUCH_BUTTON_W)]).toEqual([534, 538, 578, 586]);
     // 470 / 500 px with ✕ (the monolith): in ⋯, so the first row cannot wrap with "Mute FX Out"
     for (const touch of [false, true]) {
       expect(bypassModeInMenu(470, { hasEnd: true, touch })).toBe(true);
@@ -241,8 +228,8 @@ describe('blockStateView (Scene Ignore + Bypass mode from the device)', () => {
 
   it('touch targets widen ⋯ and ✕ in the one-row width', () => {
     const p = HEADER_PARTS;
-    expect(oneRowMinWidth({ nav: 'side', touch: true })).toBe(oneRowMinWidth({ nav: 'side' }) + TOUCH_BUTTON_W - p.more);
-    expect(oneRowMinWidth({ nav: 'side', hasEnd: true, touch: true })).toBe(oneRowMinWidth({ nav: 'side', hasEnd: true }) + 2 * (TOUCH_BUTTON_W - p.more));
+    expect(oneRowMinWidth({ nav: 'side', touch: true })).toBe(oneRowMinWidth({ nav: 'side' }) + 2 * (TOUCH_BUTTON_W - p.more));
+    expect(oneRowMinWidth({ nav: 'side', hasEnd: true, touch: true })).toBe(oneRowMinWidth({ nav: 'side', hasEnd: true }) + 3 * (TOUCH_BUTTON_W - p.more));
     const side = oneRowMinWidth({ nav: 'side', touch: true });
     expect(headerRows(side, 'side', false, true)).toBe(1);
     expect(headerRows(side - 1, 'side', false, true)).toBe(2);

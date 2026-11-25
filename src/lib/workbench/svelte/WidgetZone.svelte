@@ -1,5 +1,6 @@
 <script lang="ts">
   import WidgetHost from './WidgetHost.svelte';
+  import { widgetGridPlacement } from './widgetGridPlacement';
   import WidgetGroupHost from './WidgetGroupHost.svelte';
   import { getWorkbenchContext } from './context';
   import {
@@ -199,26 +200,10 @@
     return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
   }
 
-  function readPlacementNumber(value: unknown, min = 1): number | null {
-    return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.round(value)) : null;
-  }
-
   function gridCellStyle(unit: WidgetUnit): string {
-    const layout = $controller.activeLayout;
-    const widget = layout?.widgets[unit.widgetIds[0]];
+    const widget = $controller.activeLayout?.widgets[unit.widgetIds[0]];
     const placement = readPlacementObject(widget?.state?.grid) ?? readPlacementObject(widget?.state?.placement);
-    if (!placement) return '';
-
-    const column = readPlacementNumber(placement.column) ?? (readPlacementNumber(placement.x, 0) != null ? readPlacementNumber(placement.x, 0)! + 1 : null);
-    const row = readPlacementNumber(placement.row) ?? (readPlacementNumber(placement.y, 0) != null ? readPlacementNumber(placement.y, 0)! + 1 : null);
-    const colSpan = readPlacementNumber(placement.colSpan ?? placement.w);
-    const rowSpan = readPlacementNumber(placement.rowSpan ?? placement.h);
-    const rules: string[] = [];
-    if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
-    else if (colSpan != null) rules.push(`grid-column: span ${colSpan}`);
-    if (row != null) rules.push(`grid-row: ${row} / span ${rowSpan ?? 1}`);
-    else if (rowSpan != null) rules.push(`grid-row: span ${rowSpan}`);
-    return rules.join('; ');
+    return widgetGridPlacement(placement, gridColumns);
   }
 
   onMount(() => {

@@ -292,7 +292,8 @@ export const forgefx = {
   // ── live block parameters (addressed by the placed instance's effect id) ──
   /** `blockState` (Scene Ignore + Bypass Mode, cap `blockState`) is normalized: absent on servers / devices
    *  without it, and a malformed tag reads as absent rather than breaking the editor. */
-  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`).then(withParsedBlockState),
+  blockParams: (eid: number, opts: { observe?: boolean } = {}) =>
+    req<BlockParams>(`/preset/blocks/${eid}/params${opts.observe === false ? '?observe=0' : ''}`).then(withParsedBlockState),
   /** Set a parameter. continuous=true (knob, value 0..1) by default; false sends an enum ordinal. */
   setParam: (eid: number, paramId: number, value: number, continuous = true) =>
     req<{ ok: boolean }>(`/preset/blocks/${eid}/params/${paramId}`, {
@@ -440,6 +441,9 @@ export const forgefx = {
   /** Set the device-telemetry polling mode. 400 on an unknown mode; 404/501 on servers without the control. */
   setTelemetryMode: (mode: TelemetryMode) =>
     req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ mode }) }),
+  /** Ask the server to run its meter round-robin (on) or stop it (off). Off unless a client asks. */
+  setTelemetryMeters: (on: boolean) =>
+    req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ meters: on }) }),
   uploadDebugReport: (report: DebugReport) =>
     req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
 

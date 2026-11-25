@@ -52,7 +52,9 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.paramControl',
   'axis.hint',
   'axis.legal',
-  'axis.telemetry'
+  'axis.telemetry',
+  'axis.horizontalDivider',
+  'axis.verticalDivider'
 ] as const;
 
 export const AXIS_WORKBENCH_NAVIGATION_IDS = [

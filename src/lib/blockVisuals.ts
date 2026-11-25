@@ -5,7 +5,7 @@
 
 import type { BlockVisual, BlockVisualKind } from './types';
 
-export const BLOCK_VISUAL_KINDS: readonly BlockVisualKind[] = ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign'];
+export const BLOCK_VISUAL_KINDS: readonly BlockVisualKind[] = ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign', 'eq'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isKind = (v: unknown): v is BlockVisualKind => typeof v === 'string' && (BLOCK_VISUAL_KINDS as readonly string[]).includes(v);
@@ -22,6 +22,19 @@ function parseVisual(raw: unknown): BlockVisual | null {
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : raw.key;
   const out: BlockVisual = { key: raw.key, kind: raw.kind, title, roles };
   if (typeof raw.mode === 'string' && raw.mode) out.mode = raw.mode;
+  if (raw.kind === 'eq') {
+    if (!Array.isArray(raw.bands)) return null;
+    out.bands = raw.bands.flatMap((b) => {
+      if (!isObj(b) || typeof b.key !== 'string') return [];
+      const band: NonNullable<BlockVisual['bands']>[number] = { key: b.key };
+      for (const k of ['gain', 'freq', 'q', 'type'] as const) if (typeof b[k] === 'number' && Number.isInteger(b[k]) && b[k] >= 0) band[k] = b[k];
+      if (typeof b.centerHz === 'number' && Number.isFinite(b.centerHz) && b.centerHz > 0) band.centerHz = b.centerHz;
+      if (typeof b.label === 'string' && b.label.trim()) band.label = b.label.trim();
+      if (['bell', 'lowshelf', 'highshelf', 'lowcut', 'highcut'].includes(String(b.shape))) band.shape = b.shape as typeof band.shape;
+      return band.freq != null || (band.gain != null && (band.centerHz != null || raw.mode === 'graphic')) ? [band] : [];
+    });
+    if (!out.bands.length) return null;
+  }
   return out;
 }
 

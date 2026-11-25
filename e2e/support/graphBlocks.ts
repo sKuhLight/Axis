@@ -9,18 +9,20 @@ export const FILTER_EID = 112;
 export const GATE_EID = 113;
 export const DELAY_EID = 114;
 export const CTRL_EID = 115;
-export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID]);
+export const LOOPER_EID = 116;
+export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID, LOOPER_EID]);
 /** The device tempo the mock serves (GET /tempo). */
 export const GRAPH_BPM = 90;
 
-/** Grid cells (row 1) of the graph blocks. */
+/** Grid cells of the graph blocks. */
 export const GRAPH_CELLS = [
   { row: 1, col: 0, effectId: COMP_EID, name: 'Comp 1', slug: 'Comp', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 1, effectId: TREM_EID, name: 'Tremolo 1', slug: 'Tremolo', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 2, effectId: FILTER_EID, name: 'Filter 1', slug: 'Filter', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 3, effectId: GATE_EID, name: 'Gate 1', slug: 'Gate', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 4, effectId: DELAY_EID, name: 'Delay 1', slug: 'Delay', isShunt: false, routeFlag: 0, fromRows: [] },
-  { row: 1, col: 5, effectId: CTRL_EID, name: 'Controllers', slug: 'Controllers', isShunt: false, routeFlag: 0, fromRows: [] }
+  { row: 1, col: 5, effectId: CTRL_EID, name: 'Controllers', slug: 'Controllers', isShunt: false, routeFlag: 0, fromRows: [] },
+  { row: 2, col: 0, effectId: LOOPER_EID, name: 'Looper 1', slug: 'Looper', isShunt: false, routeFlag: 0, fromRows: [] }
 ];
 
 /** The compressor's live gain reduction while metering is on (6 dB). */
@@ -54,6 +56,17 @@ const TEMPO = ['NONE ', '1/8', '1/4', '1/2'];
 export function graphBlockParams(eid: number, o: { sustainOnly: boolean }): Record<string, unknown> {
   const out = (base: Record<string, unknown>, layout: unknown, visuals: unknown[]) => ({ ...base, ...(layout ? { layout } : {}), visuals });
   switch (eid) {
+    case LOOPER_EID:
+      return out(
+        { block: 'Looper', slug: 'looper', page: 1, named: [knob(5, 'Level', 0, -20, 20, 'dB')], enums: [], type: null },
+        {
+          family: 'LOOPER', variantName: 'Looper', pages: [{
+            name: 'Looper', rows: [row(c('Level', 5))],
+            pageControls: [{ label: 'Loop', paramName: null, paramId: null, widget: 'graph', rawWidget: 'graph_looper' }]
+          }]
+        },
+        []
+      );
     case COMP_EID: {
       if (o.sustainOnly)
         return out(

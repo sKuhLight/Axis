@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BlockGlyph from '../../BlockGlyph.svelte';
   // Cross-device converter — read-only SOURCE-device grid + drag source (M4 · META-24 · AXIS-52).
   //
   // Renders the fully-decoded SOURCE preset (e.g. FM3) as a compact, read-only grid — all source blocks
@@ -185,7 +186,7 @@
                   onmousemove={moveTip}
                   onmouseleave={hideTip}
                 >
-                  <span class="glyph">{cat.glyph}</span>
+                  <span class="glyph"><BlockGlyph glyph={cat.glyph} /></span>
                   {#if oc}<span class="src-badge" style="background:{badgeFill(oc)};">{oc.icon}</span>{/if}
                 </div>
               {:else if cl?.kind === 'shunt'}
@@ -222,7 +223,7 @@
           onmousemove={moveTip}
           onmouseleave={hideTip}
         >
-          <span class="glyph">{cat.glyph}</span>
+          <span class="glyph"><BlockGlyph glyph={cat.glyph} /></span>
           <span class="nm">{name}</span>
           {#if oc}<span class="src-badge row-badge" style="background:{badgeFill(oc)};">{oc.icon}</span>{/if}
         </div>

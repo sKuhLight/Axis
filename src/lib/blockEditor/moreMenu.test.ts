@@ -92,7 +92,8 @@ describe('buildMoreMenu', () => {
     const a = actions();
     const items = buildMoreMenu(state({ density: 'l', profiles: ['Default', 'Blank', 'Layout 1'], profile: 'Layout 1' }), a);
     expect(['size-s', 'size-m', 'size-l'].map((id) => byId(items, id).checked)).toEqual([false, false, true]);
-    expect(byId(items, 'size-s').label).toBe('Compact');
+    expect(byId(items, 'size-s').label).toBe('Small');
+    expect(byId(items, 'size-m').label).toBe('Medium');
     byId(items, 'size-s').run();
     expect(a.density).toHaveBeenCalledWith('s');
     byId(items, 'nav-side').run();

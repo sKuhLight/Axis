@@ -405,12 +405,13 @@ function responsePlot(v: BlockVisual, r: RoleReader, inp: GraphInputs): GraphPlo
       aria: `${v.title}: ${join([`${fmtHz(f)} Hz now`, `sweep ${fmtHz(fs)} to ${fmtHz(fe)} Hz`, r.has('q') ? `Q ${r.text('q')}` : null])}`
     };
   }
-  const type = typeFromLabel(inp.typeName ?? null);
+  const typeLabel = v.roles.filterType != null ? r.label('filterType') : inp.typeName ?? null;
+  const type = typeFromLabel(typeLabel);
   const freq = r.num('freq');
   if (freq == null) return { ...out, empty: 'No frequency', caption: '', aria: `${v.title}: no frequency` };
   if (type === 'unsupported') {
     out.notes.push('The response of this filter type is not modelled.');
-    return { ...out, empty: 'Response not drawn for this type', caption: inp.typeName ?? '', aria: `${v.title}: ${inp.typeName ?? 'this type'}, not drawn` };
+    return { ...out, empty: 'Response not drawn for this type', caption: typeLabel ?? '', aria: `${v.title}: ${typeLabel ?? 'this type'}, not drawn` };
   }
   const orderLabel = r.label('order');
   const order: 2 | 4 = orderLabel != null && /4/.test(orderLabel) ? 4 : 2;

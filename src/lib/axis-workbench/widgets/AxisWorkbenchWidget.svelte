@@ -52,6 +52,10 @@
   const expanded = $derived(size === 'default');
   const notMini = $derived(size !== 'mini');
   const kind = $derived(widget.type.replace(/^axis\./, ''));
+  const dividerLabel = $derived(typeof widget.state?.label === 'string' ? widget.state.label : 'Section');
+  const dividerRows = $derived(typeof (widget.state?.grid as { rowSpan?: unknown } | undefined)?.rowSpan === 'number' ? (widget.state!.grid as { rowSpan: number }).rowSpan : 2);
+  function setDividerLabel(value: string) { dispatch({ type: 'widget.state', widgetId: widget.id, state: { ...widget.state, label: value.slice(0, 100) } }); }
+  function setDividerRows(value: number) { dispatch({ type: 'widget.state', widgetId: widget.id, state: { ...widget.state, grid: { rowSpan: Math.max(1, Math.min(12, Math.round(value) || 2)) } } }); }
   const pnumRaw = $derived(editor.preset && editor.preset.number >= 0 ? editor.preset.number : -1);
   const pnum = $derived(pnumRaw >= 0 ? String(pnumRaw).padStart(3, '0') : '---');
   const pname = $derived(axisPresetDisplayName(editor.preset?.name, editor.conn.state));
@@ -467,6 +471,20 @@
       >+</button>
     {/if}
   </div>
+{:else if kind === 'horizontalDivider' || kind === 'verticalDivider'}
+  <div class="axis-divider" class:vertical={kind === 'verticalDivider'} data-axis-divider={kind}>
+    {#if editMode && !widget.locked}
+      <div class="divider-settings">
+        <input aria-label="Divider label" value={dividerLabel} maxlength="100" placeholder="Label" onchange={(e) => setDividerLabel(e.currentTarget.value)} onkeydown={(e) => e.stopPropagation()} />
+        {#if kind === 'verticalDivider'}
+          <label>Rows <input type="number" aria-label="Divider height in rows" value={dividerRows} min="1" max="12" onchange={(e) => setDividerRows(e.currentTarget.valueAsNumber)} onkeydown={(e) => e.stopPropagation()} /></label>
+        {/if}
+      </div>
+    {/if}
+    <div class="divider-rule" role="separator" aria-orientation={kind === 'verticalDivider' ? 'vertical' : 'horizontal'} aria-label={dividerLabel || undefined}>
+      {#if dividerLabel}<span>{dividerLabel}</span>{/if}<i></i>
+    </div>
+  </div>
 {:else if kind === 'paramControl'}
   <button
     class="axis-widget param axtipwrap"
@@ -681,9 +699,9 @@
     type="button"
     disabled={!editor.canMeterBlocks}
     title={editor.canMeterBlocks
-      ? "Per-block audio meters — polls the open block's level once per ~0.5s"
+      ? 'Show live readings on visible meter and gain-reduction tiles'
       : 'Per-block metering needs a ready device with live monitors on a fast link'}
-    onclick={() => (editor.meteringOn = !editor.meteringOn)}
+    onclick={() => editor.setMeteringOn(!editor.meteringOn)}
   >
     <span class="meter-glyph">▊</span>
     {#if expanded}<span class="mono token">METER</span>{/if}
@@ -741,6 +759,19 @@
 {/if}
 
 <style>
+  .axis-divider { display: flex; flex-direction: column; align-self: stretch; width: 100%; min-width: 0; min-height: 36px; }
+  .axis-divider.vertical { min-height: 88px; height: 100%; }
+  .divider-rule { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 6px; color: var(--textmuted); }
+  .divider-rule span { font: 600 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .divider-rule i { flex: 1; height: 1px; min-width: 12px; background: var(--border2); }
+  .vertical .divider-rule { flex-direction: column; }
+  .vertical .divider-rule span { writing-mode: vertical-rl; }
+  .vertical .divider-rule i { width: 1px; min-width: 1px; min-height: 20px; }
+  .divider-settings { position: relative; z-index: 6; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
+  .divider-settings input { min-width: 0; width: 100%; background: var(--input); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font: 11px var(--font-ui); }
+  .divider-settings label { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--textmuted); }
+  .divider-settings label input { width: 44px; }
+
   .axis-widget,
   .axis-widget button {
     font-family: var(--font-ui);

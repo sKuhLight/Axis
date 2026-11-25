@@ -61,7 +61,7 @@ function viewForWidget(widget: string, base: BoardCtl): string {
   if (base.kind === 'cont') {
     if (widget === 'slider') candidate = 'slider';
     else if (widget === 'fader') candidate = 'fader';
-    else if (widget === 'number' || widget === 'readout' || widget === 'meter') candidate = 'number';
+    else if (widget === 'number' || widget === 'readout') candidate = 'number';
     else if (widget === 'knob') candidate = 'knob';
   } else if (base.kind === 'toggle') {
     if (widget === 'toggle') candidate = 'switch';
@@ -123,12 +123,13 @@ export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, Bo
     const knobKey = `k${ctl.paramId}`;
     const enumKey = `e${ctl.paramId}`;
     const base = byKey.get(knobKey) ?? byKey.get(enumKey);
-    if (base) return { key: base.key, view: viewForWidget(ctl.widget, base) };
+    if (base && (ctl.widget !== 'meter' || base.kind === 'meter')) return { key: base.key, view: viewForWidget(ctl.widget, base) };
   }
   // No live param → the block-level catalog entries the widget hint points at.
   if (ctl.widget === 'meter' && byKey.has('meter')) return { key: 'meter', view: 'meter' };
   if (ctl.widget === 'button' && isBypassControl(ctl) && byKey.has('bypass')) return { key: 'bypass', view: 'action' };
-  if ((ctl.widget === 'graph' || ctl.widget === 'label') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
+  if (ctl.widget === 'graph' && ctl.rawWidget === 'graph_looper' && byKey.has('wave')) return { key: 'wave', view: 'wave' };
+  if (ctl.widget === 'graph' && (!ctl.graphKey || ctl.graphKey === 'eq') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
   // a graph slot the server keyed (`graphKey`) → the served display of that key, when the block serves it
   // (the EQ rule above stays first: a PEQ / GEQ slot is the interactive EQ graph)
   if (ctl.widget === 'graph' && typeof ctl.graphKey === 'string' && ctl.graphKey) {
@@ -148,7 +149,7 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
     (n, pg) => n + (pg.rows ?? []).reduce((m, r) => m + (r.controls?.length ?? 0), 0),
     0
   );
-  return [
+  const base = [
     layout.family ?? '',
     layout.variantName ?? '',
     layout.variantValue ?? '',
@@ -156,4 +157,28 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
     (layout.pages ?? []).length,
     ctlCount
   ].join('|');
+  // A firmware-level variant can contain multiple choices for the same page. Amp models can
+  // switch between two pages with the same name and control count inside that one variant.
+  const alternatives = layout.pages
+    .filter((pg) => pg.selectorParamName != null && pg.value != null)
+    .map(({ name, selectorParamName, value }) => [name, selectorParamName, value]);
+  return alternatives.length ? `${base}${SELECTED_PAGES_MARKER}${JSON.stringify(alternatives)}` : base;
+}
+
+const SELECTED_PAGES_MARKER = '|selected-pages:';
+
+/** Older boards predate page alternatives in their signature. A match on their complete, older
+ *  identity lets migration recognize untouched defaults without dropping customized boards. */
+export function sameLayoutVariant(stored: string | undefined, current: string): boolean {
+  return stored === current || (!!stored && current.startsWith(`${stored}${SELECTED_PAGES_MARKER}`));
+}
+
+/** Whether changing a served parameter can select different pages of this block. */
+export function isLayoutPageSelector(layout: DeviceLayout | null, paramId: number, effectId: number): boolean {
+  if (!layout) return false;
+  const selectors = new Set(layout.pages.flatMap((pg) => pg.selectorParamName ? [pg.selectorParamName] : []));
+  return selectors.size > 0 && layout.pages.some((pg) => [
+    ...(pg.pageControls ?? []), ...pg.rows.flatMap((r) => r.controls)
+  ].some((ctl) => ctl.paramId === paramId && ctl.paramName != null && selectors.has(ctl.paramName)
+    && !isForeignControl(ctl, { family: layout.family, effectId })));
 }

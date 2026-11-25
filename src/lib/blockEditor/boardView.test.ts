@@ -93,7 +93,7 @@ describe('strip chrome', () => {
 describe('layoutBoardPages', () => {
   const base = { bodyW: 1600, bodyH: 300, nav: 'top' as const, density: 'm' as const, editMode: false };
 
-  it('gives every page the same cell (the smallest per-page fit)', () => {
+  it('gives every page the same cell even if one page needs vertical scrolling', () => {
     const L = layoutBoardPages(
       [
         { page: 'Short', items: knobs(3, 1) },
@@ -102,12 +102,10 @@ describe('layoutBoardPages', () => {
       base
     );
     expect(L.Short!.c).toBe(L.Tall!.c);
-    // the tall page is the limiting one: 6 rows of cells fit the height
-    const fh = Math.floor((300 - 2 * PAD_Y - 5 * DENSITY.m.gap) / 6);
-    expect(L.Tall!.c).toBe(Math.min(DENSITY.m.cmax, fh));
+    expect(L.Tall!.c).toBe(DENSITY.m.cmax);
     expect(L.Short!.W).toBe(6 * (L.Short!.c + DENSITY.m.gap) - DENSITY.m.gap);
     expect(L.Short!.overflowY).toBe(false);
-    expect(L.Tall!.overflowY).toBe(false);
+    expect(L.Tall!.overflowY).toBe(true);
   });
 
   it('caps the cell by density on a wide, tall board', () => {
@@ -132,7 +130,7 @@ describe('layoutBoardPages', () => {
   it('scrolls sideways (no reflow) below the minimum cell in the strip', () => {
     const L = layoutBoardPages([{ page: 'Wide', items: knobs(12, 1) }], { bodyW: 400, bodyH: 900, nav: 'top', density: 'm', editMode: false });
     expect(L.Wide!.reflow).toBe(false);
-    expect(L.Wide!.c).toBe(CMIN);
+    expect(L.Wide!.c).toBe(DENSITY.m.cmin);
     expect(L.Wide!.overflowX).toBe(true);
   });
 

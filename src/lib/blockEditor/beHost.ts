@@ -75,8 +75,11 @@ export interface BeHost {
   readonly animate: boolean;
   /** A tile's playhead is moving and on screen (true) or not / gone (false). */
   playhead(id: string, on: boolean): void;
-  /** Live block metering is on (`mons` is empty otherwise; a graph's gain-reduction bar shows only then). */
+  /** Live block metering is on (`mons` is empty otherwise). */
   readonly meteringOn: boolean;
+  isLiveMeter(ctl: BeCtl): boolean;
+  /** Subscribe while a real tile intersects its scroll containers and the viewport. */
+  observeTileTelemetry(el: HTMLElement, needs: { waveform: boolean; monitors: boolean }): (() => void) | undefined;
 
   // ── value gestures ──
   tileDown(e: PointerEvent, item: BeItem, ctl: BeCtl | undefined, page: string, tile: HTMLElement): void;

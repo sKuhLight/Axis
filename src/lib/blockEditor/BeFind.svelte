@@ -1,12 +1,7 @@
 <script lang="ts">
-  // "Find a control…" (F5): the header's search field (an icon button on a narrow editor) with a
-  // popover listing the block's controls grouped by kind — a row jumps to the control (its page chips
-  // jump to that page), ⚡ pins it to a workbench panel. Enter or "Show all" opens the flat, directly
-  // operable results in the board. The popover opens by intent only — a press on the field, typing, or
-  // ArrowDown — never on plain focus (Tab passes through the header); it closes on Escape, a press
-  // outside, or when focus leaves field and popover. It floats in the editor's overlay layer
-  // (overlayLayer.ts), placed under the header and right-aligned to the field with the workbench's
-  // anchored-menu placement (zoom-safe), and follows the field when the panel resizes.
+  // The search button opens a compact popover and focuses its input. Enter shows the results
+  // as editable controls on the board. Escape returns focus to the search button.
+  import { tick } from 'svelte';
   import { effectiveZoom, resolveAnchoredMenuPlacement } from '../workbench';
   import type { FindFilter, FindGroup, FindRow } from './findControls';
   import { KIND_ICON, KIND_NAME } from './findControls';
@@ -17,7 +12,6 @@
     query = $bindable(''),
     filter = $bindable<FindFilter>('all'),
     open = $bindable(false),
-    iconOnly = false,
     touch = false,
     groups,
     current,
@@ -27,42 +21,36 @@
     onJump,
     onPin,
     onShowAll,
-    onCloseResults,
     onOpen
   }: {
     query?: string;
     filter?: FindFilter;
     /** The popover is open. */
     open?: boolean;
-    /** Narrow editor: an icon button; the field moves into the popover. */
-    iconOnly?: boolean;
     /** Phone: ≥ 40 px hit targets. */
     touch?: boolean;
     groups: FindGroup[];
     /** The board's current page (its chips are highlighted). */
     current: string;
     canPin: boolean;
-    /** The flat results are showing in the board (the field then drives them, no popover). */
+    /** The flat results are showing in the board. */
     resultsOpen: boolean;
     /** Current value text of a control (meta line). */
     preview: (key: string) => string;
     onJump: (key: string, page?: string) => void;
     onPin: (key: string) => void;
     onShowAll: () => void;
-    onCloseResults: () => void;
     /** The popover opened by intent (ends arranging). */
     onOpen: () => void;
   } = $props();
 
   let wrapEl = $state<HTMLElement | null>(null);
   let popEl = $state<HTMLElement | null>(null);
-  let inputEl = $state<HTMLInputElement | null>(null);
   let iconEl = $state<HTMLButtonElement | null>(null);
   let popInputEl = $state<HTMLInputElement | null>(null);
   let pos = $state<{ left: number; top: number; width: number; maxH: number } | null>(null);
 
-  const count = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
-  const POP_W = 400;
+  const POP_W = 320;
 
   /** Place the popover under the header, right-aligned to the field (visual px → layout px). */
   function place() {
@@ -77,29 +65,27 @@
     pos = { left: p.x, top: p.y, width: width / z, maxH: Math.max(160 / z, p.maxHeight) };
   }
   function openPop() {
-    if (resultsOpen) return;
     place();
     if (!open) {
       open = true;
       onOpen();
     }
   }
-  /** Close; `refocus` puts focus back on the field (or the icon button). */
   function closePop(refocus = false) {
     open = false;
-    if (refocus) (iconOnly ? iconEl : inputEl)?.focus();
+    if (refocus) iconEl?.focus();
   }
-  function toggleIcon() {
-    if (open) closePop();
-    else {
-      // the results have no field of their own on a narrow editor: the icon goes back to the popover
-      if (resultsOpen) onCloseResults();
-      openPop();
-      requestAnimationFrame(() => popInputEl?.focus());
+  async function toggleIcon() {
+    if (open) {
+      closePop();
+      return;
     }
+    openPop();
+    await tick();
+    popInputEl?.focus();
   }
   function showAll() {
-    closePop();
+    closePop(true);
     onShowAll();
   }
   function jump(r: FindRow, page?: string) {
@@ -108,8 +94,7 @@
   }
   function clear() {
     query = '';
-    if (resultsOpen) onCloseResults();
-    (iconOnly ? popInputEl : inputEl)?.focus();
+    popInputEl?.focus();
   }
   const rowButtons = (): HTMLElement[] => (popEl ? Array.from(popEl.querySelectorAll<HTMLElement>('.be-fmain')) : []);
   function focusRow(delta: number) {
@@ -124,17 +109,12 @@
       showAll();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      openPop();
-      requestAnimationFrame(() => focusRow(1));
+      focusRow(1);
     } else if (e.key === 'Escape') {
       // owned here: the app's Escape chain (close the editor, restore a maximized panel) never sees it
       e.preventDefault();
       e.stopPropagation();
-      if (open) closePop(true);
-      else if (resultsOpen) {
-        query = '';
-        onCloseResults();
-      } else (e.currentTarget as HTMLInputElement).blur();
+      closePop(true);
     }
   }
   /** Keys inside the popover: Escape closes it (focus back on the field), arrows walk the rows. */
@@ -147,9 +127,6 @@
       e.preventDefault();
       focusRow(e.key === 'ArrowDown' ? 1 : -1);
     }
-  }
-  function onInput() {
-    if (!resultsOpen && !open) openPop();
   }
   /** Focus left the field / popover for something else: close (a press elsewhere closes it too). */
   function onFocusOut(e: FocusEvent) {
@@ -187,14 +164,9 @@
       cancelAnimationFrame(frame);
     };
   });
-  // the flat results take over: no popover meanwhile
-  $effect(() => {
-    if (resultsOpen && open) open = false;
-  });
 </script>
 
-<div class="be-find" class:icon={iconOnly} class:touch bind:this={wrapEl} onfocusout={onFocusOut}>
-  {#if iconOnly}
+<div class="be-find" class:touch bind:this={wrapEl} onfocusout={onFocusOut}>
     <button
       bind:this={iconEl}
       class="be-find-ic"
@@ -209,25 +181,6 @@
     >
       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.6 10.6 L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
     </button>
-  {:else}
-    <div class="be-find-field" class:on={open || resultsOpen}>
-      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.6 10.6 L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-      <input
-        bind:this={inputEl}
-        bind:value={query}
-        class="be-find-in"
-        placeholder="Find a control…"
-        aria-label="Find a control"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-be-find-input
-        onpointerdown={openPop}
-        oninput={onInput}
-        onkeydown={onKey}
-      />
-      {#if query}<button class="be-find-x" type="button" aria-label="Clear search" onclick={clear}>✕</button>{/if}
-    </div>
-  {/if}
 </div>
 
 <!-- the popover floats in the overlay layer (moved to the workbench shell root, see overlayLayer.ts) -->
@@ -251,16 +204,10 @@
         onfocusout={onFocusOut}
       >
         <div class="be-fhead">
-          {#if iconOnly}
-            <div class="be-find-field on inpop">
-              <input bind:this={popInputEl} bind:value={query} class="be-find-in" placeholder="Find a control…" aria-label="Find a control" data-be-find-input onkeydown={onKey} />
-              {#if query}<button class="be-find-x" type="button" aria-label="Clear search" onclick={clear}>✕</button>{/if}
-            </div>
-          {:else}
-            <span class="be-ftitle">FIND</span>
-            <span class="be-fcount">{count}</span>
-            <span class="be-fsp"></span>
-          {/if}
+          <div class="be-find-field">
+            <input bind:this={popInputEl} bind:value={query} class="be-find-in" placeholder="Find a control…" aria-label="Find a control" data-be-find-input onkeydown={onKey} />
+            {#if query}<button class="be-find-x" type="button" aria-label="Clear search" onclick={clear}>✕</button>{/if}
+          </div>
           <div class="be-fseg" role="group" aria-label="Filter">
             <button type="button" class:on={filter === 'all'} aria-pressed={filter === 'all'} onclick={() => (filter = 'all')}>All</button>
             <button type="button" class:on={filter === 'unused'} aria-pressed={filter === 'unused'} title="Controls on no page" onclick={() => (filter = 'unused')}>Unused</button>
@@ -328,23 +275,12 @@
     align-items: center;
     gap: 7px;
     width: 100%;
-    height: 30px;
+    height: 36px;
     padding: 0 8px 0 9px;
     border-radius: 8px;
     box-sizing: border-box;
     background: var(--input);
-    border: 1px solid var(--border);
-    color: var(--textfaint);
-    transition: border-color 0.12s;
-  }
-  .be-find-field.on {
-    border-color: var(--accent-border);
-    color: var(--accentbright);
-  }
-  .be-find-field.inpop {
-    flex: 1;
-    min-width: 0;
-    width: auto;
+    border: 1px solid var(--accent-border);
   }
   .be-find-in {
     flex: 1;
@@ -372,8 +308,8 @@
     background: var(--surface2);
   }
   .be-find-ic {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     flex: none;
     display: flex;
     align-items: center;
@@ -385,7 +321,7 @@
     color: var(--textdim);
   }
   /* phone: ≥ 40 px hit targets */
-  .be-find.touch .be-find-field {
+  .be-find-pop.touch .be-find-field {
     height: 40px;
   }
   .be-find.touch .be-find-ic {
@@ -424,22 +360,11 @@
   .be-fhead {
     flex: none;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     padding: 9px 10px 8px 12px;
     border-bottom: 1px solid var(--surface2);
-  }
-  .be-ftitle {
-    font: 700 9.5px/1 var(--font-mono);
-    letter-spacing: 0.14em;
-    color: var(--textdim);
-  }
-  .be-fcount {
-    font: 600 9.5px/1 var(--font-mono);
-    color: var(--textfaint);
-  }
-  .be-fsp {
-    flex: 1;
   }
   .be-fseg {
     flex: none;

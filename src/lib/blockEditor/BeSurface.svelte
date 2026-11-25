@@ -72,7 +72,7 @@
   import { buildPageMenu } from './pageMenu';
   import { BeState } from './beState.svelte';
   import { trackDeviceClass } from './deviceClass.svelte';
-  import { effectiveNav, PHONE_END_PAD, SIDE_NAV_MIN_W, type BeDensity, type BeNav } from './boardGeometry';
+  import { effectiveNav, minimumBoardHeight, PHONE_END_PAD, SIDE_NAV_MIN_W, type BeDensity, type BeNav } from './boardGeometry';
   import {
     BE_SPEC,
     FIXED_MAX_COLS,
@@ -183,8 +183,8 @@
   // the catalog only cares whether (and as what) the block meters, not about every level poll — and not
   // about METER ON/OFF either (the ungated list): toggling metering must not change the catalog, reload
   // the board or drop the Arrange undo history; the meter tile just shows no reading while it is off
-  const monRole = $derived(blockMons[0]?.role ?? null);
-  const hasWave = $derived(wave.length > 0);
+  const monRole = $derived(editor.blockMonitorRole ?? blockMons[0]?.role ?? null);
+  const hasWave = $derived(!!editor.hasLooperWaveform);
   // The catalog only changes with the block's parameter SET (ids, names, option counts), not with their
   // values, but a device parameter event replaces the params array. Keep the previous catalog (same
   // array, same entries) while its structure is unchanged, so the board, the page layouts and every
@@ -192,6 +192,8 @@
   let catMemo: { sig: string; cat: BeCtl[] } | null = null;
   const catalog = $derived.by(() => {
     const next = buildCatalog({
+      layout: editor.blockLayout,
+      effectId: editor.selected?.effectId,
       params: editor.params,
       enums: editor.enums,
       eqBandCount: eqBands.length,
@@ -308,6 +310,7 @@
   /** The board area: the pages and the fixed area together. */
   let mainW = $state(0);
   let mainH = $state(0);
+  let rootH = $state(0);
   /** Editor width (the side navigation and the header row break depend on it, not on the board's). */
   let rootW = $state(0);
   const prefs = $derived(be.prefs);
@@ -318,6 +321,21 @@
    *  still navigate them. Reading the phone view never writes a board (display positions only). */
   const phoneBoard = $derived(isPhone && !be.editMode);
   const boardNav = $derived<BeNav>(phoneBoard ? 'side' : nav);
+  $effect(() => {
+    const root = rootEl;
+    const boardHeight = mainH;
+    const chrome = rootH - boardHeight;
+    if (!root || !boardHeight || chrome < 0 || isPhone || be.editMode) return;
+    const dock = root.closest<HTMLElement>('.aw-region');
+    const panel = root.closest<HTMLElement>('.ed:not(.embedded)');
+    const container = dock?.matches('.aw-region-bottom:not(.overlay), .aw-region-top:not(.overlay)') ? dock : panel;
+    if (!container) return;
+    const overhead = Math.max(0, container.offsetHeight - root.offsetHeight);
+    const minimum = minimumBoardHeight(prefs.density, boardNav) + chrome + overhead;
+    const previous = container.style.minHeight;
+    container.style.minHeight = dock ? `min(${minimum}px, max(0px, calc(100% - 120px)))` : `min(${minimum}px, max(0px, calc(100dvh - 150px)))`;
+    return () => { container.style.minHeight = previous; };
+  });
   /** The side list can take effect at this editor width (the ⋯ menu offers it). */
   const sideFits = $derived(rootW === 0 || rootW >= SIDE_NAV_MIN_W);
   /** Side page list width at this editor width. */
@@ -382,6 +400,26 @@
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
   const active = $derived(board?.page ?? '');
   const highlight = $derived(highlightedPages(visible, active));
+  function observeTileTelemetry(el: HTMLElement, needs: { waveform: boolean; monitors: boolean }) {
+    const eid = layoutOwnerEid;
+    if (!block || eid == null || status !== 'ready' || pageHidden || !editor.observeBlockTelemetry || typeof IntersectionObserver === 'undefined') return;
+    let stop: (() => void) | undefined;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries.at(-1);
+      if (entry?.isIntersecting && entry.intersectionRect.width > 0 && entry.intersectionRect.height > 0) {
+        stop ??= editor.observeBlockTelemetry?.(eid, needs);
+      } else {
+        stop?.();
+        stop = undefined;
+      }
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      observer.takeRecords();
+      stop?.();
+    };
+  }
 
   // called from the board's measuring effect: untracked, so that effect depends on its sections only
   function onVisible(vis: string[]) {
@@ -981,6 +1019,19 @@
   // ── ⋯ menu ──
   let moreOpen = $state(false);
   let moreAnchor = $state<HTMLElement | null>(null);
+  let blockLibraryOpen = $state(false);
+  let blockLibraryAnchor = $state<HTMLElement | null>(null);
+  const blockLibraryAvailable = $derived(!!block && !!editor.blockLibraryTarget && !!editor.openBlockLibrary);
+  $effect(() => {
+    void editor.blockLibraryTarget?.key;
+    blockLibraryOpen = false;
+  });
+  function toggleBlockLibrary() {
+    moreOpen = false;
+    bmOpen = false;
+    findOpen = false;
+    blockLibraryOpen = !blockLibraryOpen;
+  }
   const moreItems = $derived(
     moreOpen
       ? buildMoreMenu(
@@ -1659,6 +1710,8 @@
       return animate;
     },
     playhead: setPlayhead,
+    isLiveMeter: (ctl) => ctl.id < 0 || (!!ctl.meterParamName && !!editor.hasBlockMonitor?.(ctl.meterParamName)),
+    observeTileTelemetry,
     get meteringOn() {
       return meteringOn;
     },
@@ -1707,7 +1760,7 @@
   const RESULT_GAP = 4;
 </script>
 
-<div class="be-root" class:phone={isPhone} bind:this={rootEl} bind:clientWidth={rootW}>
+<div class="be-root" style:--be-accent={accent || undefined} class:phone={isPhone} bind:this={rootEl} bind:clientWidth={rootW} bind:clientHeight={rootH}>
   <BeHeader
     {block}
     {nav}
@@ -1731,16 +1784,18 @@
     bypassModeOpen={bmOpen}
     bind:bypassModeAnchor={bmAnchor}
     onBypassMode={() => (bmOpen = !bmOpen)}
+    {blockLibraryOpen}
+    bind:blockLibraryAnchor
+    onBlockLibrary={blockLibraryAvailable ? toggleBlockLibrary : undefined}
     search={findField}
     end={headerEnd}
   />
-  {#snippet findField(iconOnly: boolean)}
+  {#snippet findField()}
     <BeFind
       bind:query={q}
       bind:filter={findFilter}
       bind:open={findOpen}
-      {iconOnly}
-      touch={isPhone}
+      touch={deviceClass !== 'desktop'}
       groups={findList}
       current={board?.page ?? ''}
       canPin={workbenchCanPin}
@@ -1749,7 +1804,6 @@
       onJump={jumpTo}
       onPin={findPin}
       onShowAll={() => (resultsOpen = true)}
-      onCloseResults={() => (resultsOpen = false)}
       onOpen={() => setEdit(false)}
     />
   {/snippet}
@@ -1910,6 +1964,17 @@
 
     <!-- ⋯ menu: arrange · navigation · control size · layout · block (opens under the trigger) -->
     <BeMenu open={moreOpen} items={moreItems} anchor={moreAnchor} touch={isPhone} label="Block and layout options" onClose={() => (moreOpen = false)} />
+    <BeMenu
+      open={blockLibraryOpen && blockLibraryAvailable}
+      items={[
+        { id: 'load', label: 'Load from Library', run: () => editor.openBlockLibrary?.('browse') },
+        { id: 'save', label: 'Save to Library', run: () => editor.openBlockLibrary?.('save') }
+      ]}
+      anchor={blockLibraryAnchor}
+      touch={deviceClass !== 'desktop'}
+      label="Block library"
+      onClose={() => (blockLibraryOpen = false)}
+    />
 
     <!-- Bypass mode ▾ (header): the block's own modes as radio rows, opens under the control -->
     <BeMenu open={bmOpen && bmItems.length > 0} items={bmItems} anchor={bmAnchor} touch={deviceClass !== 'desktop'} label="Bypass mode" onClose={() => (bmOpen = false)} />

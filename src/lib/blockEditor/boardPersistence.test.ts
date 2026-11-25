@@ -791,10 +791,15 @@ describe('migration to the fixed area: an untouched earlier default follows the 
   };
   const seedInput = { layout, catalog: cat, mainParamIds: new Set([0, 1]) };
   const now = builtInSeed(seedInput);
+  const olderLayout = { ...layout, pages: layout.pages.map(({ pageControls: _pageControls, ...page }) => page) };
   const flavours = {
     'rows only (released: unguarded refs, no graphs)': buildDeviceLayoutBoardV2(layout, noGraphs, { rowFlowOnly: true, legacyUnguarded: true })!,
     'positions and graphs, before the fixed area': buildDeviceLayoutBoardV2(layout, cat, { withoutFixed: true })!,
-    'current default on an older server': buildDeviceLayoutBoardV2({ ...layout, pages: layout.pages.map(({ pageControls: _pageControls, ...page }) => page) }, cat)!
+    'first Fixed layout': buildDeviceLayoutBoardV2(layout, cat, { legacyFixedLayout: true })!,
+    'stacked Fixed layout': buildDeviceLayoutBoardV2(layout, cat, { legacyStackedLayout: true })!,
+    'current default on an older server': buildDeviceLayoutBoardV2(olderLayout, cat)!,
+    'first Fixed layout on an older server': buildDeviceLayoutBoardV2(olderLayout, cat, { legacyFixedLayout: true })!,
+    'stacked Fixed layout on an older server': buildDeviceLayoutBoardV2(olderLayout, cat, { legacyStackedLayout: true })!
   };
   const previous = () => previousSeeds(seedInput);
   const input = (st: KeyValueStore, deviceClass: 'desktop' | 'tablet' | 'phone' = 'desktop') => ({ storage: st, slug: 'chorus', profile: 'Default', deviceClass, catalogKeys: ckeys, seed: now, variantSig: layoutVariantSig(layout), previousSeed: previous });
@@ -808,7 +813,7 @@ describe('migration to the fixed area: an untouched earlier default follows the 
     }
     expect(flavours['current default on an older server'].fixed).toBeDefined();
     const before = Object.values(flavours);
-    expect(new Set([...before, now].map((b) => JSON.stringify(b.boards))).size).toBe(4);
+    expect(before.some((b) => boardDiffersFromSeed(b, now))).toBe(true);
     expect(previous()).toEqual(before);
   });
 
@@ -817,7 +822,8 @@ describe('migration to the fixed area: an untouched earlier default follows the 
       it(`untouched — ${name}, ${cls}: loads the new default, writes nothing`, () => {
         const st = stored(normalizeBoard(old, ckeys), cls);
         const r = loadBoard(input(st, cls));
-        expect(r.source).toBe('seed');
+        const changed = boardDiffersFromSeed(old, now);
+        expect(r.source).toBe(changed ? 'seed' : cls === 'desktop' ? 'desktop' : 'own');
         expect(r.board.fixed).toEqual(now.fixed);
         expect(boardDiffersFromSeed(r.board, now)).toBe(false);
         expect(st.writes).toEqual([]);

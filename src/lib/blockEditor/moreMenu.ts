@@ -69,7 +69,7 @@ export interface MoreMenuActions {
   remove(): void;
 }
 
-export const DENSITY_LABEL: Readonly<Record<BeDensity, string>> = { s: 'Compact', m: 'Normal', l: 'Large' };
+export const DENSITY_LABEL: Readonly<Record<BeDensity, string>> = { s: 'Small', m: 'Medium', l: 'Large' };
 
 /** A custom layout profile (a copy): not one of the built-ins. */
 export const isCopyProfile = (name: string): boolean => name !== DEFAULT_PROFILE && name !== BLANK_PROFILE;

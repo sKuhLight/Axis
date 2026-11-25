@@ -4,10 +4,12 @@
   // BeHost the surface provides (values, gestures, pin, arrange selection).
   import EQGraph from '../EQGraph.svelte';
   import BeGraph from './BeGraph.svelte';
+  import BeEqGraph from './BeEqGraph.svelte';
   import { longPress } from '../axis-workbench/longPress';
   import { getBeHost } from './beHost';
   import { FIXED_PAGE, isDivider, type BeItem, type BeRect } from './boardModel';
   import type { BeCtl } from './catalog';
+  import { controlMeterReadings } from './meterData';
   import {
     centredPartHit,
     ctlHeightPx,
@@ -72,6 +74,21 @@
   const key = $derived(div ? '' : (item as { key: string }).key);
   const pxW = $derived(pxOf(pos.w, c, g));
   const pxH = $derived(pxOf(pos.h, c, g));
+  const step = $derived(c + g);
+  // A divider takes no cell: it is drawn as a band in the grid gap it heads (layoutPlacement
+  // `compactDividers` gives it h = 0 / w = 0), so it never covers a control or its label and adding one
+  // never moves a control. The band is exactly the gap wide, so it sits between two rows/columns.
+  const divBox = $derived.by(() => {
+    if (!div) return null;
+    const band = Math.max(10, g);
+    // A cell-sized divider (the fixed area packs cells) keeps its band inside its own row/column.
+    if (div.kind === 'hdiv') {
+      const top = pos.h > 0 ? pos.y * step + Math.max(0, (pos.h * step - g - band) / 2) : pos.y * step - band;
+      return { left: pos.x * step, top, width: Math.max(8, pos.w * step - g), height: band };
+    }
+    const left = pos.w > 0 ? pos.x * step + Math.max(0, (pos.w * step - g - band) / 2) : pos.x * step - band;
+    return { left, top: pos.y * step, width: band, height: Math.max(8, pos.h * step - g) };
+  });
   const lf = $derived(labelPx(c));
   const ed = $derived(host.editMode && !standalone);
   const label = $derived(ctl?.label ?? '');
@@ -129,7 +146,16 @@
   const svalHit = $derived(touchUi && view === 'slider' ? sliderValueHit(hitTile, monoTextPx(centre, lf) + 8, lf + 4) : null);
   const hitStyle = (h: HitInset | null | undefined): string | undefined => (h ? `--ht:${h.top}px;--hr:${h.right}px;--hb:${h.bottom}px;--hl:${h.left}px` : undefined);
   const flatMeter = $derived(view === 'meter' && isFlatMeter(pos.w, pos.h));
-  const bars = $derived(host.mons.length ? host.mons : [null]);
+  const bars = $derived(controlMeterReadings(ctl, host.mons, host.meteringOn, ctl && ctl.id >= 0 ? host.knob(ctl.id) : undefined));
+  const primaryMeter = $derived(bars[0] ?? null);
+  const needsMonitor = $derived(host.meteringOn && (
+    (view === 'meter' && ctl?.kind === 'meter' && host.isLiveMeter(ctl)) ||
+    (view === 'graph' && ctl?.visual?.kind === 'dynamics' && typeof ctl.visual.roles.gainReduction === 'number')
+  ));
+  $effect(() => {
+    const waveform = view === 'wave' && ctl?.kind === 'wave';
+    if (tileEl && (waveform || needsMonitor)) return host.observeTileTelemetry(tileEl, { waveform, monitors: needsMonitor });
+  });
 
   // hover actions (normal mode, pointer devices): ⚡ pin · ∿ modifier, sized from the cell; left out where
   // they would cover the control (one-row tiles, small pills / fields — the control menu has both there)
@@ -182,8 +208,11 @@
   bind:this={tileEl}
   class="be-tile"
   class:edit={ed}
+  class:colored={!!host.accent}
   class:sel={selected}
   class:div={!!div}
+  class:divider={!!div}
+  class:lbl={showLabel}
   class:eq={view === 'eq'}
   class:graph={view === 'graph'}
   class:standalone
@@ -197,11 +226,14 @@
   data-be-y={pos.y}
   data-be-w={pos.w}
   data-be-h={pos.h}
-  style:grid-column={standalone ? null : `${pos.x + 1} / span ${pos.w}`}
-  style:grid-row={standalone ? null : `${pos.y + 1} / span ${pos.h}`}
-  style:width={standalone ? `${pxW}px` : null}
-  style:height={standalone ? `${pxH}px` : null}
+  style:grid-column={standalone || div ? null : `${pos.x + 1} / span ${pos.w}`}
+  style:grid-row={standalone || div ? null : `${pos.y + 1} / span ${pos.h}`}
+  style:width={div ? `${divBox!.width}px` : standalone ? `${pxW}px` : null}
+  style:height={div ? `${divBox!.height}px` : standalone ? `${pxH}px` : null}
+  style:left={div ? `${divBox!.left}px` : null}
+  style:top={div ? `${divBox!.top}px` : null}
   style:touch-action={touchAction}
+  style:--be-accent={host.accent || undefined}
   style:--lf="{lf}px"
   oncontextmenu={(e) => {
     if (ctl && !div && tileEl) host.ctxMenu(e, item, ctl, tileEl);
@@ -444,7 +476,7 @@
         <EQGraph bands={host.eqBands} gainRange={host.eqGainRange} accent={host.accent} onSet={(pp, n) => host.eqSet(pp, n)} />
       </div>
     {:else if ctl.kind === 'graph' && ctl.visual}
-      <BeGraph visual={ctl.visual} itemId={item.id} {pxW} {pxH} edit={ed} />
+      {#if ctl.visual.kind === 'eq'}<BeEqGraph visual={ctl.visual} edit={ed} />{:else}      <BeGraph visual={ctl.visual} itemId={item.id} {pxW} {pxH} edit={ed} />{/if}
     {:else if ctl.kind === 'action'}
       <button
         class="be-pill action"
@@ -462,22 +494,22 @@
       </button>
     {:else if ctl.kind === 'meter'}
       {#if flatMeter}
-        <div class="be-mflat" role="meter" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(meterFill(host.mons[0] ?? null) * 100)} aria-valuetext={meterText(host.mons[0] ?? null)} title="Live level ({label})">
+        <div class="be-mflat" role="meter" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(meterFill(primaryMeter) * 100)} aria-valuetext={meterText(primaryMeter)} title="Live level ({label})">
           <span class="be-slbl">{label}</span>
           <div class="be-mbars">
             {#each bars as m, i (i)}
               <div class="be-mhtrack"><div class="be-mhfill tone-{meterTone(meterFill(m))}" style:width="{Math.round(meterFill(m) * 100)}%"></div></div>
             {/each}
           </div>
-          <span class="be-mtext">{meterText(host.mons[0] ?? null)}</span>
+          <span class="be-mtext">{meterText(primaryMeter)}</span>
         </div>
       {:else}
-        <div class="be-mval">{meterText(host.mons[0] ?? null)}</div>
-        <div class="be-mrow" role="meter" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(meterFill(host.mons[0] ?? null) * 100)} title="Live level ({label})">
+        <div class="be-mval">{meterText(primaryMeter)}</div>
+        <div class="be-mrow" role="meter" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(meterFill(primaryMeter) * 100)} title="Live level ({label})">
           {#each bars as m, i (i)}
             <div class="be-mcol">
               <div class="be-mtrack"><div class="be-mfill tone-{meterTone(meterFill(m))}" style:height="{Math.round(meterFill(m) * 100)}%"></div></div>
-              {#if host.mons.length > 1 && m}<div class="be-mtag">{meterTag(m)}</div>{/if}
+              {#if bars.length > 1 && m}<div class="be-mtag">{meterTag(m)}</div>{/if}
             </div>
           {/each}
         </div>
@@ -569,6 +601,12 @@
       box-shadow: 0 0 0 0 transparent;
     }
   }
+  .be-tile.colored {
+    --accent: var(--be-accent);
+    --accentbright: color-mix(in srgb, var(--be-accent) 80%, var(--text));
+    --accent-tint: color-mix(in srgb, var(--be-accent) 14%, transparent);
+    --accent-border: color-mix(in srgb, var(--be-accent) 38%, transparent);
+  }
   .be-tile {
     position: relative;
     min-width: 0;
@@ -609,6 +647,13 @@
   .be-tile.div {
     padding: 0;
   }
+  /* A divider sits on the grid line, outside the cell flow (see `divBox`). Its label may be longer than the
+   * band (a short section still names itself), so it is never clipped. */
+  .be-tile.divider {
+    position: absolute;
+    z-index: 4;
+    overflow: visible;
+  }
   .be-tile.div:not(.edit) {
     pointer-events: none;
   }
@@ -626,15 +671,22 @@
     z-index: 2;
   }
   /* ── labels ── */
+  /* Labels sit at the tile's bottom edge for every view, so a knob and a button of the same tile size share
+   * one baseline (the content is centred in the space above them, see `.be-tile.lbl`). */
   .be-lbl {
-    flex: none;
-    width: 100%;
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 6px;
     font: 600 var(--lf) / 1.15 var(--font-ui);
     color: var(--textdim);
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .be-tile.lbl {
+    padding-bottom: calc(var(--lf) + 7px);
   }
   .be-slbl {
     flex: none;
@@ -819,7 +871,7 @@
     transform: translateX(-50%);
     height: 12px;
     border-radius: 4px;
-    background: var(--amber);
+    background: var(--accent);
     border: 3px solid var(--bg2);
     box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 60%, transparent);
   }
@@ -858,7 +910,7 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: var(--amber);
+    background: var(--accent);
     border: 3px solid var(--bg2);
     box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 60%, transparent);
   }
@@ -1235,7 +1287,7 @@
   /* ── dividers ── */
   .be-hdiv {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
     width: 100%;
     height: 100%;
@@ -1243,12 +1295,14 @@
   }
   .be-vdiv {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: flex-start;
     gap: 8px;
     width: 100%;
     height: 100%;
-    padding: 2px 0;
+    padding: 0;
+    overflow: visible;
   }
   .be-divlbl {
     flex: none;
@@ -1286,6 +1340,15 @@
   .be-tile.sel .be-chrome {
     border: 1.5px solid var(--accent);
     background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  /* A divider's band is only as tall as its label+line: no filled cell behind it. */
+  .be-tile.divider .be-chrome {
+    background: transparent;
+    border-radius: 3px;
+  }
+  .be-tile.divider.sel .be-chrome {
+    background: transparent;
+    border-radius: 3px;
   }
   .be-tile.dragging .be-chrome {
     border: 2px dashed var(--accent);

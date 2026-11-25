@@ -21,6 +21,7 @@
 // back on a revert).
 
 import { isGraphKey } from '../blockVisuals';
+import { sameLayoutVariant } from '../deviceLayoutBoard';
 import { FIXED_PAGE, isBlockLevelKey, isDivider, normalizeBoard, pageItems, regions, type BeBoard, type BeItem, type BeView } from './boardModel';
 import { parseStoredBoard, parseStoredMeta, type BePrefs } from './boardSchema';
 
@@ -189,7 +190,7 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
     return raw ? parseStoredBoard(raw) : null;
   };
   const isDefault = profile === DEFAULT_PROFILE;
-  const stale = (b: BeBoard) => isDefault && !!sig && b.variantSig !== sig;
+  const stale = (b: BeBoard) => isDefault && !!sig && !sameLayoutVariant(b.variantSig, sig);
   // a stored Default board that is still exactly the previous built-in seed follows the current one
   // (worked out only when a stored Default board is found)
   const stamp = (b: BeBoard): BeBoard => (isDefault && sig ? { ...b, variantSig: sig } : b);
@@ -239,7 +240,7 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
       const current = upgrade!.current;
       return { board: current.pageOrder.includes(board.page) ? { ...current, page: board.page } : current, source: 'seed' };
     }
-    return { board, source };
+    return { board: stamp(board), source };
   }
   return loadSeed({ ...input, catalogKeys: keys });
 }

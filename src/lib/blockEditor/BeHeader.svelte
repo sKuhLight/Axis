@@ -1,10 +1,11 @@
 <script lang="ts">
+  import BlockGlyph from '../BlockGlyph.svelte';
   // Block Editor header: type chip (glyph · type name or cab summary · channel letter that unfolds A–D),
   // the page tabs (top navigation), "Find a control…", the Engaged | Bypass mode ▾ | Scene Ignore segments
   // (both from the device, per channel; on a phone-width editor Bypass mode moves into ⋯) and
   // the ⋯ menu trigger (amber dot while the layout differs from its seed). One row when every part fits
-  // at its widest (`oneRowMinWidth`: ~1240 px with the tabs, less with the side navigation, whose page
-  // list sits beside the board), two rows below: chip · segments · ⋯ on top, tabs · search underneath.
+  // at its compact width; below that the page tabs have their own scrollable row. Search, state
+  // and options remain joined at the right. Wide headers expand the search field.
   // The parts are placed in document order (`headerOrder`), so Tab walks row 1 before row 2. Without a
   // block (the virtual-effect screens) it is the compact row: tabs · search · ⋯. On the phone device
   // class every hit target is at least 40 px.
@@ -37,6 +38,9 @@
     bypassModeOpen = false,
     bypassModeAnchor = $bindable(null),
     onBypassMode = () => {},
+    blockLibraryOpen = false,
+    blockLibraryAnchor = $bindable(null),
+    onBlockLibrary,
     search,
     end
   }: {
@@ -70,8 +74,11 @@
     bypassModeAnchor?: HTMLElement | null;
     /** Open / close the Bypass mode menu. */
     onBypassMode?: () => void;
-    /** The search (field, or icon button on a narrow editor). */
-    search: Snippet<[boolean]>;
+    blockLibraryOpen?: boolean;
+    blockLibraryAnchor?: HTMLElement | null;
+    onBlockLibrary?: () => void;
+    /** Opens the control search. */
+    search: Snippet;
     /** Trailing control (the monolith's ✕). */
     end?: Snippet;
   } = $props();
@@ -151,7 +158,7 @@
         data-be-type
         onclick={() => block.onType()}
       >
-        <span class="be-glyph" aria-hidden="true" style:background={block.glyphBg} style:border-color={block.glyphBorder}>{block.glyph}</span>
+        <span class="be-glyph" aria-hidden="true" style:background={block.glyphBg} style:border-color={block.glyphBorder}><BlockGlyph glyph={block.glyph} /></span>
         <span class="be-chip-txt">
           {#if !fit.tiny}<span class="be-chip-sub">{chip.sub}</span>{/if}
           <span class="be-chip-name">{chip.name}</span>
@@ -184,6 +191,26 @@
             <span class="be-ch-val">{chip.channel}</span>
           </button>
         {/if}
+      {/if}
+      {#if onBlockLibrary}
+        <span class="be-chip-sep" aria-hidden="true"></span>
+        <button
+          class="be-chip-lib"
+          type="button"
+          aria-label="Block library"
+          aria-haspopup="menu"
+          aria-expanded={blockLibraryOpen}
+          title="Block library"
+          data-be-block-library
+          bind:this={blockLibraryAnchor}
+          onclick={onBlockLibrary}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4h5v16H4zM10 4h5v16h-5zM16 5l3-1 4 15-3 1z" />
+          </svg>
+          <span class="be-chip-lib-lbl">Library</span>
+          <span aria-hidden="true" class="be-chip-lib-arrow">▾</span>
+        </button>
       {/if}
     </div>
   {/if}
@@ -263,6 +290,7 @@
   class:one={rows === 1}
   class:two={rows === 2}
   class:compact={!block}
+  class:narrow={fit.narrow}
   class:tiny={fit.tiny}
   class:xs={fit.xs}
   class:phone
@@ -287,17 +315,16 @@
       {@render chipPart()}
     {:else if part === 'tabs'}
       <div class="be-tabs">
-        <BePageNav variant="tabs" touch={phone} {pages} {active} {highlight} {editMode} {renaming} {onGo} {onStartRename} {onRename} {onCancelRename} {onAdd} />
+        <BePageNav variant="tabs" {touch} {pages} {active} {highlight} {editMode} {renaming} {onGo} {onStartRename} {onRename} {onCancelRename} {onAdd} />
       </div>
     {:else if part === 'spA' || part === 'spB'}
       <span class="be-sp" class:a={part === 'spA'}></span>
-    {:else if part === 'tools'}
-      <div class="be-tools" class:field={fit.searchField}>
-        {@render search(!fit.searchField)}
-      </div>
-    {:else if part === 'state'}
-      {@render statePart()}
-    {:else if part === 'more'}
+    {:else if part === 'actions'}
+      <div class="be-actions" role="group" aria-label="Block controls">
+        <div class="be-tools">
+          {@render search()}
+        </div>
+        {@render statePart()}
       <div class="be-morewrap">
         <button
           class="be-more"
@@ -314,6 +341,7 @@
           ⋯{#if moreDot}<span class="be-more-dot" aria-hidden="true" data-be-more-dot></span>{/if}
         </button>
         <span class="be-more-anchor" aria-hidden="true" style:width="{MORE_MENU_W}px" bind:this={moreAnchor}></span>
+      </div>
       </div>
     {:else if part === 'end' && end}
       <div class="be-end">{@render end()}</div>
@@ -412,7 +440,8 @@
     transition: background 0.12s;
   }
   .be-chip-type:hover:not(:disabled),
-  .be-chip-ch:hover {
+  .be-chip-ch:hover,
+  .be-chip-lib:hover {
     background: var(--surface2);
   }
   .be-chip-type:disabled {
@@ -490,6 +519,30 @@
     font: 800 14px/1 var(--font-mono);
     color: var(--accentbright);
   }
+  .be-chip-lib {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex: none;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--textdim);
+    font: 600 11px/1 var(--font-ui);
+    cursor: pointer;
+  }
+  .be-chip-lib[aria-expanded='true'] {
+    color: var(--be-accent, var(--accent));
+    background: var(--surface2);
+  }
+  .narrow .be-chip-lib-lbl,
+  .tiny .be-chip-lib-arrow {
+    display: none;
+  }
+  .touch .be-chip-lib {
+    min-width: 40px;
+  }
   .be-chans {
     display: flex;
     align-items: center;
@@ -531,33 +584,57 @@
     display: flex;
     min-width: 0;
     flex: 1000 1 0px;
-    max-width: max-content;
+    justify-content: center;
+    overflow: hidden;
   }
+  .one .be-chip { min-width: 172px; max-width: 280px; }
   .one .be-tabs {
-    margin-left: 4px;
+    margin-inline: 4px;
   }
   .be-tools {
     display: flex;
     align-items: center;
     flex: none;
   }
-  .be-tools.field {
-    width: 200px;
-  }
-  .one .be-tools.field {
-    width: 220px;
-  }
-  .compact .be-tools.field {
-    flex: 0 1 220px;
-    min-width: 140px;
-  }
 
-  /* ── block state: one joined control ── */
-  .be-state {
+  .be-actions {
     display: flex;
     align-items: stretch;
     flex: none;
-    height: 30px;
+    height: 36px;
+    border: 1px solid var(--border2);
+    border-radius: 9px;
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .be-actions .be-state {
+    height: 100%;
+    border: 0;
+    border-inline: 1px solid var(--border2);
+    border-radius: 0;
+  }
+  .be-actions .be-more {
+    height: 100%;
+    border: 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .be-actions :global(.be-find-ic) {
+    height: 34px;
+    border: 0;
+    border-radius: 8px 0 0 8px;
+    background: transparent;
+  }
+  .be-actions :global(.be-find) { width: 100%; }
+  .touch .be-actions { height: 42px; }
+  .touch .be-actions :global(.be-find-ic) { height: 40px; }
+
+  /* ── block state: one joined control ── */
+  .be-state {
+    box-sizing: border-box;
+    display: flex;
+    align-items: stretch;
+    flex: none;
+    height: 36px;
     border-radius: 8px;
     overflow: hidden;
     background: var(--surface);
@@ -671,8 +748,8 @@
   }
   .be-more {
     position: relative;
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;

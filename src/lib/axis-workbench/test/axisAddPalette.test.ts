@@ -10,7 +10,7 @@ import {
 } from '../axisAddPalette';
 import { AXIS_WORKBENCH_WIDGET_TYPES } from '../axisWorkbenchRegistryManifest';
 import { createAxisWorkbenchDefaultDocument } from '../axisWorkbenchDefaults';
-import { buildWidgetCatalog, selectActiveLayout } from '../../workbench/core';
+import { buildWidgetCatalog, selectActiveLayout, widgetCatalogAddCommands, reduceWorkbenchDocument } from '../../workbench/core';
 
 describe('axisCanonicalWidgets', () => {
   it('offers every manifest widget type except the parameter control, once, with a label and the default id', () => {
@@ -22,6 +22,25 @@ describe('axisCanonicalWidgets', () => {
       expect(spec.label).toBe(AXIS_WIDGET_LABELS[spec.type]);
       expect(spec.id).toBe(`axis.widget.${spec.type.replace(/^axis\./, '')}`);
     }
+  });
+
+  it('adds multiple independent dividers instead of moving the previous one', () => {
+    let doc = createAxisWorkbenchDefaultDocument();
+    const canonical = axisCanonicalWidgets();
+    const spec = canonical.find((s) => s.type === 'axis.horizontalDivider')!;
+    expect(spec.repeatable).toBe(true);
+    expect(spec.state).toEqual({ label: 'Section', grid: { fullRow: true } });
+    for (let i = 0; i < 2; i++) {
+      const entry = buildWidgetCatalog(selectActiveLayout(doc), { canonical }).find((e) => e.type === spec.type)!;
+      expect(entry.placement).toBe('absent');
+      const commands = widgetCatalogAddCommands(doc, entry, { zone: 'top.left' });
+      expect(commands[0].type).toBe('widget.add');
+      for (const command of commands) doc = reduceWorkbenchDocument(doc, command).next;
+    }
+    const dividers = Object.values(selectActiveLayout(doc)!.widgets).filter((w) => w.type === spec.type);
+    expect(dividers).toHaveLength(2);
+    expect(new Set(dividers.map((w) => w.id)).size).toBe(2);
+    expect(dividers[0].state).not.toBe(dividers[1].state);
   });
 
   it('every manifest type has a card label', () => {

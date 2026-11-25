@@ -7,7 +7,8 @@
 
 import { BE_SPEC, type BeView } from './boardModel';
 import { graphCatalogKey } from '../blockVisuals';
-import type { BlockVisual, EnumParam, NamedParam } from '../types';
+import { isForeignControl } from '../deviceLayoutBoard';
+import type { BlockVisual, DeviceLayout, EnumParam, NamedParam } from '../types';
 
 export type BeKind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave' | 'graph';
 
@@ -27,9 +28,13 @@ export interface BeCtl {
   h: number;
   /** Graph entries: the served display (roles are param ids; values reach the tile through the host). */
   visual?: BlockVisual;
+  /** Served meter symbol; selects this telemetry stream, never an unrelated block meter. */
+  meterParamName?: string;
 }
 
 export interface CatalogInput {
+  layout?: DeviceLayout | null;
+  effectId?: number | null;
   params: readonly Pick<NamedParam, 'id' | 'name'>[];
   enums: readonly Pick<EnumParam, 'id' | 'name' | 'options'>[];
   /** Number of EQ bands; > 0 adds the EQ graph. */
@@ -69,14 +74,27 @@ export const GRAPH_ID_BASE = -10;
 export function buildCatalog(input: CatalogInput): BeCtl[] {
   const hidden = new Set(input.hideIds ?? []);
   const out: BeCtl[] = [];
+  const meterParams = new Map<number, string>();
+  const owner = { family: input.layout?.family, effectId: input.effectId };
+  for (const page of input.layout?.pages ?? []) {
+    for (const ctl of [...(page.pageControls ?? []), ...(page.rows ?? []).flatMap((row) => row.controls ?? [])]) {
+      if (ctl.widget === 'meter' && ctl.paramId != null && !isForeignControl(ctl, owner)) {
+        meterParams.set(ctl.paramId, ctl.paramName ?? '');
+      }
+    }
+  }
+  const meter = (key: string, id: number, label: string): BeCtl => ({
+    ...entry(key, 'meter', label, id, 'meter', ['meter']), meterParamName: meterParams.get(id)
+  });
   if ((input.eqBandCount ?? 0) > 0) out.push(entry('eq', 'eq', input.eqTitle || 'EQ', -1, 'eq', ['eq']));
   (input.visuals ?? []).forEach((v, i) => out.push({ ...entry(graphCatalogKey(v.key), 'graph', v.title, GRAPH_ID_BASE - i, 'graph', ['graph']), visual: v }));
   for (const p of input.params) {
     if (p.id == null || hidden.has(p.id)) continue;
-    out.push(entry(`k${p.id}`, 'cont', p.name, p.id, 'knob', CONT_VIEWS));
+    out.push(meterParams.has(p.id) ? meter(`k${p.id}`, p.id, p.name) : entry(`k${p.id}`, 'cont', p.name, p.id, 'knob', CONT_VIEWS));
   }
   for (const e of input.enums) {
     if (hidden.has(e.id)) continue;
+    if (meterParams.has(e.id)) { out.push(meter(`e${e.id}`, e.id, e.name)); continue; }
     const tog = e.options.length <= 2;
     out.push(tog ? entry(`e${e.id}`, 'toggle', e.name, e.id, 'button', TOG_VIEWS) : entry(`e${e.id}`, 'select', e.name, e.id, 'select', ['select']));
   }

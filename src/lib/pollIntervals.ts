@@ -15,17 +15,19 @@ import type { TelemetryMode } from './types';
 export interface PollIntervals {
   pollMs: number;
   watchMs: number;
+  /** Period of the open block's live meter read (monitors + looper), while it is in use. */
+  meterMs: number;
 }
 
 /** Per-mode base intervals for the local/direct path. */
 const MODE_INTERVALS: Record<TelemetryMode, PollIntervals> = {
-  performance: { pollMs: 5000, watchMs: 4000 },
-  balanced: { pollMs: 8000, watchMs: 6000 },
-  reduced: { pollMs: 15000, watchMs: 12000 }
+  performance: { pollMs: 5000, watchMs: 4000, meterMs: 500 },
+  balanced: { pollMs: 8000, watchMs: 6000, meterMs: 1000 },
+  reduced: { pollMs: 15000, watchMs: 12000, meterMs: 2000 }
 };
 
 /** Relay floor for remote sessions — a slow heartbeat is enough to track connection + slot changes. */
-const REMOTE_INTERVALS: PollIntervals = { pollMs: 20000, watchMs: 25000 };
+const REMOTE_INTERVALS: PollIntervals = { pollMs: 20000, watchMs: 25000, meterMs: 5000 };
 
 /**
  * Resolve the poll + watch interval (ms) for a telemetry mode. When `remoteActive`, the remote floor and
@@ -37,6 +39,7 @@ export function pollIntervalsFor(mode: TelemetryMode, remoteActive: boolean): Po
   if (!remoteActive) return { ...base };
   return {
     pollMs: Math.max(REMOTE_INTERVALS.pollMs, base.pollMs),
-    watchMs: Math.max(REMOTE_INTERVALS.watchMs, base.watchMs)
+    watchMs: Math.max(REMOTE_INTERVALS.watchMs, base.watchMs),
+    meterMs: Math.max(REMOTE_INTERVALS.meterMs, base.meterMs)
   };
 }

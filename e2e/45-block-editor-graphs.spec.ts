@@ -1,6 +1,6 @@
 import { test, expect, type CDPSession, type Locator, type Page } from '@playwright/test';
-import { bootBlockEditorMock, openLibrary, pickMore, selectTile, type BlockEditorMock } from './support/blockEditorMock';
-import { COMP_EID, DELAY_EID } from './support/graphBlocks';
+import { AMP_EID, bootBlockEditorMock, openLibrary, pickMore, selectTile, type BlockEditorMock } from './support/blockEditorMock';
+import { COMP_EID, DELAY_EID, LOOPER_EID } from './support/graphBlocks';
 
 // Read-only graph tiles (AXIS-89): the server serves `visuals` per block (role → param id, narrowed to the
 // block's type) and keys the layout's graph slots; the Block Editor draws them from the values its knobs
@@ -112,19 +112,82 @@ test.describe('Block Editor graph tiles (AXIS-89)', () => {
     await expect(g.locator('path.be-gline.t-main')).toHaveCount(0);
   });
 
-  test('metering on: the compressor graph shows the live gain reduction; metering off: the bar is gone', async ({ page }) => {
+  test('meters start off and a visible compressor graph asks for gain reduction when enabled', async ({ page }) => {
     await bootBlockEditorMock(page, { graphs: true });
     await openBlock(page, 0);
-    await expect(graph(page, 'dynamics').locator('[data-be-graph-gr]')).toHaveCount(0);
     const toggle = page.locator('button.meter-toggle').first();
-    await toggle.click();
+    await expect(toggle).not.toHaveClass(/\bon\b/);
     const gr = graph(page, 'dynamics').locator('[data-be-graph-gr]');
+    await expect(gr).toHaveCount(0);
+    await toggle.click();
     await expect(gr).toBeVisible();
     await expect(gr).toContainText('6.0');
     // METER OFF: no stale reading stays on the graph
     await toggle.click();
     await expect(gr).toHaveCount(0);
     await expect(graph(page, 'dynamics')).toBeVisible();
+  });
+
+  test('Looper loads its waveform with Meter off without polling audio meters for the Looper', async ({ page }) => {
+    await bootBlockEditorMock(page, { graphs: true });
+    const toggle = page.locator('button.meter-toggle').first();
+    await expect(toggle).not.toHaveClass(/\bon\b/);
+    const meterReads: string[] = [];
+    page.on('request', (req) => {
+      const url = new URL(req.url());
+      if (url.pathname.endsWith('/preset/monitors/live')) meterReads.push(url.searchParams.get('eid') ?? '');
+    });
+    const waveform = page.waitForResponse((res) => {
+      const url = new URL(res.url());
+      return url.pathname.endsWith('/preset/looper') && url.searchParams.get('eid') === String(LOOPER_EID);
+    });
+    await page.locator('[data-idx="2,0"].cell.block').click();
+    const tile = page.locator('section[data-be-page="Looper"] [data-be-key="wave"]');
+    await expect(tile).toBeVisible();
+    await waveform;
+    await expect(tile.locator('.be-wbar').first()).toBeVisible();
+    expect(meterReads).not.toContain(String(LOOPER_EID));
+  });
+
+  test('a gain reduction-only graph follows METER', async ({ page }) => {
+    const mock = await bootBlockEditorMock(page, { graphs: true });
+    mock.compSustainOnly = true;
+    await openBlock(page, 0);
+    const g = graph(page, 'dynamics');
+    await expect(g.locator('.be-gempty')).toHaveText('No static curve for this type');
+    await expect(g.locator('[data-be-graph-gr]')).toHaveCount(0);
+    await page.locator('button.meter-toggle').first().click();
+    await expect(g.locator('[data-be-graph-gr]')).toContainText('6.0');
+  });
+
+  test('Amp does not poll a meter off screen and starts when the meter scrolls into view', async ({ page }) => {
+    await bootBlockEditorMock(page, { graphs: true });
+    const meterReads: string[] = [];
+    page.on('request', (req) => {
+      const url = new URL(req.url());
+      if (url.pathname.endsWith('/preset/monitors/live')) meterReads.push(url.searchParams.get('eid') ?? '');
+    });
+    await page.locator('[data-idx="0,0"].cell.block').click();
+    const meter = page.locator('section[data-be-page="Power Amp"] [data-be-key="meter"]');
+    await expect(meter).toHaveCount(1);
+    await pickMore(page, 'nav-side');
+    await expect(board(page)).toHaveAttribute('data-nav', 'side');
+    const away = page.locator('[data-be-tab="Authentic"]');
+    await away.click();
+    await expect(meter).not.toBeInViewport();
+    await page.locator('button.meter-toggle').first().click();
+    await expect(meter).not.toBeInViewport();
+    // Once per polling interval was the regression. Leave the Amp editor open past one interval.
+    await page.waitForTimeout(1200);
+    expect(meterReads).toEqual([]);
+    await page.locator('[data-be-tab="Power Amp"]').click();
+    await expect(meter).toBeInViewport();
+    await expect.poll(() => meterReads).toContain(String(AMP_EID));
+    await away.click();
+    await expect(meter).not.toBeInViewport();
+    const count = meterReads.length;
+    await page.waitForTimeout(1200);
+    expect(meterReads).toHaveLength(count);
   });
 
   test('tremolo: tempo 1/4 at 90 bpm draws a 1.5 Hz LFO whose playhead moves (the rate, not the device phase)', async ({ page }) => {

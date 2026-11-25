@@ -28,6 +28,8 @@ export interface CanonicalWidgetSpec {
   label: string;
   /** Preferred id of a fresh instance (a `.copyN` suffix is added when taken). */
   id?: string;
+  /** Add a new instance each time (e.g. labels and dividers). Default built-ins remain singletons. */
+  repeatable?: boolean;
   size?: WidgetSize;
   state?: JsonObject;
   /** Extra search terms. */
@@ -95,7 +97,7 @@ export function buildWidgetCatalog(layout: WorkbenchLayout | undefined, options:
   for (const spec of options.canonical ?? []) {
     if (seenTypes.has(spec.type)) continue;
     seenTypes.add(spec.type);
-    const instance = rankInstances(widgets.filter((widget) => widget.type === spec.type))[0];
+    const instance = spec.repeatable ? undefined : rankInstances(widgets.filter((widget) => widget.type === spec.type))[0];
     if (instance) covered.add(instance.id);
     const unavailable = reason(spec.type);
     entries.push({
@@ -211,7 +213,7 @@ export function widgetCatalogAddCommands(doc: WorkbenchDocument, entry: WidgetCa
   // A built-in entry whose instance appeared (or vanished) meanwhile follows the live layout.
   const instanceId =
     entry.source === 'builtin'
-      ? rankInstances(Object.values(layout.widgets).filter((widget) => widget.type === entry.type))[0]?.id
+      ? entry.spec?.repeatable ? undefined : rankInstances(Object.values(layout.widgets).filter((widget) => widget.type === entry.type))[0]?.id
       : entry.instanceId;
   if (instanceId && layout.widgets[instanceId]) {
     const index = moveIndexExcludingSelf(layout, instanceId, drop);

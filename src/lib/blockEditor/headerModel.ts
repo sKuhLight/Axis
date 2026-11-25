@@ -7,11 +7,9 @@ import type { BlockState, BypassModeOption } from '../types';
 import { formatBypassModeLabel } from '../blockState';
 import type { BeNav } from './boardGeometry';
 
-/** With the top navigation the header is never one row below this (the template's ~1240 px), even
+/** With the top navigation the header is never one row below this, even
  *  when the parts would just fit: the page tabs need room to show more than a tab or two. */
-export const HEADER_ONE_ROW_MIN_W = 1240;
-/** Below this the search is an icon button and its field moves into the popover. */
-export const SEARCH_FIELD_MIN_W = 640;
+export const HEADER_ONE_ROW_MIN_W = 940;
 /** Below this "Scene Ignore" reads "Ignore" and "Bypass: Thru" reads "Thru". */
 export const HEADER_NARROW_W = 720;
 /** Below this "Engaged" / "Bypassed" read "On" / "Byp", the chip drops its sub line and the Bypass mode
@@ -22,17 +20,16 @@ export const HEADER_TINY_W = 470;
 export const HEADER_XS_W = 380;
 
 /** Widths (px) of the header parts on one row, at their widest (BeHeader's CSS): the chip at its cap
- *  (a long cab summary), the search field, the state group reading "Bypassed | Bypass: Mute FX Out ▾ |
+ *  (a long cab summary), the state group reading "Bypassed | Bypass: Mute FX Out ▾ |
  *  Scene Ignore" (the Bypass mode label is capped, `.be-bm-txt`), the ⋯ and ✕ buttons, the smallest share
  *  of the tabs and of the spacer, the gaps and the padding. */
 export const HEADER_PARTS = {
   pad: 24,
   gap: 8,
   chip: 392,
-  search: 220,
   state: 350,
-  more: 30,
-  end: 30,
+  more: 36,
+  end: 36,
   tabsMin: 160,
   spacerMin: 8
 } as const;
@@ -50,12 +47,12 @@ export const STATE_NARROW_W = 270;
 
 const buttonW = (touch: boolean | undefined, w: number) => (touch ? TOUCH_BUTTON_W : w);
 
-/** Narrowest editor that holds the header on one row without wrapping: every part at its widest. With
+/** Narrowest editor that holds the header on one row without wrapping: a readable type chip and icon search. With
  *  the side navigation there are no tabs; a close button (monolith) adds itself; touch targets (phone,
  *  tablet) widen ⋯ and ✕. */
 export function oneRowMinWidth(o: { nav: BeNav; hasEnd?: boolean; touch?: boolean }): number {
   const p = HEADER_PARTS;
-  let w = p.pad + p.chip + p.gap + p.spacerMin + p.gap + p.search + p.gap + p.state + p.gap + buttonW(o.touch, p.more);
+  let w = p.pad + CHIP_READABLE_W + p.gap + p.spacerMin + p.gap + buttonW(o.touch, p.more) + p.gap + p.state + p.gap + buttonW(o.touch, p.more);
   if (o.hasEnd) w += p.gap + buttonW(o.touch, p.end);
   if (o.nav === 'top') return Math.max(HEADER_ONE_ROW_MIN_W, w + p.gap + p.tabsMin);
   return w;
@@ -69,20 +66,17 @@ export function headerRows(width: number, nav: BeNav, hasEnd = false, touch = fa
 }
 
 /** The header's parts, in document (= visual and Tab) order. */
-export type HeaderPart = 'chip' | 'tabs' | 'spA' | 'spB' | 'tools' | 'state' | 'more' | 'end' | 'break' | 'breakEnd';
+export type HeaderPart = 'chip' | 'tabs' | 'spA' | 'spB' | 'actions' | 'end' | 'break' | 'breakEnd';
 
-/** Document order of the header parts for a layout, so Tab walks row 1 before row 2 and left to right:
- *  one row   chip · tabs · ⟷ · search · state · ⋯ · ✕
- *  two rows  chip · ⟷ · state · ⋯ · ✕ ⏎ tabs · ⟷ · search
- *  phone with a close button: chip · ⟷ · ✕ ⏎ state · ⋯ ⏎ tabs · ⟷ · search
- *  no block (virtual screens): tabs · ⟷ · search · ⋯ */
+/** Document order follows the visual rows. Search, state and options share one actions group;
+ *  compact headers put the full-width centered navigation on a second row. */
 export function headerOrder(o: { rows: 1 | 2; block: boolean; tabs: boolean; end: boolean; tiny: boolean }): HeaderPart[] {
   const tabs: HeaderPart[] = o.tabs ? ['tabs'] : [];
-  if (!o.block) return [...tabs, 'spB', 'tools', 'more'];
+  if (!o.block) return [...tabs, 'spB', 'actions'];
   const end: HeaderPart[] = o.end ? ['end'] : [];
-  if (o.rows === 1) return ['chip', ...tabs, 'spB', 'tools', 'state', 'more', ...end];
-  if (o.tiny && o.end) return ['chip', 'spA', 'end', 'breakEnd', 'state', 'more', 'break', ...tabs, 'spB', 'tools'];
-  return ['chip', 'spA', 'state', 'more', ...end, 'break', ...tabs, 'spB', 'tools'];
+  if (o.rows === 1) return ['chip', ...(o.tabs ? tabs : ['spB' as const]), 'actions', ...end];
+  if (o.tiny && o.end) return ['chip', 'spA', 'end', 'breakEnd', 'spB', 'actions', 'break', ...tabs];
+  return ['chip', 'spA', 'actions', ...end, ...(o.tabs ? ['break' as const, ...tabs] : [])];
 }
 
 /** Width of the ⋯ menu's anchor box: the workbench ContextMenu opens an anchored menu at its anchor's
@@ -91,8 +85,6 @@ export function headerOrder(o: { rows: 1 | 2; block: boolean; tabs: boolean; end
 export const MORE_MENU_W = 268;
 
 export interface HeaderFit {
-  /** The search is a field (else an icon button that opens the popover with its own field). */
-  searchField: boolean;
   narrow: boolean;
   tiny: boolean;
   xs: boolean;
@@ -101,7 +93,7 @@ export interface HeaderFit {
 /** What fits at an editor width (an unmeasured editor gets the full look). */
 export function headerFit(width: number): HeaderFit {
   const w = width > 0 ? width : Infinity;
-  return { searchField: w >= SEARCH_FIELD_MIN_W, narrow: w < HEADER_NARROW_W, tiny: w < HEADER_TINY_W, xs: w < HEADER_XS_W };
+  return { narrow: w < HEADER_NARROW_W, tiny: w < HEADER_TINY_W, xs: w < HEADER_XS_W };
 }
 
 /** Labels of the Engaged and Scene Ignore segments at an editor width (the Bypass mode control's label:

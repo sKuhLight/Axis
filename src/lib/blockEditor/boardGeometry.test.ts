@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { availableArea, CMIN, DENSITY, effectiveNav, layoutForPage, PAD_X, PHONE_PAD_X, phoneCell, SEC_HEAD, visiblePages, type PageLayoutInput } from './boardGeometry';
+import { availableArea, CMIN, DENSITY, effectiveNav, layoutForPage, minimumBoardHeight, PAD_X, PAD_Y, PHONE_PAD_X, phoneCell, SEC_HEAD, visiblePages, type PageLayoutInput } from './boardGeometry';
 import { PHONE_COLS, type BeControl, type BeItem } from './boardModel';
 
 const knobs = (cols: number, rows: number): BeItem[] => {
@@ -29,9 +29,9 @@ describe('effectiveNav', () => {
 
 describe('availableArea', () => {
   it('subtracts padding and, in the side navigation, the section heading', () => {
-    expect(availableArea(1000, 400, 'top')).toEqual({ Wa: 1000 - 2 * PAD_X, Ha: 380 });
-    expect(availableArea(1000, 400, 'side')).toEqual({ Wa: 972, Ha: 380 - SEC_HEAD });
-    expect(availableArea(0, 0, 'top')).toEqual({ Wa: 772, Ha: 340 }); // unmeasured → defaults
+    expect(availableArea(1000, 400, 'top')).toEqual({ Wa: 1000 - 2 * PAD_X, Ha: 400 - 2 * PAD_Y });
+    expect(availableArea(1000, 400, 'side')).toEqual({ Wa: 972, Ha: 400 - 2 * PAD_Y - SEC_HEAD });
+    expect(availableArea(0, 0, 'top')).toEqual({ Wa: 772, Ha: 360 - 2 * PAD_Y }); // unmeasured → defaults
   });
 });
 
@@ -58,34 +58,36 @@ describe('layoutForPage across viewports', () => {
 
   it('375 px: the 24-cell page scrolls sideways at the minimum cell (top navigation)', () => {
     const L = layoutForPage(input(375, 320), fullPage);
-    expect(L.c).toBe(CMIN);
+    expect(L.c).toBe(DENSITY.m.cmin);
     expect(L.reflow).toBe(false);
     expect(L.overflowX).toBe(true);
   });
 
-  it('768 px: a full page fits the width exactly (cell from the 24-cell reference)', () => {
-    const L = layoutForPage(input(768, 360), fullPage);
-    expect(L.c).toBe(Math.floor((768 - 28 - 23 * 4) / 24)); // 27
-    expect(L.overflowX).toBe(false);
+  it('the gap costs width: a full page fits from about 1000 px at the Normal scale', () => {
+    const fits = (w: number) => layoutForPage(input(w, 360), fullPage).overflowX === false;
+    expect(fits(1000)).toBe(true);
+    expect(fits(900)).toBe(false);
+    const L = layoutForPage(input(1000, 360), fullPage);
+    expect(L.c).toBe(Math.max(DENSITY.m.cmin, Math.floor((1000 - 2 * PAD_X - 23 * DENSITY.m.gap) / 24 * DENSITY.m.scale)));
     expect(L.overflowY).toBe(false);
   });
 
-  it('1366 and 1920 px: density cap applies, no scrolling', () => {
+  it('1366 and 1920 px: the reference width or density cap fits the page', () => {
     for (const w of [1366, 1920]) {
       const L = layoutForPage(input(w, 360), fullPage);
-      expect(L.c).toBe(40);
+      expect(L.c).toBe(Math.min(DENSITY.m.cmax, Math.floor((w - 28 - 23 * DENSITY.m.gap) / 24 * DENSITY.m.scale)));
       expect(L.overflowX || L.overflowY).toBe(false);
     }
   });
 
-  it('2560×720 and 5120×1440: several full pages fit side by side', () => {
+  it('uses the selected scale on ultrawide screens', () => {
     const a = layoutForPage(input(2560, 300), fullPage);
-    expect(a.c).toBe(40);
-    expect(Math.floor(2560 / a.W)).toBeGreaterThanOrEqual(2);
+    expect(a.c).toBe(DENSITY.m.cmax);
+    expect(a.overflowX).toBe(false);
     const b = layoutForPage(input(5120, 600, { density: 'l' }), fullPage);
-    expect(b.c).toBe(50);
-    expect(Math.floor(5120 / b.W)).toBeGreaterThanOrEqual(3);
-    expect(Math.floor(5120 / layoutForPage(input(5120, 600), fullPage).W)).toBeGreaterThanOrEqual(4);
+    expect(b.c).toBe(DENSITY.l.cmax);
+    expect(b.overflowX).toBe(false);
+    expect(Math.floor(5120 / layoutForPage(input(5120, 600), fullPage).W)).toBeGreaterThanOrEqual(3);
   });
 
   it('every page shares the reference scale: a small page gets the same cell as a full one', () => {
@@ -94,16 +96,16 @@ describe('layoutForPage across viewports', () => {
     }
   });
 
-  it('the height still fits per page', () => {
+  it('a tall page scrolls at the same scale as the two-row reference', () => {
     const tall = knobs(2, 6); // 12 cells high
     const L = layoutForPage(input(1920, 360), tall);
-    expect(L.c).toBe(Math.floor((340 - 11 * 4) / 12)); // 24
-    expect(L.overflowY).toBe(false);
+    expect(L.c).toBe(layoutForPage(input(1920, 360), fullPage).c);
+    expect(L.overflowY).toBe(true);
   });
 
-  it('top navigation, page too tall even at the minimum: vertical overflow, no reflow', () => {
+  it('top navigation, page taller than the reference: vertical overflow, no reflow', () => {
     const L = layoutForPage(input(1920, 360), knobs(2, 10));
-    expect(L.c).toBe(CMIN);
+    expect(L.c).toBe(DENSITY.m.cmax);
     expect(L.reflow).toBe(false);
     expect(L.overflowY).toBe(true);
   });
@@ -111,7 +113,7 @@ describe('layoutForPage across viewports', () => {
   it('side navigation below the minimum: reflow into fewer columns', () => {
     const L = layoutForPage(input(500, 400, { nav: 'side' }), fullPage);
     expect(L.reflow).toBe(true);
-    expect(L.cols).toBe(Math.floor((472 + 4) / (CMIN + 4))); // 19
+    expect(L.cols).toBe(Math.floor((472 + DENSITY.m.gap) / (DENSITY.m.cmin + DENSITY.m.gap)));
     expect(L.c).toBeGreaterThanOrEqual(CMIN);
     expect(L.pos).toBeDefined();
     expect(Object.keys(L.pos!)).toHaveLength(24);
@@ -121,7 +123,21 @@ describe('layoutForPage across viewports', () => {
   it('side navigation, width fine but page too tall: no reflow', () => {
     const L = layoutForPage(input(1920, 360, { nav: 'side' }), knobs(2, 10));
     expect(L.reflow).toBe(false);
-    expect(L.c).toBe(CMIN);
+    expect(L.c).toBe(DENSITY.m.cmax);
+  });
+
+  it('scales all three sizes in a shallow dock and retains the selected minimum', () => {
+    const sizes = (['s', 'm', 'l'] as const).map((density) => {
+      const shallow = layoutForPage(input(1740, 230, { nav: 'side', density }), fullPage);
+      const minimum = minimumBoardHeight(density, 'side');
+      const atMinimum = layoutForPage(input(1740, minimum, { nav: 'side', density }), fullPage);
+      expect(atMinimum.c).toBe(DENSITY[density].cmin);
+      expect(atMinimum.overflowY).toBe(false);
+      expect(shallow.overflowY).toBe(false);
+      return shallow.c;
+    });
+    expect(sizes[0]).toBeLessThan(sizes[1]!);
+    expect(sizes[1]).toBeLessThan(sizes[2]!);
   });
 
   it('arrange mode shows the full 24-cell surface plus a spare row, at the frozen cell', () => {
@@ -130,7 +146,7 @@ describe('layoutForPage across viewports', () => {
     expect(L.cols).toBe(24);
     expect(L.rows).toBeGreaterThanOrEqual(3);
     const unfrozen = layoutForPage(input(375, 320, { editMode: true }), fullPage);
-    expect(unfrozen.c).toBe(CMIN);
+    expect(unfrozen.c).toBe(DENSITY.m.cmin);
     expect(unfrozen.reflow).toBe(false);
   });
 });
@@ -138,12 +154,9 @@ describe('layoutForPage across viewports', () => {
 describe('beside a fixed area', () => {
   const list = [{ id: 'a', key: 'k1', view: 'knob' as const, x: 0, y: 0, w: 2, h: 2 }];
   const inp = { bodyW: 628, bodyH: 900, nav: 'side' as const, density: 'l' as const, editMode: false };
-  it('the width is measured against fewer cells, and the cell can be capped', () => {
-    expect(layoutForPage(inp, list).c).toBe(Math.floor((600 - 23 * 5) / 24));
-    expect(layoutForPage({ ...inp, refCols: 12 }, list).c).toBe(Math.floor((600 - 11 * 5) / 12));
-    expect(layoutForPage({ ...inp, refCols: 12, maxCell: 33 }, list).c).toBe(33);
-    expect(layoutForPage({ ...inp, refCols: 0 }, list)).toEqual(layoutForPage(inp, list));
-    expect(layoutForPage({ ...inp, refCols: 99 }, list)).toEqual(layoutForPage(inp, list));
+  it('uses the cell fitted to the combined width', () => {
+    expect(layoutForPage(inp, list).c).toBe(DENSITY.l.cmin);
+    expect(layoutForPage({ ...inp, sharedCell: 33 }, list).c).toBe(33);
   });
 });
 
@@ -165,26 +178,26 @@ describe('phone layout (8 cells wide, cell = width / 8)', () => {
   });
 
   it('the cell is the available width / 8 within the minimum and the control size', () => {
-    // 390: (390 − 16 − 7·4) / 8 = 43 → capped at Normal's 40 → an 84 px knob
-    expect(phoneCell(390, 'm')).toBe(40);
-    expect(knobPx(phoneCell(390, 'm'), DENSITY.m.gap)).toBe(84);
-    // 360: (360 − 16 − 28) / 8 = 39 → an 82 px knob
-    expect(phoneCell(360, 'm')).toBe(39);
-    expect(knobPx(phoneCell(360, 'm'), DENSITY.m.gap)).toBeGreaterThanOrEqual(80);
+    // 390: (390 − 16 − 7·gap) / 8 = 34 → the width decides (the cap is higher)
+    expect(phoneCell(390, 'm')).toBe(Math.floor((390 - 2 * PHONE_PAD_X - 7 * DENSITY.m.gap) / 8));
+    expect(knobPx(phoneCell(390, 'm'), DENSITY.m.gap)).toBe(2 * phoneCell(390, 'm') + DENSITY.m.gap);
+    // 360: the same width rule → a knob of two cells and the gap
+    expect(phoneCell(360, 'm')).toBe(Math.floor((360 - 2 * PHONE_PAD_X - 7 * DENSITY.m.gap) / 8));
+    expect(knobPx(phoneCell(360, 'm'), DENSITY.m.gap)).toBeGreaterThanOrEqual(72);
     expect(phoneCell(360, 'l')).toBe(Math.floor((360 - 2 * PHONE_PAD_X - 7 * DENSITY.l.gap) / 8));
-    expect(phoneCell(390, 's')).toBe(DENSITY.s.cmax);
+    expect(phoneCell(390, 's')).toBe(DENSITY.s.phoneMax);
     expect(phoneCell(160, 'm')).toBe(CMIN); // a very narrow board keeps the minimum cell (and scrolls sideways)
     expect(layoutForPage(phone(160), row12).overflowX).toBe(true);
-    // a phone profile in a wide window: normal knobs, still eight cells
+    // a phone profile in a wide window: the cap keeps normal knobs, still eight cells
     const wide = layoutForPage(phone(1200), row12);
-    expect(wide.c).toBe(DENSITY.m.cmax);
-    expect(wide.W).toBe(8 * (40 + 4) - 4);
+    expect(wide.c).toBe(DENSITY.m.phoneMax);
+    expect(wide.W).toBe(8 * (DENSITY.m.phoneMax + DENSITY.m.gap) - DENSITY.m.gap);
     expect(wide.overflowX).toBe(false);
   });
 
   it('the height does not shrink the cell: a tall page scrolls', () => {
     const tall = layoutForPage(input(390, 300, { nav: 'side', phone: true }), knobs(12, 4));
-    expect(tall.c).toBe(40);
+    expect(tall.c).toBe(phoneCell(390, 'm'));
     expect(tall.rows).toBe(24);
     expect(tall.overflowY).toBe(true);
   });

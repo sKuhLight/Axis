@@ -1,8 +1,8 @@
-// Block Editor board geometry ("always fit"): how big one grid cell is for a page in a given panel.
+// Block Editor board geometry: a common scale for a full two-row page.
 //
 // The reference width is ONE full page of 24 cells, so the cell size (and therefore the knob size) is
-// the same on every page (beside a fixed area: of the cells that leaves, fixedLayout.ts); the height still
-// fits per page. Density caps the cell size. Below the minimum
+// the same on every page, with extra width reserved for Fixed. Two knob rows fit the available
+// height when possible. Taller layouts scroll at the same scale. Below the minimum
 // cell the top navigation (pages side by side) scrolls sideways, the side navigation (pages stacked)
 // reflows the page into fewer columns. In arrange mode the cell is frozen per page while dragging. On the
 // phone layout every page is re-wrapped to PHONE_COLS (8) cells — at most four knobs a row — and the cell
@@ -15,17 +15,24 @@ import { bbox, MAXC, PHONE_COLS, phoneWrap, reflowPack, type BeItem, type BeRect
 export type BeNav = 'top' | 'side';
 export type BeDensity = 's' | 'm' | 'l';
 
-/** Maximum cell size and gap (px) per control size: Compact / Normal / Large. */
-export const DENSITY: Readonly<Record<BeDensity, { cmax: number; gap: number }>> = {
-  s: { cmax: 32, gap: 4 },
-  m: { cmax: 40, gap: 4 },
-  l: { cmax: 50, gap: 5 }
+/** Desktop scale, cell limits, and spacing. Phone retains its four-control layout and caps. The gap is the
+ *  divider's band: a divider sits in it (label + line), so it never covers a control or its label. The
+ *  maximum cell keeps the pitch (cell + gap) of the 4 px spacing, so the wider gap only narrows controls:
+ *  the grid never grows, re-flows or spills a control onto another page. */
+export const DENSITY = {
+  s: { cmin: 20, cmax: 32, phoneMax: 30, gap: 12, scale: 0.78 },
+  m: { cmin: 24, cmax: 42, phoneMax: 40, gap: 14, scale: 0.9 },
+  l: { cmin: 28, cmax: 59, phoneMax: 50, gap: 16, scale: 1 }
 };
 /** Smallest cell before the board scrolls (top) or reflows (side). */
 export const CMIN = 20;
 /** Horizontal / vertical padding of the board area. */
 export const PAD_X = 14;
-export const PAD_Y = 10;
+/** The top padding holds a divider's band (its label) above the first row, so a title at the top of a page
+ *  never covers the controls under it. */
+export const PAD_Y = 16;
+/** Two rows of standard two-cell controls. */
+export const PAGE_REFERENCE_ROWS = 4;
 /** Height of a page's section heading in the side navigation. */
 export const SEC_HEAD = 28;
 /** Narrowest editor that may use the side navigation; below it the top navigation is forced. */
@@ -46,8 +53,22 @@ export function effectiveNav(nav: BeNav, width: number): BeNav {
 export function availableArea(bodyW: number, bodyH: number, nav: BeNav): { Wa: number; Ha: number } {
   return {
     Wa: Math.max(120, (bodyW || 800) - PAD_X * 2),
-    Ha: Math.max(80, (bodyH || 360) - PAD_Y * 2 - (nav === 'top' ? 0 : SEC_HEAD))
+    Ha: Math.max(0, (bodyH || 360) - PAD_Y * 2 - (nav === 'top' ? 0 : SEC_HEAD))
   };
+}
+
+export function fitBoardCell(density: BeDensity, widthFit: number, heightFit = Infinity): number {
+  const { cmin, cmax, scale } = DENSITY[density];
+  return Math.max(cmin, Math.min(cmax, Math.floor(Math.min(widthFit, heightFit) * scale)));
+}
+
+export function referenceHeightCell(height: number, gap: number): number {
+  return (height - (PAGE_REFERENCE_ROWS - 1) * gap) / PAGE_REFERENCE_ROWS;
+}
+
+export function minimumBoardHeight(density: BeDensity, nav: BeNav): number {
+  const { cmin, gap } = DENSITY[density];
+  return PAGE_REFERENCE_ROWS * cmin + (PAGE_REFERENCE_ROWS - 1) * gap + 2 * PAD_Y + (nav === 'side' ? SEC_HEAD : 0);
 }
 
 export interface PageLayoutInput {
@@ -62,10 +83,8 @@ export interface PageLayoutInput {
   /** Arrange mode: empty rows kept below the content, so the tallest item can be dropped under it
    *  (default 1). */
   spareRows?: number;
-  /** Cells the width is measured against (default: a full page, MAXC). Fewer beside a fixed area. */
-  refCols?: number;
-  /** Upper limit of the cell (beside a fixed area: the cell that area is drawn with). */
-  maxCell?: number;
+  /** Cell already fitted to the combined page and Fixed width. */
+  sharedCell?: number;
   /** Phone layout (device class `phone`, never while arranging): the page re-wrapped to PHONE_COLS cells,
    *  the cell from the width alone. */
   phone?: boolean;
@@ -99,7 +118,7 @@ export const phoneAreaW = (bodyW: number): number => Math.max(120, (bodyW || 390
 export function phoneCell(bodyW: number, density: BeDensity): number {
   const d = DENSITY[density] ?? DENSITY.m;
   const fit = Math.floor((phoneAreaW(bodyW) - (PHONE_COLS - 1) * d.gap) / PHONE_COLS);
-  return Math.max(CMIN, Math.min(d.cmax, fit));
+  return Math.max(CMIN, Math.min(d.phoneMax, fit));
 }
 
 export function layoutForPage(input: PageLayoutInput, list: readonly BeItem[]): PageLayout {
@@ -115,22 +134,15 @@ export function layoutForPage(input: PageLayoutInput, list: readonly BeItem[]): 
   }
   const bb = bbox(list);
   const strip = input.nav === 'top';
-  const refCols = input.refCols && input.refCols > 0 ? Math.min(MAXC, input.refCols) : MAXC;
-  const ref = (A.Wa - (refCols - 1) * g) / refCols;
-  const fh = (A.Ha - (bb.R - 1) * g) / bb.R;
-  let c = Math.floor(Math.min(d.cmax, input.maxCell ?? d.cmax, ref, fh));
+  const ref = (A.Wa - (MAXC - 1) * g) / MAXC;
+  const c = input.editMode && input.frozenCell ? input.frozenCell : input.sharedCell ?? fitBoardCell(input.density, ref, referenceHeightCell(A.Ha, g));
   let reflow = false;
   let pos: Record<string, BeRect> | undefined;
-  if (input.editMode) c = input.frozenCell && input.frozenCell > 0 ? input.frozenCell : Math.max(CMIN, c);
-  else if (c < CMIN) {
-    c = CMIN;
-    if (!strip && ref < fh && bb.C * (CMIN + g) - g > A.Wa) reflow = true;
-  }
+  if (!input.editMode && !strip && bb.C * (c + g) - g > A.Wa) reflow = true;
   let cols = bb.C;
   let rows = bb.R;
   if (reflow) {
-    cols = Math.max(2, Math.floor((A.Wa + g) / (CMIN + g)));
-    c = Math.max(CMIN, Math.min(d.cmax, Math.floor((A.Wa - (cols - 1) * g) / cols)));
+    cols = Math.max(2, Math.floor((A.Wa + g) / (c + g)));
     const r = reflowPack(list, cols);
     pos = r.pos;
     rows = r.rows;

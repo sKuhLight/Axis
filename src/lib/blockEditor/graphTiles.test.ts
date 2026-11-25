@@ -71,11 +71,14 @@ describe('seeding from layout graph slots', () => {
   it('a keyed slot whose visual is served becomes that graph tile', () => {
     expect(resolveControl(slot('dynamics'), byKey)).toEqual({ key: 'graph:dynamics', view: 'graph' });
   });
-  it('an unserved key, an unkeyed slot → gap; the EQ graph rule stays first', () => {
+  it('an unserved key, an unkeyed slot → gap; the EQ graph rule only takes unkeyed slots', () => {
     expect(resolveControl(slot('decay'), byKey)).toBe('gap');
     expect(resolveControl(slot(), byKey)).toBe('gap');
     const eqCat = new Map(buildCatalog({ params: [], enums: [], eqBandCount: 5, visuals }).map((c) => [c.key, c]));
-    expect(resolveControl(slot('dynamics'), eqCat)).toEqual({ key: 'eq', view: 'eq' });
+    expect(resolveControl(slot(), eqCat)).toEqual({ key: 'eq', view: 'eq' });
+    expect(resolveControl(slot('eq'), eqCat)).toEqual({ key: 'eq', view: 'eq' });
+    // a slot the server keyed for another visual keeps that visual even when the block has an EQ
+    expect(resolveControl(slot('dynamics'), eqCat)).toEqual({ key: 'graph:dynamics', view: 'graph' });
   });
   it('a graph slot of another block never anchors (cross-block guard first)', () => {
     const foreign = slot('dynamics', { crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: null, paramId: null } });

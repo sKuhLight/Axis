@@ -54,7 +54,29 @@
     {/if}
   {/each}
   {#if ghost && ghost.page === page}
-    <div class="be-ghost" class:bad={!ghost.valid} style:grid-column="{ghost.x + 1} / span {ghost.w}" style:grid-row="{ghost.y + 1} / span {ghost.h}"></div>
+    {#if ghost.h === 0 || ghost.w === 0}
+      <!-- a divider drops onto a grid LINE: the line, not a cell, is what it will occupy -->
+      {@const st = layout.c + layout.g}
+      {#if ghost.h === 0}
+        <div
+          class="be-ghost line"
+          class:bad={!ghost.valid}
+          style:left="{ghost.x * st}px"
+          style:top="{ghost.y * st - layout.g / 2 - 1.5}px"
+          style:width="{Math.max(8, ghost.w * st - layout.g)}px"
+        ></div>
+      {:else}
+        <div
+          class="be-ghost line vert"
+          class:bad={!ghost.valid}
+          style:left="{ghost.x * st - layout.g / 2 - 1.5}px"
+          style:top="{ghost.y * st}px"
+          style:height="{Math.max(8, ghost.h * st - layout.g)}px"
+        ></div>
+      {/if}
+    {:else}
+      <div class="be-ghost" class:bad={!ghost.valid} style:grid-column="{ghost.x + 1} / span {ghost.w}" style:grid-row="{ghost.y + 1} / span {ghost.h}"></div>
+    {/if}
   {/if}
 </div>
 
@@ -84,5 +106,20 @@
   .be-ghost.bad {
     border-color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
+  }
+  /* A divider's drop preview is the line it will become. */
+  .be-ghost.line {
+    position: absolute;
+    height: 3px;
+    border: 0;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  .be-ghost.line.vert {
+    width: 3px;
+    height: auto;
+  }
+  .be-ghost.line.bad {
+    background: var(--danger);
   }
 </style>

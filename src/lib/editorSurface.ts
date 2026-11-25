@@ -13,6 +13,7 @@ import { editor } from './editor.svelte';
 import type { Cell, Layout } from './grid';
 import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState, BlockState, BlockVisual } from './types';
 import type { SwipeCtrl } from './layouts';
+import type { BlockLibraryMode, BlockLibraryTarget } from './blockLibrary';
 
 export const EDITOR_SURFACE_KEY = Symbol('axis.editorSurface');
 
@@ -66,6 +67,8 @@ export interface EditorSurface {
   completeLink: (row: number, col: number) => Promise<void>;
   openPaletteAt: (row: number, col: number) => void;
   openRetype: () => void;
+  readonly blockLibraryTarget?: BlockLibraryTarget | null;
+  openBlockLibrary?: (mode: BlockLibraryMode) => void;
   openCabPicker: () => void;
   applyCab: (writes: { paramId: number; value: number }[]) => Promise<void>;
   toggleBypass: (cell?: Cell) => Promise<void>;
@@ -96,9 +99,15 @@ export interface EditorSurface {
   readonly blockVisuals?: readonly BlockVisual[];
   /** Live block metering is on (a dynamics graph shows its gain-reduction bar only then). */
   readonly meteringOn?: boolean;
+  /** Meter role from the device's static monitor catalog. */
+  readonly blockMonitorRole?: string;
+  hasBlockMonitor?: (paramName: string) => boolean;
+  /** Keep the selected block's live data running while a visible tile needs it. */
+  observeBlockTelemetry?: (effectId: number, needs: { waveform: boolean; monitors: boolean }) => () => void;
 
   // ── telemetry / meters / swipe controls ──
   levels: { out1L: number; out1R: number; out2L: number; out2R: number } | null;
+  readonly hasLooperWaveform?: boolean;
   looperWave: { wave: number[]; position: number | null; level: number | null } | null;
   looperControl: (action: string, on: boolean) => Promise<void>;
   typeNameFor: (effectId: number) => string;

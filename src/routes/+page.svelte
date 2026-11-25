@@ -82,6 +82,11 @@
 
     const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
     const onKey = (e: KeyboardEvent) => {
+      if (editor.blockLibraryBusy) {
+        // Keep the picker open and suppress app shortcuts until the device operation settles.
+        if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && ['k', 'y', 'z'].includes(e.key.toLowerCase()))) e.preventDefault();
+        return;
+      }
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
       const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);

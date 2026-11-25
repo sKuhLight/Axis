@@ -13,17 +13,44 @@
     active?: boolean;
   } = $props();
 
-  const glyphs: Record<string, string> = {
-    grid: '▦',
-    library: '≣',
-    fc: '⬚',
-    scenes: '❏',
-    live: '▷',
-    setup: '⚙',
-    account: '◈'
-  };
-
 </script>
+
+{#snippet glyph(id: string)}
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {#if id === 'grid'}
+      <rect x="2.5" y="8.5" width="6.5" height="6.5" rx="1.3" />
+      <rect x="15" y="2.5" width="6.5" height="6.5" rx="1.3" />
+      <rect x="15" y="15" width="6.5" height="6.5" rx="1.3" />
+      <path d="M9 11.75h3v-6h3M9 11.75h3v6.5h3" stroke-width=".85" />
+    {:else if id === 'library'}
+      <path d="M3.4 6.2H13M3.4 11H10M3.4 15.8h4m11.2 1.8 2.8 2.8" />
+      <circle cx="16" cy="15" r="3.5" />
+    {:else if id === 'fc'}
+      <rect x="2.6" y="3.4" width="18.8" height="17.2" rx="4.2" fill="currentColor" stroke="none" />
+      <text x="12" y="15.9" font-weight="800" font-size="10.6" text-anchor="middle" stroke="none" style:fill="var(--aw-bg-2, var(--bg2))">FC</text>
+    {:else if id === 'controllers'}
+      <circle cx="12" cy="15.6" r="5.6" />
+      <path d="M12 15.6V11M4.6 8.6a8.5 8.5 0 0 1 14.8 0" />
+    {:else if id === 'scenes'}
+      <rect x="3" y="7" width="13" height="13" rx="2" />
+      <path d="M8 4h10a2 2 0 0 1 2 2v10M7 12h5m-5 4h5" />
+    {:else if id === 'live'}
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="m10.1 8.5 5.6 3.5-5.6 3.5Z" />
+    {:else if id === 'setup'}
+      <path d="M3.4 7.4h2.2M12 7.4h8.6M3.4 16.6H12m6.8 0h1.8" stroke-width="2.2" />
+      <circle cx="8.4" cy="7.4" r="2.8" fill="currentColor" stroke="none" />
+      <circle cx="15.6" cy="16.6" r="2.8" fill="currentColor" stroke="none" />
+    {:else if id === 'theme'}
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 0 0 17Z" fill="currentColor" stroke="none" />
+    {:else if id === 'account'}
+      <path d="m12 2.8 9.2 9.2-9.2 9.2L2.8 12Zm0 5.1 4.1 4.1-4.1 4.1L7.9 12Z" />
+    {:else}
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
+    {/if}
+  </svg>
+{/snippet}
 
 <button
   class="axis-nav-entry"
@@ -35,7 +62,7 @@
   onclick={runAction}
   title={entry.label ?? entry.id}
 >
-  <span class="ic">{glyphs[entry.id] ?? '•'}</span>
+  <span class="ic">{@render glyph(entry.id)}</span>
   <span class="lbl">{entry.label ?? entry.id}</span>
 </button>
 
@@ -75,7 +102,7 @@
     color: var(--accent);
   }
   .ic {
-    font-size: 18px;
+    display: flex;
     line-height: 1;
   }
   .lbl {
