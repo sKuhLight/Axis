@@ -15,18 +15,27 @@ const SVG_COLOR_ATTR = /\b(?:fill|stroke|stop-color|color|background|border(?:-c
 
 const GRAPH_FILES = [join(HERE, 'BeGraph.svelte'), ...readdirSync(join(HERE, 'visuals')).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts')).map((f) => join(HERE, 'visuals', f))];
 
-/** Strip comments until the text stops changing: one pass can leave a marker behind (e.g. `<!--<!-- -->`),
- *  and this guard only cares about code. */
+/** Strip comments with a small scanner (prose may mention a colour, and the guard only cares about code).
+ *  A scanner instead of chained replacements keeps every pass complete: no comment marker can survive it. */
 function stripComments(src: string): string {
-  let code = src;
-  for (let previous = ''; previous !== code; ) {
-    previous = code;
-    code = code
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    if (src.startsWith('/*', i)) {
+      const end = src.indexOf('*/', i + 2);
+      i = end < 0 ? src.length : end + 2;
+    } else if (src.startsWith('<!--', i)) {
+      const end = src.indexOf('-->', i + 4);
+      i = end < 0 ? src.length : end + 3;
+    } else if (src.startsWith('//', i) && (i === 0 || src[i - 1] !== ':')) {
+      const end = src.indexOf('\n', i + 2);
+      i = end < 0 ? src.length : end;
+    } else {
+      out += src[i];
+      i++;
+    }
   }
-  return code;
+  return out;
 }
 
 describe('graph tiles use theme tokens, not hex colours', () => {
