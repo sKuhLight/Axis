@@ -15,15 +15,28 @@ const SVG_COLOR_ATTR = /\b(?:fill|stroke|stop-color|color|background|border(?:-c
 
 const GRAPH_FILES = [join(HERE, 'BeGraph.svelte'), ...readdirSync(join(HERE, 'visuals')).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts')).map((f) => join(HERE, 'visuals', f))];
 
+/** Strip comments until the text stops changing: one pass can leave a marker behind (e.g. `<!--<!-- -->`),
+ *  and this guard only cares about code. */
+function stripComments(src: string): string {
+  let code = src;
+  for (let previous = ''; previous !== code; ) {
+    previous = code;
+    code = code
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  }
+  return code;
+}
+
 describe('graph tiles use theme tokens, not hex colours', () => {
   it('finds the graph files to scan', () => {
     expect(GRAPH_FILES.length).toBeGreaterThan(2);
   });
   for (const file of GRAPH_FILES) {
     it(file.slice(HERE.length + 1), () => {
-      const src = readFileSync(file, 'utf8');
-      // strip comments (`// …`, `/* … */`, `<!-- … -->`): prose may mention a colour
-      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      // comments may mention a colour in prose
+      const code = stripComments(readFileSync(file, 'utf8'));
       expect(code.match(SVG_COLOR_ATTR) ?? []).toEqual([]);
       expect(code.match(HEX_COLOR) ?? []).toEqual([]);
     });
