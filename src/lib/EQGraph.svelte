@@ -185,10 +185,13 @@
   .eq {
     display: block;
     border-radius: 11px;
-    touch-action: none;
+    /* A swipe that starts on the graph's background pans the page / strip like the rest of the board; the
+     * nodes below keep it for themselves (they drag in both axes). */
+    touch-action: manipulation;
   }
   .node {
     cursor: grab;
+    touch-action: none;
   }
   .node.fixed {
     cursor: ns-resize;

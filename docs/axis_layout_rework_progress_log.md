@@ -2791,5 +2791,26 @@ Branch `feature/block-editor-fixed-area`, on top of ROUND BE-9 (`a830d76`). The 
 - The gap is now the divider band itself: 4 → 12 px (s), 4 → 14 (m), 5 → 16 (l), with `cmax`/`phoneMax` lowered by the same delta (50 → 42, 68 → 59, 40 → 40) so the pitch at the cap does not grow and no page re-flows or spills. The phone keeps a slightly smaller knob (74 px at 390) and the band's first line holds two knobs instead of three at 360 px.
 - Arrange shows a divider's drop preview as the LINE it becomes (`be-ghost.line`), not a one-row cell: the pointer snaps to the nearest grid line, and the preview draws centred in that gap.
 - `phoneWrap` puts a compacted heading back on a line of its own (one inserted line per heading row, everything below shifts), so the phone keeps every title above the rows it heads; `compactDividers` no longer reorders the page (it maps the input order), which the phone's re-wrap depends on.
+- The EQ graph no longer swallows a phone swipe: `EQGraph`'s background is `touch-action: manipulation` (a swipe on it pans the page / strip), only its `.node` bands keep `touch-action: none` for the two-axis drag. This closes the slice-7 deferral.
+- Spec 17 now pins the line-divider model: titles sit ON their controls' line (`h = 0`), the mixer divider on its first row's line, the overlap check skips zero-thickness dividers.
+
+## Port to the release bases (Axis v0.10.3-beta, ForgeFX v0.8.3-beta, codec v0.6.1)
+
+- **Axis:** merged `v0.10.3-beta` (clean, 0 conflicts). `DeviceCaps.graphCurves` is mirrored from the server's telemetry cap (the curve tiles can be gated now); the Looper wave tile scales its bars to `host.wave.length` (the new capture sends 128 samples; the fixed viewBox clipped the last 18).
+- **Codec:** merged `v0.6.1` and regenerated all four device layouts from the local FM3-Edit 1.07.15 config (`FORGEFX_MIDI_EDITOR_XML_ROOT=fas-re/raw`, the source main's own regeneration used). Our `<EditorControl>`-under-`<Page>` emission was ported onto main's newer generator: FM3 950 pages / 696 page-level controls, FM9 853/575, Axe-Fx III 1175/731, AM4 383/60. The data files' diff against `v0.6.1` is **additions only** (no regenerated line changed), so the newer source data and our page controls now live in one generation.
+- **ForgeFX:** ported, not merged (`v0.8.3-beta` rewrote `blockParams` into classic + generic): `observe` on the definition-only read, `blockState` + `visuals` on the classic response, `pageControls` pruning on the firmware-aware gate, `stampGraphKeys` over the firmware-resolved pages, `graphKeys` option on `layoutFrom`. The meter-demand gate had also silenced the CPU poll; CPU keeps its own read while the four meter reads stay demand-gated.
+- Gates on the merged base: Axis `npm run check` clean, `npm test` 189 files / 2,965; block-editor e2e 133/133 (40, 41, 43, 44, 45, 46, 51) and the workbench set 130/130 (01-22, spec 17 updated); codec `npm run build && npm test` green; ForgeFX `npm run typecheck && npm test` green (goldens regenerated for the new layout data).
+
+### Still open (UI rework, deferred with reasons)
+
+- **Control-menu header icon (BE-4):** needs a control-kind glyph set (knob / toggle / select / fader / meter / graph / wave); the icon work so far is block families (`BlockGlyph`) and UI actions (`Icon`), neither has kind glyphs.
+- **Arrange redo (BE-5):** only undo exists (`arrangeHistory` is a single stack). A redo stack has to be cleared on every new arrange change and needs the bar row + keybinding + tests - a feature, not a fix.
+- **Page menu on a tab right-click (BE-5):** `buildPageMenu` is built for the ACTIVE page; opening it for another tab needs the menu keyed by page (and the page switched on pick).
+- **Floating copy of the dragged tile (BE-5):** the selection follows the pointer as an outline; a lifted copy is decoration.
+- **Ctrl+Z routing while the workbench's Customize was on before Arrange started (BE-5):** reaches into `src/lib/workbench/` history.
+- **Two open editors of the same slug keep separate board state (BE-2):** needs a board store shared per slug across mounts.
+- **The ? hover action shows no assigned-modifier state (AXIS-92):** the editor has no live modifier-binding read for a control; the modifier bindings live on the device's modifier slots, which the app does not read yet.
+- **Mute** stays a placeholder (device-side item); **FM3** FORMANT / MIXER / FDBKRET / MULTIPLEXER bypass-mode labels are missing from the codec catalog (codec data follow-up); a front-panel enum change still updates on the next block read, not live (pre-existing for every enum).
+
 
 

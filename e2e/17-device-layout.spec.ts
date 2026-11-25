@@ -186,27 +186,28 @@ test.describe('Block Editor device positions (slice 6)', () => {
     expect(drive).toMatchObject({ x: 0, w: 2, h: 2 });
     await expect(page.locator(`${AUTH} [data-be-key="e10"]`)).toHaveAttribute('data-be-view', 'switch');
 
-    // the section titles: dividers on the line above, over the controls they title
+    // the section titles: dividers ON the line they head (h = 0, no cell of their own), over the controls
     for (const t of ['GAIN', 'TONE', 'OUTPUT']) await expect(divider(page, t)).toHaveCount(1);
-    expect(await cellOf(divider(page, 'GAIN'))).toMatchObject({ x: drive.x, y: drive.y - 1, w: 2, h: 1 });
-    expect(await cellOf(divider(page, 'TONE'))).toMatchObject({ x: bass.x, y: drive.y - 1, w: presence.x + presence.w - bass.x });
-    expect(await cellOf(divider(page, 'OUTPUT'))).toMatchObject({ x: master.x, y: drive.y - 1, w: bright.x + bright.w - master.x });
-    // the mixer section (no positions) below a "Mixer" divider, in layout order
+    expect(await cellOf(divider(page, 'GAIN'))).toMatchObject({ x: drive.x, y: drive.y, w: 2, h: 0 });
+    expect(await cellOf(divider(page, 'TONE'))).toMatchObject({ x: bass.x, y: drive.y, w: presence.x + presence.w - bass.x });
+    expect(await cellOf(divider(page, 'OUTPUT'))).toMatchObject({ x: master.x, y: drive.y, w: bright.x + bright.w - master.x });
+    // the mixer section (no positions) under a "Mixer" divider on its first row's line, in layout order
     await expect(divider(page, 'Mixer')).toHaveCount(1);
     const mixer = await cellOf(divider(page, 'Mixer'));
     const [trim, level, balance] = await Promise.all(['k6', 'k7', 'k8'].map((k) => tileCell(page, k)));
     expect(mixer.y).toBe(drive.y + drive.h);
-    expect([trim, level, balance].map((c) => [c.x, c.y])).toEqual([0, 2, 4].map((x) => [x, mixer.y + 1]));
+    expect([trim, level, balance].map((c) => [c.x, c.y])).toEqual([0, 2, 4].map((x) => [x, mixer.y]));
 
-    // nothing overlaps (dividers included)
+    // nothing overlaps: a line divider covers no cell, so only the solid items are compared
     const all = await page.locator(`${AUTH} [data-be-item]`).evaluateAll((els) =>
       els.map((e) => ({ id: e.getAttribute('data-be-item')!, x: Number(e.getAttribute('data-be-x')), y: Number(e.getAttribute('data-be-y')), w: Number(e.getAttribute('data-be-w')), h: Number(e.getAttribute('data-be-h')) }))
     );
     expect(all.length).toBe(14);
-    for (let i = 0; i < all.length; i++)
-      for (let j = i + 1; j < all.length; j++) {
-        const a = all[i]!;
-        const b = all[j]!;
+    const solid = all.filter((a) => a.w > 0 && a.h > 0);
+    for (let i = 0; i < solid.length; i++)
+      for (let j = i + 1; j < solid.length; j++) {
+        const a = solid[i]!;
+        const b = solid[j]!;
         expect(a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y, `${a.id} × ${b.id}`).toBe(false);
       }
 
@@ -215,7 +216,7 @@ test.describe('Block Editor device positions (slice 6)', () => {
       Math.max(...secs.map((s) => Math.max(0, ...[...s.querySelectorAll('[data-be-item]')].map((e) => Number(e.getAttribute('data-be-y')) + Number(e.getAttribute('data-be-h'))))))
     );
     expect(tallest).toBe(6);
-    expect(level.y + level.h).toBe(6);
+    expect(level.y + level.h).toBe(mixer.y + level.h);
 
     // always fit: no vertical scroll, all of the page in view
     const fit = await page.locator('[data-be-board]').evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
