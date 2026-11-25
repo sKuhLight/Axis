@@ -1365,6 +1365,20 @@ class EditorStore {
         deviceDefs.onBuildEvent(e);
         break;
       }
+      case 'definitions': {
+        // The server's stored definitions for this unit changed (merge / import / re-derive / block probe).
+        // Re-read the status so the definitions panel reflects it; `/device` is free, not a device read.
+        void (async () => {
+          const dev = await forgefx.device().catch(() => null);
+          if (dev) {
+            void deviceDefs.refresh({
+              model: dev.model, modelByte: dev.modelByte,
+              firmware: dev.firmware?.version ?? null, caps: dev.capabilities ?? null
+            });
+          }
+        })();
+        break;
+      }
     }
   };
   /** Apply a shared config doc pushed by another UI (host↔remote). Sets local state + the localStorage cache
