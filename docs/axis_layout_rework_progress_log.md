@@ -2882,9 +2882,10 @@ replaces instead of falling onto "More".
   (1–2 → 4/2, 3–4 → 4/4, 5–6 → 6/4, 7–8 → 8/4, 9 → 8/6).
 - **A divider takes no cell** (h = 0): it is drawn in the grid gap above its block's first row, like the block
   editor's compacted section titles; the panel reserves one gap-band of top padding so the first one shows.
-- **Widget drag in Customize:** the board's own ⌘/Ctrl-drag does the moving; the edit-mode dashed surface is
-  decorative, so a Quick Controls tile is not dragged out of its panel with the workbench widget drag any more
-  (see follow-ups — dropping INTO the panel still works).
+- **Widget drag in Customize:** a plain drag on a tile is the workbench's (`beginWidgetDrag`): the tile lifts
+  (the drag ghost travels, the board closes the gap) and drops into any zone, onto a unit to group, or at the
+  workspace edge for a new panel. The board's own ⌘/Ctrl-drag still reorders within the panel. Dropping INTO
+  the panel is unchanged.
 
 ### Tests and gates
 
@@ -2899,19 +2900,14 @@ replaces instead of falling onto "More".
 
 ### Still open
 
-- **Edit-mode widget drag-out of a Quick Controls tile:** start the workbench `beginWidgetDrag` from the tile in
-  Customize (the dashed surface is there; the pointer handler is not).
+- **Edit-mode widget drag-out of a Quick Controls tile:** done — see the section below.
 - **Graph-tile size clamp (handover item 2):** done — see the section below.
 - **EQ style switch on the tile (handover item 3):** done — see the section below.
 - **Visual DynaCab UI (handover item 4):** done — see the section below.
-- **Cab Align graph (handover item 5):** roles `delay1`/`delay2` resolve to `CABINET_DELAY1/2` and the axis is
-  fitted (`max(delay1, delay2) × 1.5`, capped at the param's max) in `graphModel.cabAlignPlot`. The likely causes
-  are the tile span (the graph's seeded 8×4 cells shift the page, item 2) and the unit: the spikes/ticks draw
-  `paramValue()` and `p.max` without the display unit. Needs a real CAB block to compare the served delays with the
-  drawn scale and to confirm both roles resolve.
-- **Stale e2e specs noticed in the full run:** `45-block-editor-graphs` (4 cases still expect METER off by default;
-  `meteringOn` starts true) and `46-block-editor-fixed` (the right-edge case still expects the `.be-tip` value
-  bubble, removed earlier). Both fail on the base branch too.
+- **Cab Align graph (handover item 5):** done — see the section below.
+- **Stale e2e specs noticed in the full run:** fixed — `45-block-editor-graphs` now expects metering on by
+  default (the four METER cases were rewritten around switching it OFF), and `46-block-editor-fixed`'s
+  right-edge case only covers the select popover (the `.be-tip` value bubble was removed earlier).
 
 ## Graph and EQ tile seeds stay inside their slot
 
@@ -2983,3 +2979,27 @@ replaces instead of falling onto "More".
 - **Gates.** Codec `npm run build && npm test` green (135 tests); ForgeFX `npm run typecheck` and 70 suites
   green; Axis `npm run check` 0/0, `npm test` 192 files / 3,005 tests; e2e 45 + 52 + 53 + 17: 17/21 with only
   the four known stale METER cases.
+
+## Cab alignment graph, tile drag-out and the stale specs
+
+- **Cab alignment (handover item 5).** `graphModel.cabAlignPlot` no longer fits the axis to `max(delay1,
+  delay2) × 1.5` on every step: the ceiling is a 1-2-5 step of the values' own scale (`niceCeil`), floored at a
+  tenth of the device's maximum and capped by it, so the ticks and the slot-1 marker stay put while one knob
+  turns. The two markers end at different heights (an equal pair still shows both), their inline `1` / `2`
+  labels are dropped when they would collide (the caption always names both), a single served slot still
+  draws and says which one is missing, and both at 0 lands at the scale origin instead of an empty plot. The
+  synthetic CAB block now serves a second page with the graph slot, so the new `e2e/53` case checks the
+  shared scale / stable ticks / both markers in the real board.
+- **Tile drag-out in Customize.** A plain left-button press on a Quick Controls tile starts the workbench
+  `beginWidgetDrag` (the parent builds it from the widget record, the tile host is a `[data-widget-host]` with
+  its widget id), so a tile can leave the panel for any zone, group with another unit, or open a new panel at
+  the workspace edge; the tile lifts (`display: none`) like a lifted WidgetHost. ⌘/Ctrl-drag keeps the board's
+  own reorder. New case 6 in `e2e/23-quick-controls.spec.ts`: edit mode, drag the tile to `top.left`, the bar
+  gains a host and the panel loses one.
+- **Stale specs.** `45-block-editor-graphs`: metering now starts on, so its four METER cases check the
+  gain-reduction readout is there, switching it off clears it, the Looper still loads its waveform with
+  metering off, and the Amp's off-screen meter does not poll (the visible-read baseline is cleared after
+  switching pages). `46-block-editor-fixed`: the right-edge case drops the removed `.be-tip` bubble and keeps
+  the select-popover clamp.
+- **Gates.** Axis `npm run check` 0/0, `npm test` 192 files / 3,009 tests; e2e 15 + 23 + 45 + 46 + 52 + 53:
+  56/56 (Chromium, system Chrome).

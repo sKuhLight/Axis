@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootCleanWorkbench } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode } from './support/workbench';
 
 // Quick Controls (custom panel as a Block Editor board): one panel collects every control dropped on it,
 // lays the controls out on the block editor's cell raster (4 cells / two knobs a row, one knob column wider
@@ -170,5 +170,31 @@ test.describe('Quick Controls — one panel, block-editor board', () => {
 
     await expect(tiles(page)).toHaveCount(4);
     expect(await colsOf(page)).toBe(4);
+  });
+
+  test('in Customize a plain drag takes a tile out of the panel and into another zone', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await dropOnWorkspace(page, GAIN);
+    await dropOnPanel(page, MASTER);
+    await expect(tiles(page)).toHaveCount(2);
+
+    await enterEditMode(page);
+    const host = page.locator('.custom-panel [data-widget-host]').first();
+    await expect(host).toHaveCount(1);
+    const bar = page.locator('[data-zone="top.left"]');
+    const before = await bar.locator('[data-widget-host]').count();
+    const from = (await host.boundingBox())!;
+    const to = (await bar.boundingBox())!;
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2 + 24, from.y + from.height / 2 + 8, { steps: 5 });
+    // the workbench drag has lifted the tile: it travels as the drag ghost, the board closes the gap
+    await expect(host).toBeHidden();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(bar.locator('[data-widget-host]')).toHaveCount(before + 1);
+    await expect(tiles(page)).toHaveCount(1);
   });
 });

@@ -112,25 +112,28 @@ test.describe('Block Editor graph tiles (AXIS-89)', () => {
     await expect(g.locator('path.be-gline.t-main')).toHaveCount(0);
   });
 
-  test('meters start off and a visible compressor graph asks for gain reduction when enabled', async ({ page }) => {
+  test('meters start on and a visible compressor graph shows gain reduction until they are switched off', async ({ page }) => {
     await bootBlockEditorMock(page, { graphs: true });
     await openBlock(page, 0);
     const toggle = page.locator('button.meter-toggle').first();
-    await expect(toggle).not.toHaveClass(/\bon\b/);
+    await expect(toggle).toHaveClass(/\bon\b/);
     const gr = graph(page, 'dynamics').locator('[data-be-graph-gr]');
-    await expect(gr).toHaveCount(0);
-    await toggle.click();
     await expect(gr).toBeVisible();
     await expect(gr).toContainText('6.0');
     // METER OFF: no stale reading stays on the graph
     await toggle.click();
     await expect(gr).toHaveCount(0);
     await expect(graph(page, 'dynamics')).toBeVisible();
+    // and on again
+    await toggle.click();
+    await expect(gr).toBeVisible();
   });
 
   test('Looper loads its waveform with Meter off without polling audio meters for the Looper', async ({ page }) => {
     await bootBlockEditorMock(page, { graphs: true });
     const toggle = page.locator('button.meter-toggle').first();
+    await expect(toggle).toHaveClass(/\bon\b/);
+    await toggle.click();
     await expect(toggle).not.toHaveClass(/\bon\b/);
     const meterReads: string[] = [];
     page.on('request', (req) => {
@@ -155,9 +158,9 @@ test.describe('Block Editor graph tiles (AXIS-89)', () => {
     await openBlock(page, 0);
     const g = graph(page, 'dynamics');
     await expect(g.locator('.be-gempty')).toHaveText('No static curve for this type');
-    await expect(g.locator('[data-be-graph-gr]')).toHaveCount(0);
-    await page.locator('button.meter-toggle').first().click();
     await expect(g.locator('[data-be-graph-gr]')).toContainText('6.0');
+    await page.locator('button.meter-toggle').first().click();
+    await expect(g.locator('[data-be-graph-gr]')).toHaveCount(0);
   });
 
   test('Amp does not poll a meter off screen and starts when the meter scrolls into view', async ({ page }) => {
@@ -175,9 +178,8 @@ test.describe('Block Editor graph tiles (AXIS-89)', () => {
     const away = page.locator('[data-be-tab="Authentic"]');
     await away.click();
     await expect(meter).not.toBeInViewport();
-    await page.locator('button.meter-toggle').first().click();
-    await expect(meter).not.toBeInViewport();
     // Once per polling interval was the regression. Leave the Amp editor open past one interval.
+    meterReads.length = 0; // reads made while the meter was visible do not count
     await page.waitForTimeout(1200);
     expect(meterReads).toEqual([]);
     await page.locator('[data-be-tab="Power Amp"]').click();

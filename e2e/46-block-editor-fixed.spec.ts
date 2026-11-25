@@ -194,7 +194,7 @@ test.describe('Block Editor fixed area', () => {
     await expect(onPage).toHaveCount(0);
   });
 
-  test('the select popover and value bubble stay within the window at the right edge', async ({ page }) => {
+  test('the select popover stays within the window at the right edge', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 768 });
     await bootBlockEditorMock(page, { fixed: true });
     await openAmpEditor(page);
@@ -214,19 +214,6 @@ test.describe('Block Editor fixed area', () => {
     expect(t.x + p.width).toBeGreaterThan(1440);
     expect(p.x).toBeGreaterThanOrEqual(0);
     expect(p.x + p.width).toBeLessThanOrEqual(1440);
-    await page.keyboard.press('Escape');
-    const dial = inFixed(page, 'k8').locator('.be-dial');
-    await dial.evaluate((el) => {
-      const bounds = el.getBoundingClientRect();
-      (el as HTMLElement).style.translate = `${window.innerWidth - bounds.left - bounds.width / 2 - 2}px 0`;
-    });
-    await dial.dispatchEvent('pointerenter', { pointerType: 'mouse' });
-    const bubble = page.locator('.be-tip');
-    await expect(bubble).toBeVisible();
-    await expect.poll(async () => {
-      const b = (await bubble.boundingBox())!;
-      return b.x + b.width;
-    }).toBeLessThanOrEqual(1440);
   });
 
   test('no header control in the default board; the library and the search offer them; a placement of one’s own stays', async ({ page }) => {

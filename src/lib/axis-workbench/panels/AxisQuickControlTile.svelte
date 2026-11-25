@@ -19,8 +19,10 @@
     page,
     editMode = false,
     selected = false,
+    lifted = false,
     onselect,
     onmove,
+    ondragout,
     onremove
   }: {
     info: CustomPanelTileInfo;
@@ -32,9 +34,13 @@
     page: string;
     editMode?: boolean;
     selected?: boolean;
+    /** The workbench drag has lifted this tile (it travels as the drag ghost). */
+    lifted?: boolean;
     onselect: () => void;
     /** Ctrl/⌘-drag on the tile: the panel reorders it to the cell under the pointer. */
     onmove: (event: PointerEvent) => void;
+    /** Plain drag in edit mode: the workbench widget drag (out of the panel, into any zone). */
+    ondragout: (event: PointerEvent) => void;
     /** The selected tile's × (Delete works too). */
     onremove: () => void;
   } = $props();
@@ -245,11 +251,16 @@
   setBeHost(host);
 
   function onPointerDownCapture(event: PointerEvent): void {
-    if (!editMode || !(event.ctrlKey || event.metaKey)) return;
+    if (!editMode || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    onselect();
-    onmove(event);
+    if (event.ctrlKey || event.metaKey) {
+      onselect();
+      onmove(event);
+      return;
+    }
+    // A plain drag is the workbench's: the tile can leave the panel, join a zone or group with a unit.
+    ondragout(event);
   }
 </script>
 
@@ -257,8 +268,11 @@
 <div
   class="aw-widget-host qc-host"
   class:selected
+  class:lifted
   data-quick-control={info.widgetId}
-  data-widget={info.foreign ? undefined : 'axis.paramControl'}
+  data-widget-host
+  data-widget={info.widgetId}
+  data-widget-type={info.foreign ? undefined : 'axis.paramControl'}
   style:grid-column="{x + 1} / span 2"
   style:grid-row="{y + 1} / span 2"
   onpointerdowncapture={onPointerDownCapture}
@@ -286,6 +300,9 @@
     min-width: 0;
     min-height: 0;
     display: flex;
+  }
+  .qc-host.lifted {
+    display: none;
   }
   .axis-widget.param {
     position: relative;

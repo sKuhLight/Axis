@@ -3,6 +3,7 @@
   // block grouping draws a labelled divider above each block's controls, and the panel collects every control
   // dropped on it instead of spawning a panel per knob. The layout is pure (`workbench/core/customPanelBoard`).
   import WidgetHost from '../../workbench/svelte/WidgetHost.svelte';
+  import { beginWidgetDrag } from '../../workbench/svelte/widgetDragSession';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
   import {
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -112,6 +113,28 @@
   }
 
   // ── moving, selecting, removing ─────────────────────────────────────────────────────────────────
+  /** Edit mode: a plain drag hands the tile to the workbench's widget drag (out of the panel, into any
+   *  zone, or onto another unit to group). The board keeps its own reorder on Ctrl/⌘-drag. */
+  function startDragOut(widgetId: string, event: PointerEvent) {
+    if (!editMode) return;
+    const widget = widgetById.get(widgetId);
+    if (!widget) return;
+    const host = event.currentTarget as HTMLElement | null;
+    const rect = host?.getBoundingClientRect();
+    selectedId = widgetId;
+    beginWidgetDrag({
+      controller,
+      event,
+      widgetIds: [widget.id],
+      ownUnitKey: widget.groupId ?? widget.id,
+      reorderGroupId: widget.groupId ?? null,
+      size: { width: host?.offsetWidth || 120, height: host?.offsetHeight || 120 },
+      grabOffset: rect ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : { x: 60, y: 60 },
+      onTap: () => (selectedId = widgetId),
+      typeLabel: (type) => registry.canonicalWidgets().find((spec) => spec.type === type)?.label
+    });
+  }
+
   function startMove(widgetId: string, event: PointerEvent) {
     if (!editMode) return;
     moveDrag = { widgetId, pointerId: event.pointerId };
@@ -295,8 +318,10 @@
                 page={zone}
                 {editMode}
                 selected={selectedId === info.widgetId}
+                lifted={drag?.kind === 'widget' && drag.widgetIds.includes(info.widgetId)}
                 onselect={() => (selectedId = info.widgetId)}
                 onmove={(event) => startMove(info.widgetId, event)}
+                ondragout={(event) => startDragOut(info.widgetId, event)}
                 onremove={() => remove(info.widgetId)}
               />
             {/if}
