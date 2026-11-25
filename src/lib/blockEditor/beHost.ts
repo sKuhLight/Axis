@@ -5,8 +5,7 @@
 import { getContext, setContext } from 'svelte';
 import type { EQBand } from '../EQGraph.svelte';
 import type { EnumParam, LiveMonitor, NamedParam } from '../types';
-import type { BeItem } from './boardModel';
-import type { BeCtl } from './catalog';
+import type { BeItem, BeView } from './boardModel';import type { BeCtl } from './catalog';
 import type { Axis } from './touchGesture';
 
 /** Drop preview of an arrange drag: where the item would land, and whether it may. */
@@ -56,6 +55,11 @@ export interface BeHost {
   readonly hideHoverActions?: boolean;
   readonly eqBands: EQBand[];
   readonly eqGainRange: number;
+  /** A style view's own bands / title / gain range (the eq tile's Input EQ / Output EQ / PEQ variants);
+   *  absent = every view draws `eqBands` (the block's own EQ). */
+  eqBandsFor?(view: BeView): EQBand[] | undefined;
+  eqTitleFor?(view: BeView): string | undefined;
+  eqGainRangeFor?(view: BeView): number | undefined;
   readonly bypassed: boolean;
   readonly mons: LiveMonitor[];
   readonly wave: number[];

@@ -26,6 +26,7 @@ import type { DeviceLayout, LayoutPage } from '../types';
 import { PAGE_REFERENCE_ROWS } from './boardGeometry';
 import { bbox, BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeItem, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
+import { EQ_STYLE_VIEW, eqStyleForVisual } from './eqStyles';
 import { packFixed, pickFixed } from './fixedSeed';
 import { headerKeys, type HeaderBlockState } from './headerControls';
 import { compactLayoutPage, fitLayoutPage, GAP_CELLS, itemId, measureLayoutPitch, pageEntries, pageRows, pitchSamples, rowKeys, type PageMode, type PlacedRow } from './layoutPlacement';
@@ -176,9 +177,16 @@ export function buildDeviceLayoutBoardV2(
   // Every band gain of a GRAPHIC EQ the block serves (the AMP's Output EQ, a GEQ's ten bands): the EQ tile
   // draws them, so the gain controls themselves take no place on the page (no fader rows).
   const eqGains = new Set<string>();
+  /** The style view each dropped fader belongs to (the served visual's Input / Output EQ), when it has one. */
+  const eqGainView = new Map<string, BeView>();
   for (const c of catalog) {
     if (c.visual?.kind !== 'eq' || c.visual.mode !== 'graphic') continue;
-    for (const band of c.visual.bands ?? []) if (band.gain != null) eqGains.add(`k${band.gain}`);
+    const style = eqStyleForVisual(c.visual);
+    for (const band of c.visual.bands ?? []) {
+      if (band.gain == null) continue;
+      eqGains.add(`k${band.gain}`);
+      if (style) eqGainView.set(`k${band.gain}`, EQ_STYLE_VIEW[style]);
+    }
   }
   // The EQ tile (kind `eq`) is what draws those gains. Where the layout stamps an EQ graph on the page, that
   // slot already draws them; otherwise the tile takes the first dropped fader's place on the page, so the EQ
@@ -198,11 +206,14 @@ export function buildDeviceLayoutBoardV2(
       if (entry.kind !== 'tile' || !entry.key || !eqGains.has(entry.key)) return entry;
       represented.add(entry.key);
       if (!eqCtl || stamped || took || skip.has(eqCtl.key)) return { ...entry, kind: 'gone' as const };
-      // One EQ per page: the first dropped fader's anchor becomes the EQ tile.
+      // One EQ per page: the first dropped fader's anchor becomes the EQ tile, in the style the fader's
+      // visual has (an output EQ stays an output EQ) when the catalog offers that view.
       took = true;
       represented.add(eqCtl.key);
       eqPages.add(page);
-      return { ...entry, key: eqCtl.key, view: 'eq' as BeView };
+      const styleView = eqGainView.get(entry.key);
+      const view = styleView && eqCtl.views.includes(styleView) ? styleView : eqCtl.view;
+      return { ...entry, key: eqCtl.key, view };
     });
   });
   const layoutPitch = opts.rowFlowOnly ? null : measureLayoutPitch(entries.map(pitchSamples));

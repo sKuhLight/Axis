@@ -5,7 +5,7 @@
 // displays the server serves for the block are `graph:<visual key>` (read-only, kind `graph`).
 // Pure (catalog.test.ts).
 
-import { BE_SPEC, type BeView } from './boardModel';
+import { BE_SPEC, isBeView, type BeView } from './boardModel';
 import { graphCatalogKey } from '../blockVisuals';
 import { isForeignControl } from '../deviceLayoutBoard';
 import type { BlockVisual, DeviceLayout, EnumParam, NamedParam } from '../types';
@@ -40,6 +40,9 @@ export interface CatalogInput {
   /** Number of EQ bands; > 0 adds the EQ graph. */
   eqBandCount?: number;
   eqTitle?: string;
+  /** EQ style views the block serves besides the plain (its input / output EQ, a PEQ): the eq tile's
+   *  View list, same footprint. Empty = the plain `eq` view only. */
+  eqViews?: readonly BeView[];
   /** Parameter ids shown elsewhere (e.g. by the cab picker) and left out here. */
   hideIds?: readonly number[];
   /** Level meters the block reports; the first one names the meter entry. */
@@ -86,7 +89,13 @@ export function buildCatalog(input: CatalogInput): BeCtl[] {
   const meter = (key: string, id: number, label: string): BeCtl => ({
     ...entry(key, 'meter', label, id, 'meter', ['meter']), meterParamName: meterParams.get(id)
   });
-  if ((input.eqBandCount ?? 0) > 0) out.push(entry('eq', 'eq', input.eqTitle || 'EQ', -1, 'eq', ['eq']));
+  if ((input.eqBandCount ?? 0) > 0 || (input.eqViews?.length ?? 0) > 0) {
+    // The eq tile's views: the block's own EQ plus the styles it serves (Input EQ / Output EQ / PEQ), the
+    // same footprint for all of them. The first one is the default.
+    const views: BeView[] = [...new Set<BeView>([...(input.eqBandCount ?? 0) > 0 ? (['eq'] as BeView[]) : [], ...(input.eqViews ?? []).filter(isBeView)])];
+    const eq = entry('eq', 'eq', input.eqTitle || 'EQ', -1, 'eq', views);
+    out.push(views.length ? { ...eq, view: views[0]! } : eq);
+  }
   (input.visuals ?? []).forEach((v, i) => out.push({ ...entry(graphCatalogKey(v.key), 'graph', v.title, GRAPH_ID_BASE - i, 'graph', ['graph']), visual: v }));
   for (const p of input.params) {
     if (p.id == null || hidden.has(p.id)) continue;

@@ -128,6 +128,20 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(b.pageOrder.some((name) => name.startsWith('More'))).toBe(false);
   });
 
+  it('injects the fader’s own EQ style into the tile that replaces it', () => {
+    const c = buildCatalog({
+      params: [{ id: 0, name: '31 Hz' }, { id: 1, name: '62 Hz' }],
+      enums: [],
+      eqViews: ['eqIn', 'eqOut'],
+      visuals: [{ key: 'outputEq', title: 'Output EQ', kind: 'eq', mode: 'graphic', roles: {}, bands: [
+        { key: 'low', centerHz: 31, gain: 0 }, { key: 'high', centerHz: 62, gain: 1 }
+      ] }]
+    });
+    const eqPage = { name: 'Output EQ', rows: [{ controls: [ctl('slider', 0), ctl('slider', 1)] }] };
+    const b = buildDeviceLayoutBoardV2(layout([eqPage]), c)!;
+    expect(find(b.boards['Output EQ']!, 'eq')).toMatchObject({ view: 'eqOut', x: 0, y: 0 });
+  });
+
   it('makes repeated page names unique and skips empty pages', () => {
     const b = buildDeviceLayoutBoardV2(
       layout([

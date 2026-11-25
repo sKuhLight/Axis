@@ -10,7 +10,10 @@ export const GATE_EID = 113;
 export const DELAY_EID = 114;
 export const CTRL_EID = 115;
 export const LOOPER_EID = 116;
-export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID, LOOPER_EID]);
+/** An EQ block: its graphic gains on the page (dropped in favour of the eq tile) plus an Input EQ, an
+ *  Output EQ and a PEQ as served EQ visuals (the eq tile's style variants). */
+export const EQ_EID = 117;
+export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID, LOOPER_EID, EQ_EID]);
 /** The device tempo the mock serves (GET /tempo). */
 export const GRAPH_BPM = 90;
 
@@ -22,7 +25,8 @@ export const GRAPH_CELLS = [
   { row: 1, col: 3, effectId: GATE_EID, name: 'Gate 1', slug: 'Gate', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 4, effectId: DELAY_EID, name: 'Delay 1', slug: 'Delay', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 5, effectId: CTRL_EID, name: 'Controllers', slug: 'Controllers', isShunt: false, routeFlag: 0, fromRows: [] },
-  { row: 2, col: 0, effectId: LOOPER_EID, name: 'Looper 1', slug: 'Looper', isShunt: false, routeFlag: 0, fromRows: [] }
+  { row: 2, col: 0, effectId: LOOPER_EID, name: 'Looper 1', slug: 'Looper', isShunt: false, routeFlag: 0, fromRows: [] },
+  { row: 2, col: 1, effectId: EQ_EID, name: 'EQ 1', slug: 'Filter', isShunt: false, routeFlag: 0, fromRows: [] }
 ];
 
 /** The compressor's live gain reduction while metering is on (6 dB). */
@@ -67,6 +71,50 @@ export function graphBlockParams(eid: number, o: { sustainOnly: boolean }): Reco
         },
         []
       );
+    case EQ_EID: {
+      // a graphic EQ whose ten band gains are the page's faders (the eq tile takes their place), with an
+      // Input EQ, an Output EQ and a PEQ served as the tile's style variants
+      const gains = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+      return out(
+        {
+          block: 'EQ',
+          slug: 'filter',
+          page: 1,
+          named: [
+            ...gains.map((hz, i) => knob(i, `${hz} Hz`, 0, -12, 12, 'dB')),
+            knob(20, 'Low Cut', 20, 20, 2000, 'Hz', true),
+            knob(21, 'Peak Freq', 1000, 20, 20000, 'Hz', true),
+            knob(22, 'Peak Gain', 0, -20, 20, 'dB'),
+            knob(23, 'Peak Q', 1.4, 0.1, 10),
+            knob(24, 'High Cut', 20000, 200, 20000, 'Hz', true),
+            ...[0, 1, 2, 3, 4].flatMap((i) => [
+              knob(30 + i, `P${i + 1} Freq`, 100 * 2 ** i, 20, 20000, 'Hz', true),
+              knob(35 + i, `P${i + 1} Q`, 1.4, 0.1, 10),
+              knob(40 + i, `P${i + 1} Gain`, 0, -20, 20, 'dB')
+            ])
+          ],
+          enums: [],
+          type: null
+        },
+        {
+          family: 'FILTER',
+          variantName: 'EQ',
+          pages: [{
+            name: 'Graphic EQ',
+            rows: [row(...gains.map((hz, i) => c(`${hz} Hz`, i, 'slider'))), row(c('Low Cut', 20), c('High Cut', 24))]
+          }]
+        },
+        [
+          { key: 'inputEq', kind: 'eq', title: 'Input EQ', mode: 'parametric', roles: {}, bands: [
+            { key: 'low', freq: 20, shape: 'lowcut' },
+            { key: 'mid', freq: 21, gain: 22, q: 23, shape: 'bell' },
+            { key: 'high', freq: 24, shape: 'highcut' }
+          ] },
+          { key: 'outputEq', kind: 'eq', title: 'Output EQ', mode: 'graphic', roles: {}, bands: gains.map((hz, i) => ({ key: `o${i}`, centerHz: hz, gain: i })) },
+          { key: 'peq', kind: 'eq', title: 'PEQ', mode: 'parametric', roles: {}, bands: [0, 1, 2, 3, 4].map((i) => ({ key: `p${i}`, freq: 30 + i, q: 35 + i, gain: 40 + i, shape: 'bell' })) }
+        ]
+      );
+    }
     case COMP_EID: {
       if (o.sustainOnly)
         return out(

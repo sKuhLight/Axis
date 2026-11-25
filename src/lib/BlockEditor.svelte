@@ -5,6 +5,7 @@
   import BeSurface from './blockEditor/BeSurface.svelte';
   import { trackDeviceClass } from './blockEditor/deviceClass.svelte';
   import { blockStateView, type BeBlockChrome } from './blockEditor/headerModel';
+  import { eqStylesFromVisuals } from './blockEditor/eqStyles';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
   import type { CabState, CabSlot } from './types';
@@ -76,6 +77,12 @@
     }
     return out;
   });
+  // The block's served EQ styles (Input EQ / Output EQ / PEQ): style views on the one eq tile. The PEQ and
+  // GEQ blocks draw their own bands through the plain `eq` view, so they keep it alone.
+  const eqStyles = $derived.by(() => (isEQ ? [] : eqStylesFromVisuals(editor.blockVisuals ?? [], editor.params, editor.enums)));
+  const eqTitleText = $derived(
+    isEQ ? editor.blockType?.name || (sel?.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ') : eqStyles[0]?.title ?? 'EQ'
+  );
   // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
   const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
 
@@ -187,8 +194,9 @@
         slug={sel.pack ?? sel.display ?? 'block'}
         accent={cat.accent}
         eqBands={isEQ ? eqBands : []}
+        eqStyles={isEQ ? [] : eqStyles}
         eqGainRange={sel.pack === 'Geq' ? 12 : 20}
-        eqTitle={editor.blockType?.name || (sel.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ')}
+        eqTitle={eqTitleText}
         hideIds={isCab ? CAB_PICKER_IDS : []}
         block={chrome}
         status={editor.sheetState}

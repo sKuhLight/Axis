@@ -2902,10 +2902,7 @@ replaces instead of falling onto "More".
 - **Edit-mode widget drag-out of a Quick Controls tile:** start the workbench `beginWidgetDrag` from the tile in
   Customize (the dashed surface is there; the pointer handler is not).
 - **Graph-tile size clamp (handover item 2):** done — see the section below.
-- **EQ style switch on the tile (handover item 3):** the plumbing is in place (`BE_VIEWS`, `VIEW_NAME`,
-  `controlMenu.viewS`, per-key `viewsByKey`), but a second `BE_SPEC` entry with the same footprint, the persisted
-  per-tile view and the three renderings (Output EQ / Input EQ / PEQ) need the block's served EQ visuals per
-  variant; `BeControl`'s `eq` branch draws one `EQGraph` today.
+- **EQ style switch on the tile (handover item 3):** done — see the section below.
 - **Visual DynaCab UI (handover item 4):** no `dynaCab` visual exists in `editor.blockVisuals`; it needs a codec
   visual (forgefx-midi) + ForgeFX pass-through, a drawing model (mic position/distance from `DYNA_CAB_*`) and a
   `kind: 'graph'` (or dedicated) tile anchored on the DynaCab page.
@@ -2939,3 +2936,32 @@ replaces instead of falling onto "More".
 - **Gates.** `npm run check` 0/0; `npm test` 191 files / 2,991 tests (2,985 + 6). Chromium e2e: block editor
   17 + 40 + 41 + 44 + 47 + 51 75/75; 43 + 45 + 46 60/65 with only the five known stale cases (METER default,
   `.be-tip`).
+## EQ styles: one eq tile, Input / Output / PEQ views
+
+- **Views.** The eq tile gained three same-footprint view variants: `eqIn`, `eqOut`, `eqPeq` (`BE_SPEC` and
+  `BE_PRESETS` copied from `eq`: 8×4 cells, min 6×3, max 24×8), labelled Input EQ / Output EQ / PEQ in the
+  control menu's existing View list. The chosen view is the persisted per-tile field, so switching never resizes
+  or moves the tile; `normalizeBoard` falls a stored view name the block no longer serves back to the first
+  allowed one (footprint preserved), and the normalization stays idempotent.
+- **Styles from the served visuals** (`blockEditor/eqStyles.ts`, new, pure + tested): a block's `eq` visuals whose
+  key names input / output / peq (`inputEq`, `outputEq`, `peq`, `paramEq`) become styles; other eq visuals stay on
+  the plain view. Each style carries its bands as the tile's editable `EQBand`s (roles are param ids resolved
+  against the live params: graphic bands keep their fixed centres and draw as bells, parametric ones take their
+  shape from the band's type enum), its title and its gain range (±12 dB graphic, ±20 dB parametric); repeated
+  styles are deduped in the server's order.
+- **Wiring.** `buildCatalog({ eqViews })` lists those views on the one `eq` entry (plain `eq` first when the block
+  has its own bands, else the first style is the default; no bands and no styles = no eq tile). `BeControl` draws
+  `host.eqBandsFor / eqTitleFor / eqGainRangeFor(view)` with the block's own bands as the fallback; `BeSurface`
+  wires them from `BlockEditor`, which builds the styles from `editor.blockVisuals` for every block that is not a
+  PEQ/GEQ itself (those keep their own bands on the plain view).
+- **Seed.** When a graphic EQ's faders become the eq tile, `deviceLayoutBoardV2` gives the tile the style view of
+  the visual that owned the faders (`eqOut` for an output EQ) when the catalog allows that view.
+- **Tests.** `eqStyles.test.ts` (8 cases: style detection, view mapping, parametric/graphic band reading, dropped
+  bands, dedupe/order/ranges, empty input) plus board normalization (kept style, unknown-style fallback, footprint
+  clamp) and catalog views (styles only, styles + own bands, none); `deviceLayoutBoardV2` pins the seeded `eqOut`.
+  New `e2e/52-eq-styles.spec.ts` against a synthetic EQ block (ten gain faders and Input/Output/PEQ visuals): the
+  eq tile replaces the faders as Output EQ (10 band nodes), the View list shows the three labels and switches
+  title + bands with the same footprint (3 / 10 / 5 nodes), and the chosen PEQ survives a reload.
+- **Gates.** `npm run check` 0/0; `npm test` 192 files / 3,003 tests. Chromium e2e for the block-editor set
+  (17, 40-47, 49, 51, 52): 159/164, the five failures being the known stale cases (4 × METER default in 45,
+  1 × removed `.be-tip` bubble in 46).

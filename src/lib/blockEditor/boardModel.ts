@@ -27,13 +27,17 @@ export type BeView =
   | 'switch'
   | 'select'
   | 'eq'
+  // EQ renderings of the same footprint: the block's input EQ, its output EQ, or a PEQ (see eqStyles.ts).
+  | 'eqIn'
+  | 'eqOut'
+  | 'eqPeq'
   | 'action'
   | 'meter'
   | 'wave'
   | 'graph';
 export type BeDividerKind = 'hdiv' | 'vdiv';
 
-export const BE_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'action', 'meter', 'wave', 'graph'];
+export const BE_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'eqIn', 'eqOut', 'eqPeq', 'action', 'meter', 'wave', 'graph'];
 export const BE_DIVIDER_KINDS: readonly BeDividerKind[] = ['hdiv', 'vdiv'];
 
 export interface BeRect {
@@ -127,6 +131,11 @@ export const BE_SPEC: Readonly<Record<BeView | BeDividerKind, BeSpec>> = {
   switch: { w: 2, h: 2, minW: 1, maxW: 3, minH: 1, maxH: 3 },
   select: { w: 2, h: 2, minW: 2, maxW: 6, minH: 1, maxH: 2 },
   eq: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  // The EQ style variants share the eq tile's footprint exactly (see eqStyles.ts): switching a view
+  // never resizes or moves the tile.
+  eqIn: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  eqOut: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  eqPeq: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
   action: { w: 2, h: 1, minW: 2, maxW: 6, minH: 1, maxH: 2 },
   // Upright by default (a block can report several bars, e.g. L/R); a wide, one-cell-high shape gives the
   // lying read-out variant.
@@ -156,6 +165,9 @@ export const BE_PRESETS: Readonly<Record<BeView, readonly BePreset[]>> = {
   switch: [P(2, 1, 'S'), P(2, 2, 'M')],
   select: [P(2, 1, 'S'), P(2, 2, 'M'), P(4, 2, 'L')],
   eq: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqIn: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqOut: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqPeq: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
   action: [P(2, 1, 'S'), P(3, 1, 'M'), P(2, 2, 'L')],
   meter: [P(1, 4, 'S'), P(2, 4, 'M'), P(2, 6, 'L')],
   wave: [P(8, 4, 'S'), P(12, 4, 'M'), P(16, 6, 'L')],

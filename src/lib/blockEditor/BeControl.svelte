@@ -7,7 +7,7 @@
   import BeEqGraph from './BeEqGraph.svelte';
   import { longPress } from '../axis-workbench/longPress';
   import { getBeHost } from './beHost';
-  import { FIXED_PAGE, isDivider, type BeItem, type BeRect } from './boardModel';
+  import { FIXED_PAGE, isDivider, type BeItem, type BeRect, type BeView } from './boardModel';
   import type { BeCtl } from './catalog';
   import { controlMeterReadings } from './meterData';
   import {
@@ -92,6 +92,12 @@
   const lf = $derived(labelPx(c));
   const ed = $derived(host.editMode && !standalone);
   const label = $derived(ctl?.label ?? '');
+  // The eq tile's style: a view variant draws its own bands / title / range (Input EQ, Output EQ, PEQ);
+  // any other view (and every block without style variants) draws the block's own EQ.
+  const viewv = $derived(view as BeView);
+  const eqBands = $derived(host.eqBandsFor?.(viewv) ?? host.eqBands);
+  const eqTitle = $derived(host.eqTitleFor?.(viewv) ?? label);
+  const eqRange = $derived(host.eqGainRangeFor?.(viewv) ?? host.eqGainRange);
 
   // live values
   const p = $derived(ctl?.kind === 'cont' ? host.knob(ctl.id) : undefined);
@@ -469,9 +475,9 @@
       </button>
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
     {:else if ctl.kind === 'eq'}
-      <div class="be-eqtitle" style:left="{ed ? 30 : 12}px">{label}</div>
+      <div class="be-eqtitle" style:left="{ed ? 30 : 12}px">{eqTitle}</div>
       <div class="be-eqbox" style:pointer-events={ed ? 'none' : 'auto'}>
-        <EQGraph bands={host.eqBands} gainRange={host.eqGainRange} accent={host.accent} onSet={(pp, n) => host.eqSet(pp, n)} />
+        <EQGraph bands={eqBands} gainRange={eqRange} accent={host.accent} onSet={(pp, n) => host.eqSet(pp, n)} />
       </div>
     {:else if ctl.kind === 'graph' && ctl.visual}
       {#if ctl.visual.kind === 'eq'}<BeEqGraph visual={ctl.visual} edit={ed} />{:else}      <BeGraph visual={ctl.visual} itemId={item.id} {pxW} {pxH} edit={ed} />{/if}

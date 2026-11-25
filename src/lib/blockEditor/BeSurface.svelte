@@ -90,6 +90,7 @@
   } from './boardModel';
   import { boardDiffersFromSeed, fixedDiffersFromSeed, pageDiffersFromSeed, type PreviousSeeds } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
+  import type { EqStyleData } from './eqStyles';
   import { builtInSeed, previousSeeds, type SeedInput } from './boardSeeds';
   import { hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
   import { endPadOver, fixedColumnMax, layoutEditor, type FixedLayout } from './fixedLayout';
@@ -128,6 +129,7 @@
     eqBands = [] as EQBand[],
     eqGainRange = 20,
     eqTitle = 'EQ',
+    eqStyles = [] as EqStyleData[],
     hideIds = [] as number[],
     block = null,
     typeName = '',
@@ -141,6 +143,9 @@
     eqBands?: EQBand[];
     eqGainRange?: number;
     eqTitle?: string;
+    /** The block's served EQ styles (Input EQ / Output EQ / PEQ): the eq tile's view variants, each with its
+     *  own bands. Empty = the tile draws `eqBands`. */
+    eqStyles?: EqStyleData[];
     hideIds?: number[];
     /** A grid block's header data and actions; null = the compact row (virtual-effect screens). */
     block?: BeBlockChrome | null;
@@ -198,6 +203,7 @@
       enums: editor.enums,
       eqBandCount: eqBands.length,
       eqTitle,
+      eqViews: eqStyles.map((style) => style.view),
       hideIds,
       monitors: monRole ? [{ role: monRole }] : [],
       hasWave,
@@ -1657,6 +1663,9 @@
     get eqBands() {
       return eqBands;
     },
+    eqBandsFor: (view) => eqStyles.find((style) => style.view === view)?.bands,
+    eqTitleFor: (view) => eqStyles.find((style) => style.view === view)?.title,
+    eqGainRangeFor: (view) => eqStyles.find((style) => style.view === view)?.gainRange,
     get eqGainRange() {
       return eqGainRange;
     },

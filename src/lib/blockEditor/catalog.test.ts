@@ -38,6 +38,19 @@ describe('buildCatalog', () => {
     expect(bare.map((c) => c.key)).toEqual(['bypass']);
   });
 
+  it('lists the block’s EQ styles as views of the one eq tile, first one default', () => {
+    const styles = buildCatalog({ params: [], enums: [], eqViews: ['eqIn', 'eqOut'] });
+    const eq = styles.find((c) => c.key === 'eq')!;
+    expect(eq).toMatchObject({ kind: 'eq', view: 'eqIn', views: ['eqIn', 'eqOut'], w: 8, h: 4 });
+    expect(viewsByKey(styles).get('eq')).toEqual(['eqIn', 'eqOut']);
+
+    // a block with its own EQ bands and a served style keeps both, the plain view first
+    const both = buildCatalog({ params: [{ id: 0, name: 'Gain' }], enums: [], eqBandCount: 1, eqViews: ['eqOut'] });
+    expect(both.find((c) => c.key === 'eq')).toMatchObject({ view: 'eq', views: ['eq', 'eqOut'] });
+    // no bands and no styles: no eq tile at all
+    expect(buildCatalog({ params: [], enums: [] }).some((c) => c.key === 'eq')).toBe(false);
+  });
+
   it('names meters by role', () => {
     expect(meterLabel('vu')).toBe('VU');
     expect(meterLabel('level')).toBe('Meter');
