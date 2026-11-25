@@ -3002,4 +3002,4 @@ replaces instead of falling onto "More".
   switching pages). `46-block-editor-fixed`: the right-edge case drops the removed `.be-tip` bubble and keeps
   the select-popover clamp.
 - **Gates.** Axis `npm run check` 0/0, `npm test` 192 files / 3,009 tests; e2e 15 + 23 + 45 + 46 + 52 + 53:
-  56/56 (Chromium, system Chrome).
+  56/56, and the full Chromium suite 299/299 (system Chrome).
