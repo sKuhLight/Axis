@@ -173,17 +173,18 @@ export function buildDeviceLayoutBoardV2(
   const picks = previous ? [] : pickFixed(rows.map((r) => pageEntries(r, byKey, owner, header)), useMixerRail);
   const skip: ReadonlySet<string> = new Set([...header, ...picks.map((p) => p.key)]);
   const represented = new Set<string>();
+  // Every band gain of a GRAPHIC EQ the block serves (the AMP's Output EQ, a GEQ's ten bands): the EQ tile
+  // draws them, so the gain controls themselves take no place on the page (no fader rows).
+  const eqGains = new Set<string>();
+  for (const c of catalog) {
+    if (c.visual?.kind !== 'eq' || c.visual.mode !== 'graphic') continue;
+    for (const band of c.visual.bands ?? []) if (band.gain != null) eqGains.add(`k${band.gain}`);
+  }
   const entries = opts.rowFlowOnly ? [] : rows.map((r) => {
     const page = pageEntries(r, byKey, owner, skip);
-    if (!useMixerRail) return page;
-    const gains = new Set(page.flatMap((entry) => {
-      const visual = entry.key == null ? undefined : byKey.get(entry.key)?.visual;
-      return entry.kind === 'tile' && visual?.kind === 'eq' && visual.mode === 'graphic'
-        ? (visual.bands ?? []).flatMap((band) => band.gain == null ? [] : [`k${band.gain}`])
-        : [];
-    }));
+    if (!eqGains.size) return page;
     return page.map((entry) => {
-      if (entry.kind !== 'tile' || !entry.key || !gains.has(entry.key)) return entry;
+      if (entry.kind !== 'tile' || !entry.key || !eqGains.has(entry.key)) return entry;
       represented.add(entry.key);
       return { ...entry, kind: 'gone' as const };
     });
