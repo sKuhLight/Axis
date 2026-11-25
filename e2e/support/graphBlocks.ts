@@ -13,7 +13,9 @@ export const LOOPER_EID = 116;
 /** An EQ block: its graphic gains on the page (dropped in favour of the eq tile) plus an Input EQ, an
  *  Output EQ and a PEQ as served EQ visuals (the eq tile's style variants). */
 export const EQ_EID = 117;
-export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID, LOOPER_EID, EQ_EID]);
+/** A CAB block in DynaCab mode: the mic graphic (`dynaCab`) plus the position / distance controls. */
+export const DYNACAB_EID = 118;
+export const GRAPH_EIDS: ReadonlySet<number> = new Set([COMP_EID, TREM_EID, FILTER_EID, GATE_EID, DELAY_EID, CTRL_EID, LOOPER_EID, EQ_EID, DYNACAB_EID]);
 /** The device tempo the mock serves (GET /tempo). */
 export const GRAPH_BPM = 90;
 
@@ -26,7 +28,8 @@ export const GRAPH_CELLS = [
   { row: 1, col: 4, effectId: DELAY_EID, name: 'Delay 1', slug: 'Delay', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 1, col: 5, effectId: CTRL_EID, name: 'Controllers', slug: 'Controllers', isShunt: false, routeFlag: 0, fromRows: [] },
   { row: 2, col: 0, effectId: LOOPER_EID, name: 'Looper 1', slug: 'Looper', isShunt: false, routeFlag: 0, fromRows: [] },
-  { row: 2, col: 1, effectId: EQ_EID, name: 'EQ 1', slug: 'Filter', isShunt: false, routeFlag: 0, fromRows: [] }
+  { row: 2, col: 1, effectId: EQ_EID, name: 'EQ 1', slug: 'Filter', isShunt: false, routeFlag: 0, fromRows: [] },
+  { row: 2, col: 2, effectId: DYNACAB_EID, name: 'Cab 1', slug: 'Cab', isShunt: false, routeFlag: 0, fromRows: [] }
 ];
 
 /** The compressor's live gain reduction while metering is on (6 dB). */
@@ -193,6 +196,23 @@ export function graphBlockParams(eid: number, o: { sustainOnly: boolean }): Reco
           { key: 'response', kind: 'response', title: 'Filter response', mode: 'filter', roles: { freq: 1, q: 2, gain: 3, order: 7, lowCut: 12, highCut: 13 } },
           { key: 'lfo', kind: 'lfo', title: 'Filter LFO', mode: 'mod', roles: { rate: 18, shape: 17 } }
         ]
+      );
+    case DYNACAB_EID:
+      return out(
+        {
+          block: 'Cab',
+          slug: 'cab',
+          page: 1,
+          named: [knob(93, 'Position', 0.35, 0, 1), knob(97, 'Distance', 0.4, 0, 1)],
+          enums: [enm(85, 'Cab', ['4x12 UK', '2x12 USA'], 0), enm(89, 'Mic', ['Condenser 57', 'Ribbon 121'], 0)],
+          type: null
+        },
+        {
+          family: 'CABINET',
+          variantName: 'DynaCab',
+          pages: [{ name: 'DynaCab', rows: [row(c('Position', 93), c('Distance', 97), slot('dynaCab'))] }]
+        },
+        [{ key: 'dynaCab', kind: 'dynaCab', title: 'DynaCab mic', roles: { position: 93, distance: 97, cabType: 85, mic: 89 } }]
       );
     case GATE_EID:
       return out(

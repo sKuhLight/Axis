@@ -2903,9 +2903,7 @@ replaces instead of falling onto "More".
   Customize (the dashed surface is there; the pointer handler is not).
 - **Graph-tile size clamp (handover item 2):** done — see the section below.
 - **EQ style switch on the tile (handover item 3):** done — see the section below.
-- **Visual DynaCab UI (handover item 4):** no `dynaCab` visual exists in `editor.blockVisuals`; it needs a codec
-  visual (forgefx-midi) + ForgeFX pass-through, a drawing model (mic position/distance from `DYNA_CAB_*`) and a
-  `kind: 'graph'` (or dedicated) tile anchored on the DynaCab page.
+- **Visual DynaCab UI (handover item 4):** done — see the section below.
 - **Cab Align graph (handover item 5):** roles `delay1`/`delay2` resolve to `CABINET_DELAY1/2` and the axis is
   fitted (`max(delay1, delay2) × 1.5`, capped at the param's max) in `graphModel.cabAlignPlot`. The likely causes
   are the tile span (the graph's seeded 8×4 cells shift the page, item 2) and the unit: the spikes/ticks draw
@@ -2965,3 +2963,23 @@ replaces instead of falling onto "More".
 - **Gates.** `npm run check` 0/0; `npm test` 192 files / 3,003 tests. Chromium e2e for the block-editor set
   (17, 40-47, 49, 51, 52): 159/164, the five failures being the known stale cases (4 × METER default in 45,
   1 × removed `.be-tip` bubble in 46).
+
+## DynaCab mic graphic on the CAB block
+
+- **Codec** (`forgefx-midi feature/block-editor-eq-visuals`, `3332178`): a new `dynaCab` visual kind for the
+  CABINET family — slot 1's mic position (`CABINET_DYNACAB_R1`), distance (`CABINET_DYNACAB_Z1`), cab
+  (`..._TYPE1`) and mic (`..._MIC1`). `stampGraphKeys` gives the page that shows those controls (the DynaCab
+  page) the visual's slot, once per variant; the legacy Cab variant is untouched. The `visuals` suite grew to
+  16 cases (kind, roles, one slot on the DynaCab page, offered only while its controls are in the layout).
+- **ForgeFX** (`21bd62a`): the catalog / newer-firmware goldens are regenerated; their only diff is the new slot.
+- **Axis**: parses the kind and draws it (`graphModel.dynaCabPlot`): a filled cab silhouette with two speakers,
+  the mic at the served position (0 = cone centre, 1 = edge) and distance (0 = against the grille), a dashed
+  grille line, a guide, and a caption / aria naming the selected cab and mic with both values. The mic head and
+  its guide move with the controls; a missing value still draws the other with a note.
+- **Tests.** 3 plot cases (caption, six series with two filled areas, movement, one served control, the empty
+  case) and a new `e2e/53-dynacab.spec.ts` against a synthetic DynaCab block: the slot sits on the DynaCab page,
+  the tile is a `role="img"` graph, the caption carries the cab / mic / values, the sketch has two filled areas
+  and six lines, and the mic head + guide follow the position knob (nothing written).
+- **Gates.** Codec `npm run build && npm test` green (135 tests); ForgeFX `npm run typecheck` and 70 suites
+  green; Axis `npm run check` 0/0, `npm test` 192 files / 3,005 tests; e2e 45 + 52 + 53 + 17: 17/21 with only
+  the four known stale METER cases.

@@ -5,7 +5,7 @@
 
 import type { BlockVisual, BlockVisualKind } from './types';
 
-export const BLOCK_VISUAL_KINDS: readonly BlockVisualKind[] = ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign', 'eq'];
+export const BLOCK_VISUAL_KINDS: readonly BlockVisualKind[] = ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign', 'eq', 'dynaCab'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isKind = (v: unknown): v is BlockVisualKind => typeof v === 'string' && (BLOCK_VISUAL_KINDS as readonly string[]).includes(v);

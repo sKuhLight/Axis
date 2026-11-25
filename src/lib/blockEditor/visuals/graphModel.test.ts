@@ -220,8 +220,32 @@ describe('decay, echo, adsr, cab', () => {
     expect(p.spikes).toHaveLength(2);
     expect(p.caption).toContain('Δ 0.2');
   });
+  it('DynaCab: the cab silhouette with the mic at the served position and distance', () => {
+    const v = vis('dynaCab', { position: 1, distance: 2, cabType: 3, mic: 4 }, { title: 'DynaCab mic' });
+    const p = graphPlot(v, inputs([knob(1, 0.2, '', 0, 1), knob(2, 0.4, '', 0, 1)], [enm(3, ['4x12 UK', '2x12'], 0), enm(4, ['Condenser 57', 'Ribbon'], 0)]));
+    expect(p.empty).toBeUndefined();
+    // cab body (filled), two speakers, the grille line, the mic head (filled) and its stand
+    expect(p.series).toHaveLength(6);
+    expect(p.series[0]!.area).toBeTruthy();
+    expect(p.series[4]!.tone).toBe('main');
+    expect(p.caption).toContain('4x12 UK');
+    expect(p.caption).toContain('Condenser 57');
+    expect(p.caption).toContain('position 0.2');
+    expect(p.caption).toContain('distance 0.4');
+    expect(p.aria).toContain('position 0.2');
+    // the mic moves with the values
+    const far = graphPlot(v, inputs([knob(1, 0.9, '', 0, 1), knob(2, 0.9, '', 0, 1)], [enm(3, ['4x12 UK', '2x12'], 0), enm(4, ['Condenser 57', 'Ribbon'], 0)]));
+    expect(far.series[4]!.d).not.toBe(p.series[4]!.d);
+    expect(far.hlines[0]!.y).not.toBe(p.hlines[0]!.y);
+  });
+  it('DynaCab: one served control still draws the mic and says what is missing', () => {
+    const v = vis('dynaCab', { position: 1, distance: 2 }, { title: 'DynaCab mic' });
+    const p = graphPlot(v, inputs([knob(1, 0.2, '', 0, 1)]));
+    expect(p.empty).toBeUndefined();
+    expect(p.notes.join(' ')).toContain('not served');
+  });
   it('missing required values give an empty plot, never a throw', () => {
-    for (const kind of ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign'] as const) {
+    for (const kind of ['dynamics', 'lfo', 'response', 'decay', 'echo', 'adsr', 'cabAlign', 'dynaCab'] as const) {
       const p = graphPlot(vis(kind, {}), inputs([]));
       expect(typeof p.aria).toBe('string');
     }

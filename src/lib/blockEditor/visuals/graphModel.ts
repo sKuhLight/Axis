@@ -597,6 +597,58 @@ function cabAlignPlot(v: BlockVisual, r: RoleReader): GraphPlot {
 
 // ── entry ──────────────────────────────────────────────────────────────────────────────────────────
 
+// -- dynaCab -------------------------------------------------------------------------------------
+
+/** The cab silhouette the DynaCab mic graphic sketches, in view-box units. */
+export const DYNACAB = { left: 10, right: 88, top: 14, bottom: 90, micNear: 100, micFar: 176 } as const;
+
+function roundRectPath(l: number, t: number, r: number, b: number, rad: number): string {
+  return `M${l + rad},${t} H${r - rad} Q${r},${t} ${r},${t + rad} V${b - rad} Q${r},${b} ${r - rad},${b} H${l + rad} Q${l},${b} ${l},${b - rad} V${t + rad} Q${l},${t} ${l + rad},${t} Z`;
+}
+function circlePath(cx: number, cy: number, rad: number): string {
+  return `M${(cx - rad).toFixed(1)},${cy.toFixed(1)} a${rad},${rad} 0 1,0 ${2 * rad},0 a${rad},${rad} 0 1,0 ${-2 * rad},0 Z`;
+}
+
+/** The DynaCab mic on the cab: the mic climbs from the speaker's centre (position 0) to its edge (1) and
+ *  moves away from the grille as the distance grows. The silhouette is a sketch; the two values are the
+ *  device's own. */
+function dynaCabPlot(v: BlockVisual, r: RoleReader): GraphPlot {
+  const out = blank();
+  const pos = r.knob('position');
+  const dist = r.knob('distance');
+  const pos01 = frac(pos);
+  const dist01 = frac(dist);
+  if (pos01 == null && dist01 == null) return { ...out, empty: 'No DynaCab', caption: '', aria: `${v.title}: no mic position or distance` };
+  const p = pos01 ?? 0.5;
+  const d = dist01 ?? 0.3;
+  const { left, right, top, bottom, micNear, micFar } = DYNACAB;
+  const w = right - left;
+  const h = bottom - top;
+  const midY = (top + bottom) / 2;
+  const micY = midY - (p - 0.5) * h * 0.72;
+  const micX = micNear + d * (micFar - micNear);
+  const cab = roundRectPath(left, top, right, bottom, 7);
+  out.series.push({ d: cab, tone: 'faint', area: cab });
+  const speaker = Math.min(17, w * 0.23);
+  out.series.push({ d: circlePath(left + w * 0.5, top + h * 0.31, speaker), tone: 'ref' });
+  out.series.push({ d: circlePath(left + w * 0.5, top + h * 0.71, speaker), tone: 'ref' });
+  // the mic: a dashed line from the grille, a head at the position / distance, a short stand
+  out.series.push({ d: `M${right + 3},${micY.toFixed(1)} H${(micX - 6).toFixed(1)}`, tone: 'faint', dash: true });
+  out.series.push({ d: circlePath(micX, micY, 5.5), tone: 'main', area: circlePath(micX, micY, 5.5) });
+  out.series.push({ d: `M${(micX + 5).toFixed(1)},${(micY + 3).toFixed(1)} l13,7`, tone: 'main' });
+  out.hlines.push({ y: micY, tone: 'faint' });
+  out.notes.push('The cab outline is a sketch; the mic sits where the block puts it (position 0 = cone centre, 1 = edge).');
+  if (pos01 == null || dist01 == null) out.notes.push('One of the mic controls is not served: the other is drawn as it is.');
+  const cabName = r.label('cabType');
+  const micName = r.label('mic');
+  const values = join([pos ? `position ${r.text('position')}` : null, dist ? `distance ${r.text('distance')}` : null]);
+  return {
+    ...out,
+    caption: join([cabName, micName, values]),
+    aria: `${v.title}: ${join([cabName, micName, values])}`
+  };
+}
+
 /** The drawable plot of one served visual with the block's current values. */
 export function graphPlot(v: BlockVisual, inp: GraphInputs): GraphPlot {
   const r = reader(v, inp);
@@ -615,6 +667,8 @@ export function graphPlot(v: BlockVisual, inp: GraphInputs): GraphPlot {
       return adsrPlot(v, r);
     case 'cabAlign':
       return cabAlignPlot(v, r);
+    case 'dynaCab':
+      return dynaCabPlot(v, r);
     default:
       return { ...blank(), empty: 'Not drawn', caption: '', aria: `${(v as BlockVisual).title}: not drawn` };
   }

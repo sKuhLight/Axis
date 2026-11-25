@@ -176,7 +176,7 @@ export interface BlockVisual {
   roles: Record<string, number>;
   bands?: VisualEqBand[];
 }
-export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign' | 'eq';
+export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign' | 'eq' | 'dynaCab';
 
 /** The block's Scene Ignore toggle on its ACTIVE channel (the device param is per channel). `paramId` is
  *  the same id as the block's own `enums[]` entry: a toggle is the ordinary enum write. */
