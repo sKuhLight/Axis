@@ -53,6 +53,11 @@ npx playwright install firefox    # optional `firefox` project
   `PW_FIREFOX_PATH=/path/to/firefox` to point at a custom Playwright-compatible
   Firefox build, but the normal path is `npx playwright install firefox`.
 
+`44-block-editor-touch`, the phone tests of `45-block-editor-graphs` and the touch tests of
+`46-block-editor-fixed` drive touch through the Chrome DevTools
+Protocol (`Input.dispatchTouchEvent`), so they run on `chromium` only and skip themselves on the `firefox`
+project (`test.skip(({ browserName }) => …)`).
+
 Both projects pin the viewport to **1440×900**. This is load-bearing: the
 workbench viewport-profile resolver (T14) treats widths `<1366` as the *tablet*
 profile, whose seeded layout differs from the desktop default these tests
@@ -79,18 +84,40 @@ attributes were added**:
 - `[data-tabstack]`, `[data-region="main|bottom|…"]`, `.aw-tabstack[data-region]`
 - `.aw-pane-tab`, `.aw-pane-btn[title="Panel actions"]`, `.aw-tabbody`
 - `[data-nav-entry="<id>"]`, `[data-nav-active="true"]`, `button.axis-nav-entry`
-- `.aw-context-menu`, `.aw-menu-item` (roles `menu`/`menuitem`)
+- `.aw-context-menu`, `.aw-menu-item` (roles `menu`/`menuitem`/`menuitemradio`;
+  drill-in submenus start with a `Back` row; inline fields are `input[data-menu-input]`)
+- Edit bar: `[data-editbar]` (role `toolbar`) with controls `[data-eb="undo|redo|page|layout|profile|add|more|done"]`,
+  the `.aw-eb-tag` CUSTOMIZE tag, `.aw-eb-status` hint and the `[role="alert"]` error chip.
+  Helpers in `support/workbench.ts`: `editBar`, `editBarControl`, `openEditBarMenu`,
+  `menuLabels`, `addPalette` / `openAddPalette` / `addPaletteCard`, `addCustomPanel`
+  (the main tab bar's "+" → Add palette → "New custom panel").
+- Add palette: `[role="dialog"][aria-label="Add to the layout"]`, chips `.cat`, target chip
+  `.target`, cards `[data-add-card="<kind>:<catalog key>"][data-kind]` (button `.ap-card`,
+  title `.ap-title`, status `[data-status]`, previews `[data-preview="live|static|panel|page"]`,
+  template menu `.ap-dots`), footer `[data-manage="pages|widgets"]`, page note `[data-page-note]`.
+  Context "+": `[data-zone-add="<zone>"]` (`.aw-zone-add` / "+ Widget"), `[data-tab-add]`,
+  `[data-region-add="<region>"]`, `[data-nav-add-page]`.
+  Click-to-place: `[data-placement="panel|widget|page"]`, spots `[data-place-spot]` (active:
+  `[data-active="true"]`).
+- Widget drags (slice 4b): the insert line `[data-insert-line]` and the dwell "Group" frame
+  `[data-group-frame]` (both in the DragLayer), the chip `.aw-drag-target` ("Insert · …",
+  "Group with …", "Reorder in group"), the zone wash `.aw-widget-zone.drop-target`, an empty
+  zone's lit "+ Widget" `.aw-zone-empty.ins` (an empty zone gets no line); the widget / group menu's "Group with" submenu
+  row (`menuitem` named /Group with/).
+- `.aw-viewport.aw-preview` (pinned-profile preview), `.aw-preview-label`
 - `.axis-gridbar .pill-chip` (Full/Map/Auto), `.axis-gridbar .block-size .step`
-- `.axis-preset-tab` (Default/Stage/Studio/Compact)
-- `.aw-zone-empty` (empty custom-panel hint)
-- Buttons by accessible text: `Customize`, `Done`, `Map`, `Stage`, `＋ Panel`
+- `.axis-preset-tab` (Default/Stage/Studio/Compact — radio rows in the edit bar's LAYOUT menu)
+- `.aw-zone-empty` (empty-zone placeholder; with the Add palette it is the "+ Widget" button `.aw-zone-add-empty`)
+- Buttons by accessible text: `Customize` (the bottom-bar toggle; pressed while editing),
+  `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
+  `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
 
-## Test inventory (9 files, 17 tests)
+## Test inventory (29 spec files, 275 tests on `chromium`; the first nine below)
 
 1. **01-boot** — shell chrome renders; no console errors beyond the filtered
    ForgeFX/`/api` connection failures.
-2. **02-edit-mode** — Customize opens the EDIT LAYOUT ribbon; per-panel Close
-   chrome appears; Done exits.
+2. **02-edit-mode** — Customize opens the edit bar (CUSTOMIZE tag, Undo/Redo,
+   PAGE, LAYOUT, Add, Done); per-panel Close chrome appears; Done exits.
 3. **03-dock** — drag a panel tab between regions (manual pointer drag);
    tab switching; collapse + close from the pane header menu.
 4. **04-nav** — Setup docks a VirtualScreen panel + active tint, second click
@@ -99,12 +126,214 @@ attributes were added**:
    block-size stepper cycles M↔L.
 6. **06-persistence** — a rearrangement survives reload; a corrupt stored doc
    self-heals to defaults (no blank page).
-7. **07-layout-presets** — LAYOUT tabs visible; Stage → bottom nav; Default →
-   side rail.
+7. **07-layout-presets** — LAYOUT menu lists the presets as radio rows; Stage →
+   bottom nav; Default → side rail; Reset layout asks inline first.
 8. **08-keyboard** — Escape closes an open context menu and restores focus to
    the opener (T18).
-9. **09-custom-panel** — the "＋ Panel" edit action inserts a custom panel with
-   the empty-drop hint.
+9. **09-custom-panel** — the "New custom panel" card inserts a custom panel whose
+   empty body is a "+ Widget" button (with the drop hint) targeting it; a widget dragged
+   over it lights that button up, and a release inserts it there.
+
+Later specs (10–21) cover bottom-nav mode, pages, widget menus, the Customize
+drawers (opened from the edit bar's PAGE / LAYOUT menus and the Add palette's footer), the profile
+preview frame (the edit bar stays full width above it), parameter collect, grid
+routing, device layout, telemetry, and **19-edit-bar** — the edit bar's geometry
+(full width at the top, the app shifted by exactly its height, no overlap), its
+menus (inline delete confirm, rename field, duplicate, presets, saved layouts,
+import / export, backups, Add), and its overflow into ⋯ More at 1100 / 834 /
+390 px, and **20-dock-zones** — panel drags (the dragged panel is lifted out of
+the dock, five labelled zones on the hovered panel, the panel lands exactly on
+the highlighted rect, edges, empty region strips, small panels, nav pages,
+cancel, library drag-out, occupied and collapsed regions, tab bars at the
+workspace top), the panel menu's Move to ▸, maximize (incl. Escape priority
+behind app overlays) and collapse strips, and **21-pages-lossless** — pages and
+panels are never lost: page deletes ask inline and park their panels, the
+Library's panel catalog shows every panel's status and re-adds or moves it (tap
+or drag), deleted default pages come back from Add page ▸ / the nav "+" at their
+seed position with their nav entry, the "Bring it here" hint, Reset to default /
+Clear page with one-step undo, Remove from page, Delete everywhere for custom
+panels, and the nav context menu's edit-mode-only Delete, and **22-add-and-group** —
+the Add palette (Add + / context "+"): real widget previews, panel schematics, page
+mini-maps, chips and search, unsupported widgets greyed last with the reason, template
+⋯ menus, Escape consumed (never reaching the app's Escape chain), ↑↓ across the
+section rows, touch (a vertical swipe on a card scrolls, a sideways pull drags it out);
+click-to-place (a click marks every spot, a click places on release, a swipe or the second
+press of a double-click places nothing, Escape cancels, keyboard, the status line names the
+active spot, focus returns to the opener, the Customize toggle still works), drag from the
+palette, the context "+" entries inserting directly (a template at the zone's end), the
+panel menu's Split right, and (slice 4b) widget drags: the insert line instead of a slot box,
+a short release on a widget inserts beside it, resting 350 ms on a foreign widget / group
+shows the Group frame and a release groups (one undo step), a member reorders directly inside
+its own group, the widget menu's "Group with ▸", and the edit-mode top bar at 834 px staying
+one row (zones collapse: units step down, nothing spills). Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
+browser-context level (page-level mocks still win), so a reachable ForgeFX can
+neither drive a device nor pop device prompts over the chrome.
+
+Block Editor rework specs are numbered from 40 (no clash with the specs above): **40-block-editor-board** —
+the v2 board against a mocked multi-page amp layout (`support/blockEditorMock.ts`): always fit at
+1366×768, several pages visible at 2560×720 with their tabs highlighted, tab click scrolls to the page,
+knob drag / click-to-type / arrow keys write the parameter (a click on a value and away writes nothing),
+select popover and switch, side navigation persisted across a reload, an arrange drag persisted across a
+reload (the moved tile selected), a later page kept active through Top/Side and S/M/L (control size persisted), boards of the
+previous editor (seeded `axs.surface3.*` keys) surviving the first change, the empty page's Arrange
+button, the phone width without Top/Side and Arrange, and the Setup screen on the same board (since slice 3
+these steps go through the header's ⋯ menu).
+**41-block-editor-header** — the header and its ⋯ menu: the channel letter of the type chip unfolds A–D and a
+pick writes the channel (mocked `POST …/channel`), the Engaged segment writes bypass / engage, Scene Ignore
+and Bypass mode from the device (AXIS-81: the mocked amp's params carry `blockState`; the header's Scene
+Ignore toggle writes the tagged param through the enum write (`mock.enumWrites`) with `aria-pressed`, the
+Scene Ignore button a user put on the board (no default board has one) follows and back, the channel names itself in the title; the Bypass mode ▾
+menu lists the block's own modes, a pick writes and relabels "Bypass: …", a muting mode shows the muted mark,
+a Bypass Mode select placed on the board follows and back; Enter opens it, Escape closes it back to the control with a maximized
+panel staying maximized, Space toggles Scene Ignore; caps off (`blockState: false` / `'absent'`) both
+disabled with the reason in the title and nothing written (a later board write arrives first); a firmware gate
+(`sceneIgnoreGate`: "Needs firmware ≥ 5.03") disables Scene Ignore only; a refused write (`mock.failNextEnumWrite`,
+a 500) puts the header and the board back with one toast; a held re-read after a channel switch keeps the last
+state on show, disabled, same width, nothing written; 470 / 500 / 540 px editors with "Mute FX Out" keep chip · state ·
+⋯ on one row with a readable chip (the control in ⋯ at 470 and 500, in the header at 540); the phone at 390 px keeps chip · Engaged | Ignore ·
+⋯ on one row with 40 px targets and Bypass mode as a ⋯ submenu), Top / Side via ⋯ kept after a reload (the side list has no heading and
+no counts), reset this page / new copy / profile switch / delete copy, the amber "custom" dot appearing after a
+change and leaving after the whole-layout reset ("Reset to device layout" for the Default profile), save as default for the type, the type chip and "Change type…"
+opening the model palette, the search popover jumping to a control with "Show all" / Enter opening the flat
+results (and ending Arrange), one header row at the default 1440 px panel and two at 1100 px,
+"Remove block from grid" with its inline confirm, and the Setup screen's compact row
+with the same ⋯ menu; review round: Escape inside the popover / channel letters stays there (a maximized
+panel stays maximized), Tab passes through the header without opening the popover or ending Arrange (one-row
+and two-row Tab order), page tab and Arrange while the flat results show, ⚡ pin from the popover, Unused
+carried into "Show all" (a control on no page, and the header's three), a cab chip opening the cab picker, no-pack / read-error states with a usable header,
+and "Clear this page" on a page outside the default layout (mock option `extraBlocks`).
+**42-block-editor-pin** — everything done to one control outside Arrange, with real pointer input: a held knob
+dragged onto a custom panel is collected there; ⚡ appears on hover (invisible = no press) and a click pins to the
+default target (a new custom panel); one-row tiles have no hover actions (a 2×1 button toggles where ⚡ would
+sit; the 6×1 slider); a ⚡ press-drag onto a custom panel collects the control with no hold; the control menu's
+"Pin to ▸" tells same-named panels apart by where they are, lists "New tab beside the editor" and "New custom
+panel" (a panel pick pins into that panel, "New tab" adds a Controls tab right after the Block Editor); the
+long-press with synthetic touch / pen pointers (a still touch hold opens the menu; the pen's hold-drag reaches
+a panel without the menu interrupting it; in Arrange on the tablet profile a touch hold opens no menu and a
+slow drag still moves the tile); ∿ opens the modifier flyout (Escape closes it and a maximized panel stays
+maximized; an overlay on top — the Ctrl+K palette — gets the first Escape; the control menu takes over from
+the flyout) and, with the modifier panel docked (seeded into the stored workbench document at the next load),
+targets the panel instead; View ▸ knob → fader, Size ▸ Large without overlaps, Move to page ▸ (a page already
+holding the control is disabled) and Remove from page — each saved once (board writes counted in the stored
+surface document) and kept after a reload; Move to page ▸ onto an earlier page keeps a later active page at
+the start of the board; Grid swipe control on / off; Shift+F10 and the ContextMenu key on a focused tile
+(Escape returns focus); a right-click in an open value field opens no menu; the phone menu without layout rows
+(touch rows); and the control menu in Arrange (the tile's pin / swipe badges are gone).
+**43-block-editor-arrange** — Arrange with real pointer input: a drag to a free spot (teal preview) kept after a
+reload; a collision refused (red preview, nothing moves, nothing to undo); the corner handle resizing the
+selection (w×h follows, one undo step for the gesture); a drag onto another page of the strip (2560 px, the
+active page stays) and a page that already holds the control showing red; arrows / Shift+arrows / Delete on the
+selection and Ctrl+Z walking back each step; a click on empty grid clearing the selection; the selection bar's
+View / Size / ⚡ Pin / ⇆ swipe control / ✕ Remove; a divider added at the first free spot, labelled inline, rotated
+and kept after a reload (drawn as a labelled line outside Arrange); Close gaps and Tidy up; Undo by button and
+Ctrl+Z with one board save each, cleared when Arrange ends, and Ctrl+Z outside Arrange leaving the board alone;
+Page ▾ rename (and a double-click on the tab), duplicate (fresh ids), move, delete with its inline confirm (undo
+brings it back), the last page not deletable, "Pin page as panel" into a new custom panel; the Add library (a
+click = first free spot, a drag = exact spot with the teal preview and the library faded, red onto another
+control, a control already on the page pointed at instead of added twice); Escape closing the library and the
+page menu before ending Arrange (a maximized panel stays maximized); the one-row bar at the default panel
+height with a usable board; the tablet profile (40 px targets, the ⋯ overflow, the empty page's Arrange opening
+the library); no Arrange on the phone; a layout profile switch while arranging (fresh undo, each profile keeps
+its board); and the Setup screen's compact row arranging the same way; review round: Escape with the library
+open and the board focused (library first, then Arrange, the panel stays maximized), Escape during a library
+drag (drag cancelled, nothing added), a divider label kept on its own divider when the focus moves to another
+divider / empty grid / a control, a control menu opened over the library stacking above it, undoing Duplicate /
+Add page bringing the page back into view, Ctrl+Z during a drag or resize doing nothing, a held arrow key
+(synthetic auto-repeats) being one step and one save, Ctrl+Z in Arrange never reaching the preset history
+while outside Arrange it does (a recorded switch write is undone), and Delete / Backspace in the text fields
+keeping the selected tile. **17-device-layout** (slice 6) also covers the device positions: with the mock option
+`positioned` (`AMP_PARAMS_POSITIONED`: an Authentic page with one line of exact pixel positions, three section
+titles and a mixer section without positions; a three-row Dynamics page makes the rows-only default 6 rows
+high, the height budget) the controls land in the device's cells (a knob slot = 2 cells, one line, the empty
+slots kept as gaps), the titles and the mixer section show as labelled dividers, nothing overlaps, the page
+is exactly as tall as the budget and fits at 1366×768 without the amber dot, and "Reset to device layout"
+puts an arranged control back (kept after a reload); its own Drive page keeps only the bypass
+in its mixer row, which the header shows: no tile, no divider, no fixed area.
+**44-block-editor-touch** (Chromium only) — touch through Chromium's input pipeline (CDP
+`Input.dispatchTouchEvent`, so the tiles' `touch-action` — `pan-x pinch-zoom` / `pan-y pinch-zoom` — decides what
+the browser pans; `hasTouch` profiles; not a physical device): on the tablet profile (1100×800) the header's
+targets are ≥ 40 px (Engaged, Bypass mode and its menu rows, Scene Ignore, ⋯, CH and A–D) on one row; a sideways swipe
+over a knob scrolls the Top strip and writes nothing while a vertical drag changes the value; in the Side
+navigation (F11) a vertical swipe scrolls the pages and writes nothing while a sideways drag changes it; a swipe
+along the strip from a fader track writes nothing, a tap on the track sets the tapped value; a `pointercancel`
+ends a value drag; two fingers (two CDP touch points): a second finger on another knob neither writes nor flips
+the first finger's value to an extreme, and lifting it does not end the first finger's drag; a long-press opens
+the control menu (the finger's release does not close it again, and a quick tap on a menu row right after the
+release still goes through); at 1024×768 Arrange maximizes the panel so at least
+three knob rows fit, Done restores it (a panel the user maximized stays maximized); Arrange with a touch drag
+(the resize handle a 40 px target) stores a board of the tablet's own while the desktop board stays as it was.
+The phone layout at 390×844 and 360×780: every page grid of the board `data-cols="8"` with at most four knobs a
+visual row and each knob tile at least 80 px wide (84 px at 390, 82 px at 360) — also for the positioned device
+page (mock option `positioned`: every title over its group), the pages stacked (`data-nav="side"`, `phone`
+class) and scrolling vertically under a swipe that writes nothing, scrolled to the end the last row clear of
+the dock opener and the collapse button over the board's corner, a sideways drag changing a value, the header
+tabs paging, no Arrange, a long-press menu without layout rows; a 12-knob row of a desktop board the phone
+inherits and of a phone board of its own both show as three rows of four; reading the phone view writes no
+board (`countBoardSaves` stays 0, the stored board keeps its 24-cell row); a Find jump scrolls a control lower
+down a tall phone page into view, and a shorter board (the on-screen keyboard) keeps the scroll position. Also
+every control view's role / value and the select's keyboard listbox (Enter opens on the current option — after
+a pick, reopened, on the picked one, which holds the list's one tab stop —, arrows walk with a focus ring,
+Enter picks, Escape back to the field without restoring a maximized panel, Tab closes it and moves on from the
+field).
+**45-block-editor-graphs** — read-only graph tiles (AXIS-89) against synthetic blocks in row 1 of the mocked
+grid (`support/graphBlocks.ts`: served `visuals` + keyed layout graph slots, the device tempo 90 bpm): the
+compressor graph at its slot (cells 8,0), its `aria-label` naming threshold / ratio / knee / level / mix and its
+notes as its accessible description (`aria-describedby`), a threshold change by keyboard redrawing label and path while only the threshold is written; knee (select) and
+mix redraw it, a sustain-only type shows no curve ("No static curve for this type"); metering on shows the
+live gain reduction and METER OFF removes it; the tremolo's tempo 1/4 at 90 bpm draws 1.5 Hz with a moving playhead whose tooltip says it
+shows the rate, not the device phase; reduced motion and Arrange keep it still; the filter's response (Filter
+page) and LFO (Modulation page); the controllers' LFO 1 / LFO 2 / ADSR 1; a gate (no slot) gets its graph only
+from the Arrange library under "Graphs · meters · actions", sized S / M / L, and its control menu shows its notes and keeps Size
+and Remove; a delay without a device layout gets its echo train only from the library (40 % feedback, ping-pong: eight
+spikes, caption "500 ms, 8 repeats to −60 dB"); no `blockVisuals` cap (false
+or absent; `visuals` and the slots' graph keys still served, so the cap alone hides them) → no graph tiles and
+none in the library; on the phone (Chromium, CDP touch) a graph is one full-width row, knobs stay ≤ 4 a row, a
+swipe starting on the graph scrolls the board and writes nothing, and a long-press on it opens the control
+menu with the graph's notes. Every test of the desktop describe also fails on a page error or a console error
+(e.g. a Svelte effect that re-runs itself).
+**46-block-editor-fixed** — the fixed area (AXIS-94; mock option `fixed`, `AMP_PARAMS_FIXED`: a mixer, Depth and a
+page-level Tracking Mode on every page): in both navigations the repeated controls show once in a column at the
+far right with the pages' cell size, on no page and no tab, and stay put while tabs, wheel and scrolling change
+the pages (a wheel over the area scrolls no page; looking writes nothing); values, selects and the control menu
+work there ("Move to page ▸" out and "Fixed area" back); no Bypass / Bypass Mode / Scene Ignore tile in the default
+while the library and the search offer them and one the user placed survives a reload; Arrange: a drag from a page
+into the area, red onto another control, back onto a page, within the area, all kept after a reload, "Reset fixed
+area" restoring the area only; the selected area taking the library's click and a library drag, keys moving /
+resizing / removing there with undo, Page ▾ keeping the page; the width handle by keyboard and mouse (one undo
+step each, the cell frozen, a narrower area packed again); "Add fixed area" on a board without one, the emptied
+area showing only in Arrange and removable; a Find jump flashing a control there without changing the page; a very
+narrow desktop editor showing a band instead of the column; no grid map anywhere (desktop, tablet, phone); on the
+tablet what the dock opener covers scrolls clear of it and the handle is a 40 px target; on the phone (390×844,
+360×780) the band with at most four knobs a row, the toggle (`aria-expanded`), everything clear of the dock opener,
+the pages scrolling above it.
+Helpers `selectTile` / `openLibrary` /
+`arrangeAdd` / `countBoardSaves` / `boardSaves` live in `support/blockEditorMock.ts`. Arrange selectors:
+`[data-be-arrange-bar]` (`touch` class on the tablet), its parts `[data-be-ab="<part>"]` (`remove`, `pin`,
+`swipe`, `label`, `rotate`, `undo`, `add`, `hdiv`, `vdiv`, `close-gaps`, `tidy`, `autopack`, `fixed`, `page`, `more`),
+`[data-be-ab-view="<view>"]`, `[data-be-ab-size="S|M|L"]`, `[data-be-arrange-done]`; on a tile the `sel` class,
+`[data-be-dims]` and `[data-be-resize]`; the drop preview `.be-ghost` (`.bad` when refused); the library
+`[data-be-library]` with `[data-be-lib-row="<key>"]` (`data-on-page`), `[data-be-lib-input]`,
+`[data-be-lib-close]`; the Page ▾ menu (`role="menu"` named "Page options") with `be-pm-<id>` rows (`rename`,
+`duplicate`, `pin`, `earlier`, `later`, `delete`, `add`) and the bar's ⋯ ("More arrange tools") with `be-ab-<id>`
+rows.
+Board selectors: `[data-be-board]` (`data-nav`; `phone` class on the phone layout), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
+`[data-be-key]` / `[data-be-view]` / `data-be-x|y|w|h`, `[data-be-pin]` / `[data-be-mod]` (hover actions),
+`[data-be-fixed="column|band"]` (the fixed area, a region named "Fixed controls"; its grid is a `[data-be-grid]`,
+`[data-be-fixed-handle]` its width, `[data-be-fixed-toggle]` the band's toggle, `[data-be-fixed-remove]`), `[data-be-tab]` (`data-visible`, `data-active`; header tabs
+and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, `[data-be-empty]`,
+`[data-be-arrange-done]`. Header selectors: `[data-be-head]` (`data-be-head-rows`), `[data-be-chip]`,
+`[data-be-type]`, `[data-be-channel-toggle]` / `[data-be-channel]`, `[data-be-engaged]`,
+`[data-be-bypass-mode]` (`data-be-bypass-muting`; `[data-be-bypass-muted]` the muted mark; its menu is
+`role="menu"` named "Bypass mode" with `be-bm-head` / `be-bm-opt` / `be-bm-<value>` rows),
+`[data-be-scene]` (`on` / `off`; both use `aria-disabled` + the reason in `title` when unavailable),
+`[data-be-more]` (`data-custom`) / `[data-be-more-dot]`, `[data-be-find-input]`,
+`[data-be-find]` / `[data-be-find-row]` / `[data-be-find-all]`, `[data-be-results]` / `[data-be-results-close]`.
+⋯ rows carry `be-mi-<id>` classes (`arrange`, `nav-top|side`, `size-s|m|l`, `profile`, `reset-page`,
+`reset-fixed`, `reset-all`, `new-copy`, `delete-copy`, `save-default`, `bypass-mode` (phone-width editors only),
+`change-type`, `remove`, …); helpers
+`openMore` / `pickMore` / `pickProfile` / `checkedProfile` live in `support/blockEditorMock.ts`. The control
+menu (`role="menu"` named "Control options") has `be-ci-<id>` rows (`head`, `pin` → `pin-panel` / `pin-tab` /
+`pin-new`, `modifier`, `view` → `view-opt`, `size` → `size-opt`, `move` → `move-opt` / `move-fixed`, `swipe` (`on`), `remove`).
 
 ## Ignore these generated artifacts
 

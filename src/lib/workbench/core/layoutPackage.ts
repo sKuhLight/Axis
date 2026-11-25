@@ -227,6 +227,11 @@ function remapLayoutBits(
 }
 
 /** Remap one dock (regions kept, every node id re-minted, panel refs mapped). */
+/** A copy of `dock` with fresh node ids and panel references mapped through `panelIdMap`. */
+export function remapDockLayout(dock: DockLayout, panelIdMap: Map<string, string>): DockLayout {
+  return remapDock(dock, panelIdMap);
+}
+
 function remapDock(dock: DockLayout, panelIdMap: Map<string, string>): DockLayout {
   const root = Object.fromEntries(
     Object.entries(dock.root ?? {}).map(([region, node]) => [region, remapDockNode(node, panelIdMap)])
@@ -341,14 +346,23 @@ export interface RemintWorkbenchPageOptions {
   /** Top-level id for the copy (the caller owns collision policy for it). */
   pageId: string;
   label?: string;
+  /**
+   * Keep the panels' identity flags (`singletonKey`, `locked`, `closable`) — for
+   * an inert stored SNAPSHOT (an imported page layout), which `pageLayout.apply`
+   * maps onto the live instances by singleton key. Off for live copies.
+   */
+  keepIdentity?: boolean;
 }
 
 /**
  * Deep-copy ONE page plus the panel instances its dock references, re-minting
  * every interior id (dock nodes via {@link remapDockNode}, panel instances via
- * the shared id machinery). `singletonKey` is stripped from the copied panels —
- * singletons are mutually exclusive per layout, so a faithful copy would be
- * repaired away immediately. Backs `page.duplicate`.
+ * the shared id machinery). A live copy is an ordinary, removable panel:
+ * `singletonKey` is stripped (singletons are mutually exclusive per layout, so
+ * a faithful copy would be repaired away immediately), `locked` is cleared and
+ * `closable` defaults to true — the same flags as a template instance — so a
+ * copy can always be removed or deleted. Backs `page.duplicate`; the page-layout
+ * import passes `keepIdentity` (an inert snapshot).
  */
 export function remintWorkbenchPage(
   page: WorkbenchPage,
@@ -371,7 +385,11 @@ export function remintWorkbenchPage(
   for (const panel of Object.values(panels)) {
     const id = panelIdMap.get(panel.id) ?? panel.id;
     const next = { ...clone(panel), id };
-    delete next.singletonKey;
+    if (!options.keepIdentity) {
+      delete next.singletonKey;
+      delete next.locked;
+      next.closable = panel.closable ?? true;
+    }
     nextPanels[id] = next;
   }
 
@@ -551,7 +569,9 @@ export function importPageLayoutPackage(pkg: unknown): ImportLayoutResult<Workbe
     typeof pageLayout.label === 'string' && pageLayout.label.trim() ? pageLayout.label.trim() : 'Imported Page Layout';
   const { page, panels } = remintWorkbenchPage(pageLayout.page, pageLayout.panels ?? {}, {
     pageId: createWorkbenchId('page'),
-    label
+    label,
+    // A stored snapshot: apply maps its single-instance panels by key.
+    keepIdentity: true
   });
   return {
     success: true,

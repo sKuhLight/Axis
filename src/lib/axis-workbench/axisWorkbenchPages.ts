@@ -11,10 +11,12 @@ import {
   type NavigationLayout,
   type NavigationMode,
   type PanelInstance,
+  type WorkbenchCommand,
   type WorkbenchDocument,
   type WorkbenchLayout,
   type WorkbenchPage
 } from '../workbench/core';
+import type { WorkbenchController } from '../workbench/svelte/controller.svelte';
 
 /**
  * ROUND 15 — Pages navigation model (AXIS-23), Axis binding half.
@@ -29,7 +31,10 @@ import {
  * configurable layout page. Seven predefined pages ship — Grid (today's default
  * layout), Preset Browser (full-size PB), Scenes, Live, Setup, Controllers, FC —
  * each renamable / deletable / reorderable. Theme + Axis Cloud stay ACTION entries
- * (no page). Pages are per device profile (desktop/tablet/phone), same seeds.
+ * (no page). Pages are per device profile (desktop/tablet/phone), same seeds — but
+ * the ACTIVE page is carried across a profile switch (see the reducer's
+ * `profile.activate`), so it reads as one page selection shared by all three
+ * profiles rather than three that drift apart on every window resize.
  */
 
 export const AXIS_PAGE_GRID = 'axis.page.grid';
@@ -92,7 +97,7 @@ const NAV_LABELS: Record<string, string> = {
  * These specs are the single source for the extra panel instances the roster must
  * carry so the pages have something to dock (and for the migration fallback).
  */
-interface AxisPagePanelSpec {
+export interface AxisPagePanelSpec {
   pageId: string;
   label: string;
   panelId: string;
@@ -167,13 +172,23 @@ export const AXIS_SECONDARY_PAGE_SPECS: AxisPagePanelSpec[] = [
   }
 ];
 
+/** Seed page id → its default label (the label a restored default page gets). */
+export const AXIS_SEED_PAGE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(AXIS_PAGE_NAV_BINDINGS).map(([entryId, pageId]) => [pageId, NAV_LABELS[entryId] ?? pageId])
+);
+
+/** Seed page id → the id of its original navigation entry (so a restored page keeps its nav glyph). */
+export const AXIS_SEED_PAGE_NAV_ENTRY: Record<string, string> = Object.fromEntries(
+  Object.entries(AXIS_PAGE_NAV_BINDINGS).map(([entryId, pageId]) => [pageId, entryId])
+);
+
 const specForPage = (pageId: string): AxisPagePanelSpec | undefined =>
   AXIS_SECONDARY_PAGE_SPECS.find((spec) => spec.pageId === pageId);
 
 const specForPanel = (panelId: string): AxisPagePanelSpec | undefined =>
   AXIS_SECONDARY_PAGE_SPECS.find((spec) => spec.panelId === panelId);
 
-const toPanelInstance = (spec: AxisPagePanelSpec): PanelInstance => ({
+export const axisPagePanelInstance = (spec: AxisPagePanelSpec): PanelInstance => ({
   id: spec.panelId,
   type: spec.panelType,
   title: spec.panelTitle,
@@ -194,7 +209,7 @@ export function createAxisPagePanels(): Record<string, PanelInstance> {
   const panels: Record<string, PanelInstance> = {};
   for (const spec of AXIS_SECONDARY_PAGE_SPECS) {
     if (spec.panelId === 'axis.presetBrowser' || spec.panelId === 'axis.fc') continue;
-    panels[spec.panelId] = toPanelInstance(spec);
+    panels[spec.panelId] = axisPagePanelInstance(spec);
   }
   return panels;
 }
@@ -226,7 +241,7 @@ export function createAxisConvertPanels(): Record<string, PanelInstance> {
 }
 
 /** Build the convert page's dock: grid (main) · minimap+tray split (right) · block editor (bottom). */
-function buildConvertPageDock(mintNodeId: () => string): DockLayout {
+export function buildConvertPageDock(mintNodeId: () => string): DockLayout {
   const dock = createEmptyDockLayout();
   dock.root.main = mainTabs(AXIS_CONVERT_GRID_PANEL, mintNodeId);
   dock.root.right = {
@@ -322,6 +337,16 @@ export const AXIS_SEED_PAGES_MARKER = 'axisSeedPages';
 /** Panel ids that belong on their OWN seed page (must be pulled out of the Grid dock). */
 const SECONDARY_PANEL_IDS = new Set(AXIS_SECONDARY_PAGE_SPECS.map((spec) => spec.panelId));
 
+/** Every panel id a (possibly unrepaired) dock tree references. */
+function collectDockedPanelIds(node: DockNode | null, into: Set<string>): void {
+  if (!node) return;
+  if (node.kind === 'tabs') {
+    for (const id of Array.isArray(node.panelIds) ? node.panelIds : []) into.add(id);
+    return;
+  }
+  for (const child of Array.isArray(node.children) ? node.children : []) collectDockedPanelIds(child, into);
+}
+
 /** Recursively strip a set of panel ids from a dock tree; empty stacks collapse to null. */
 function stripPanelsFromNode(node: DockNode | null, drop: Set<string>): DockNode | null {
   if (!node) return null;
@@ -349,7 +374,7 @@ function stripSecondaryPanels(dock: DockLayout): DockLayout {
 function ensurePagePanelsExist(layout: WorkbenchLayout): void {
   layout.panels = layout.panels ?? {};
   for (const spec of AXIS_SECONDARY_PAGE_SPECS) {
-    if (!layout.panels[spec.panelId]) layout.panels[spec.panelId] = toPanelInstance(spec);
+    if (!layout.panels[spec.panelId]) layout.panels[spec.panelId] = axisPagePanelInstance(spec);
   }
 }
 
@@ -413,11 +438,24 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
     layout.pages = layout.pages ?? {};
     layout.panels = layout.panels ?? {};
     if (!layout.pages[AXIS_PAGE_CONVERT]) {
-      layout.pages[AXIS_PAGE_CONVERT] = {
-        id: AXIS_PAGE_CONVERT,
-        label: 'Convert',
-        dock: buildConvertPageDock(() => createWorkbenchId('tabs'))
-      };
+      // A convert panel the user docked on another page (after the page was
+      // deleted, its panels were parked) stays there: a panel lives on at most
+      // one page, so the recreated dock drops it — like the reducer's page.add.
+      const dockedElsewhere = new Set<string>();
+      for (const page of Object.values(layout.pages)) {
+        for (const node of Object.values(page?.dock?.root ?? {})) collectDockedPanelIds(node ?? null, dockedElsewhere);
+      }
+      const dock = buildConvertPageDock(() => createWorkbenchId('tabs'));
+      if (dockedElsewhere.size) {
+        for (const region of Object.keys(dock.root) as (keyof DockLayout['root'])[]) {
+          dock.root[region] = stripPanelsFromNode(dock.root[region], dockedElsewhere);
+        }
+      }
+      layout.pages[AXIS_PAGE_CONVERT] = { id: AXIS_PAGE_CONVERT, label: 'Convert', dock };
+      // Listed in pageOrder by the step that creates it, so the next run (and
+      // repair) find nothing left to change — the step stays idempotent.
+      layout.pageOrder = Array.isArray(layout.pageOrder) ? layout.pageOrder : [];
+      if (!layout.pageOrder.includes(AXIS_PAGE_CONVERT)) layout.pageOrder.push(AXIS_PAGE_CONVERT);
     }
     const convertPanels = createAxisConvertPanels();
     for (const [id, instance] of Object.entries(convertPanels)) {
@@ -429,6 +467,34 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
     if (srcPanel && srcPanel.title === 'Grid Map') srcPanel.title = 'Source';
   }
   return doc;
+}
+
+/**
+ * Commands that recreate a MISSING convert page in the running session (e.g.
+ * after importing a layout without it), before a "Convert…" action activates
+ * it: `panel.create` for its missing panels, then a nav-less `page.add` at the
+ * end (panels docked on other pages stay there). [] when the page exists.
+ * The normalization chain's `ensureAxisConvertPage` covers the next load.
+ */
+export function ensureAxisConvertPageCommands(layout: WorkbenchLayout | undefined): WorkbenchCommand[] {
+  if (!layout || layout.pages?.[AXIS_PAGE_CONVERT]) return [];
+  const commands: WorkbenchCommand[] = [];
+  for (const [id, instance] of Object.entries(createAxisConvertPanels())) {
+    if (!layout.panels?.[id]) commands.push({ type: 'panel.create', panel: instance });
+  }
+  commands.push({
+    type: 'page.add',
+    page: { id: AXIS_PAGE_CONVERT, label: 'Convert', dock: buildConvertPageDock(() => createWorkbenchId('tabs')) },
+    navEntry: null
+  });
+  return commands;
+}
+
+/** Make sure the convert page exists (one batch when it does not), then activate it. */
+export function openAxisConvertPage(controller: Pick<WorkbenchController, 'activeLayout' | 'dispatchMany' | 'activatePage'>): void {
+  const commands = ensureAxisConvertPageCommands(controller.activeLayout);
+  if (commands.length) controller.dispatchMany(commands);
+  controller.activatePage(AXIS_PAGE_CONVERT);
 }
 
 // Re-exported for tests / callers that want to introspect the active seed page.

@@ -6,7 +6,8 @@ import {
   type WorkbenchProfile
 } from '../../core';
 import { createWorkbenchBindingRegistry } from '../../bindings';
-import { createWorkbenchController } from '../controller.svelte';
+import { createWorkbenchController, reconcileMaximizedPanel } from '../controller.svelte';
+import { shouldReleaseMaximize } from '../panelChrome';
 
 const panel = (id: string): PanelInstance => ({ id, type: 'test.panel', title: id });
 
@@ -109,7 +110,10 @@ describe('WorkbenchController', () => {
     expect(result).toEqual({ handled: true, success: true, value: 'layout.test:level' });
   });
 
-  it('switches the active profile by viewport width without mutating layouts', () => {
+  // Panels/widgets/docks stay untouched by a resize. (The active PAGE is deliberately
+  // carried onto the incoming layout — covered by the next test; here every profile's
+  // layout is a clone with the same single page, so the carry is a no-op.)
+  it('switches the active profile by viewport width without mutating layout contents', () => {
     const controller = createWorkbenchController(multiProfileDoc());
     const layoutsBefore = JSON.stringify(controller.document.layouts);
 
@@ -133,6 +137,36 @@ describe('WorkbenchController', () => {
     expect(controller.document.activeProfileId).toBe('profile.desktop');
 
     expect(JSON.stringify(controller.document.layouts)).toBe(layoutsBefore);
+  });
+
+  it('carries the active page across a viewport-driven profile switch', () => {
+    const doc = multiProfileDoc();
+    // Give every layout the same two pages, each parked on a different one (desktop on
+    // Preset Browser, tablet and phone left on Grid).
+    const grid = doc.layouts['layout.desktop'].activePageId;
+    for (const id of ['layout.desktop', 'layout.tablet', 'layout.phone']) {
+      const l = doc.layouts[id];
+      l.pages['page.presets'] = { id: 'page.presets', label: 'Preset Browser', dock: JSON.parse(JSON.stringify(l.pages[grid].dock)) };
+      l.pageOrder = [grid, 'page.presets'];
+      l.activePageId = grid;
+    }
+    doc.layouts['layout.desktop'].activePageId = 'page.presets';
+
+    const controller = createWorkbenchController(doc);
+
+    // Narrow past the tablet breakpoint — the view must not move.
+    expect(controller.resolveProfileForWidth(1024)).toBe(true);
+    expect(controller.document.activeProfileId).toBe('profile.tablet');
+    expect(controller.document.layouts['layout.tablet'].activePageId).toBe('page.presets');
+
+    // Narrow past the phone breakpoint — still the same view.
+    expect(controller.resolveProfileForWidth(390)).toBe(true);
+    expect(controller.document.layouts['layout.phone'].activePageId).toBe('page.presets');
+
+    // Widen all the way back — and a page chosen at phone width follows you up.
+    controller.dispatch({ type: 'page.activate', pageId: grid });
+    expect(controller.resolveProfileForWidth(1920)).toBe(true);
+    expect(controller.document.layouts['layout.desktop'].activePageId).toBe(grid);
   });
 
   it('honours a persisted user override over viewport resolution and clears it', () => {
@@ -427,5 +461,189 @@ describe('WorkbenchController — pages', () => {
     controller.setDocument(raw);
 
     expect(controller.activePage?.id).toBe('page.one');
+  });
+});
+
+describe('WorkbenchController — lift and maximize (transient view state)', () => {
+  function dockedDoc(): WorkbenchDocument {
+    let doc = createEmptyWorkbenchDocument({ profileId: 'profile.t', layoutId: 'layout.t', pageId: 'page.one', pageLabel: 'One' });
+    const controller = createWorkbenchController(doc);
+    controller.dispatch({ type: 'panel.add', panel: panel('grid'), region: 'main' });
+    controller.dispatch({ type: 'panel.add', panel: panel('editor'), region: 'main', target: { kind: 'split', targetPanelId: 'grid', axis: 'horizontal', position: 'after' } });
+    controller.dispatch({ type: 'panel.add', panel: panel('history'), region: 'main', target: { kind: 'tab', targetPanelId: 'grid' } });
+    doc = controller.document;
+    return doc;
+  }
+
+  it('renderedPage lifts the panel out (keeping the split ids) and puts it back on setDrag(null)', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    const page = controller.activePage!;
+    expect(controller.renderedPage).toBe(page);
+
+    controller.setLiftedPanel('editor');
+    const lifted = controller.renderedPage!;
+    expect(lifted).not.toBe(page);
+    expect(lifted.dock.root.main?.kind).toBe('split'); // one-child split kept: neighbours keep their ids
+    expect(JSON.stringify(lifted.dock)).not.toContain('"editor"');
+    // memoized: the same object until the page or the lift changes
+    expect(controller.renderedPage).toBe(lifted);
+
+    controller.setDrag(null);
+    expect(controller.liftedPanelId).toBeNull();
+    expect(controller.renderedPage).toBe(controller.activePage);
+  });
+
+  it('never records the lift in history or the document', () => {
+    const changes: WorkbenchDocument[] = [];
+    const controller = createWorkbenchController(dockedDoc(), { onChange: (doc) => changes.push(doc) });
+    const before = JSON.stringify(controller.document);
+    controller.setLiftedPanel('editor');
+    controller.setDrag(null);
+    expect(JSON.stringify(controller.document)).toBe(before);
+    expect(controller.canUndoLayout).toBe(false);
+    expect(changes).toHaveLength(0);
+  });
+
+  it('leaving edit mode clears a drag and its lift', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.setEditMode(true);
+    controller.setLiftedPanel('editor');
+    controller.toggleEditMode();
+    expect(controller.liftedPanelId).toBeNull();
+    controller.setEditMode(true);
+    controller.setLiftedPanel('grid');
+    controller.setEditMode(false);
+    expect(controller.liftedPanelId).toBeNull();
+  });
+
+  it('one drop is one undo step', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.setLiftedPanel('editor');
+    controller.dispatch({ type: 'panel.move', panelId: 'editor', to: { kind: 'region', region: 'right' } });
+    controller.setDrag(null);
+    expect(controller.activePage?.dock.root.right).toMatchObject({ panelIds: ['editor'] });
+    controller.undoLayout();
+    expect(controller.activePage?.dock.root.right).toBeNull();
+    expect(controller.canUndoLayout).toBe(false);
+  });
+
+  it('maximize activates the panel in its stack, toggles off, and is not an undo step', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    // history was tabbed onto grid and is active; maximizing grid re-activates grid.
+    controller.toggleMaximizedPanel('grid');
+    expect(controller.maximizedPanelId).toBe('grid');
+    expect(JSON.stringify(controller.activePage!.dock.root.main)).toContain('"activePanelId":"grid"');
+    expect(controller.canUndoLayout).toBe(false);
+    controller.toggleMaximizedPanel('grid');
+    expect(controller.maximizedPanelId).toBeNull();
+  });
+
+  it('ignores maximizing a panel that is not on the active page', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.setMaximizedPanel('nope');
+    expect(controller.maximizedPanelId).toBeNull();
+  });
+
+  it('clears maximize on a page switch and when the panel leaves the page', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.addPage({ id: 'page.two', label: 'Two' });
+    controller.activatePage('page.one');
+    controller.setMaximizedPanel('editor');
+    expect(controller.maximizedPanelId).toBe('editor');
+    controller.activatePage('page.two');
+    expect(controller.maximizedPanelId).toBeNull();
+
+    controller.activatePage('page.one');
+    controller.setMaximizedPanel('editor');
+    controller.dispatch({ type: 'panel.move', panelId: 'editor', to: { kind: 'region', region: 'main' }, pageId: 'page.two' });
+    expect(controller.maximizedPanelId).toBeNull();
+  });
+
+  it('the controller alone keeps maximize across a move within the page; the old owner releases it; a lift restores it', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.setMaximizedPanel('editor');
+    const ownerPanels = ['editor']; // the stack (TabStack instance) that showed it
+    controller.dispatch({ type: 'panel.move', panelId: 'editor', to: { kind: 'region', region: 'left' } });
+    // Document-level rule: still on the page → the id survives …
+    expect(controller.maximizedPanelId).toBe('editor');
+    // … but the rendered rule releases it: the old owner unmounted (shouldReleaseMaximize),
+    // so a moved maximized panel arrives restored.
+    expect(shouldReleaseMaximize({ maximizedPanelId: controller.maximizedPanelId, stackPanelIds: ownerPanels, overlay: false, rendered: false })).toBe(true);
+    controller.setLiftedPanel('grid');
+    expect(controller.maximizedPanelId).toBeNull();
+  });
+
+  it('holds a stack whose active tab is lifted (no neighbour tab becomes active)', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    // grid's stack holds [grid, history] with history active.
+    controller.setLiftedPanel('history');
+    const main = controller.renderedPage!.dock.root.main;
+    const json = JSON.stringify(main);
+    expect(json).toContain('"panelIds":["grid"]');
+    expect(json).toContain('"activePanelId":"history"'); // held: stale on purpose (render only)
+    expect(JSON.stringify(controller.activePage!.dock.root.main)).toContain('"activePanelId":"history"');
+  });
+
+  it('maximize and collapse are exclusive', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    controller.dispatch({ type: 'panel.collapse', panelId: 'editor', collapsed: true });
+    controller.setMaximizedPanel('editor');
+    expect(controller.maximizedPanelId).toBeNull();
+    controller.dispatch({ type: 'panel.collapse', panelId: 'editor', collapsed: false });
+    controller.setMaximizedPanel('editor');
+    expect(controller.maximizedPanelId).toBe('editor');
+    // Collapsing the maximized panel (from anywhere) restores it.
+    controller.dispatch({ type: 'panel.collapse', panelId: 'editor', collapsed: true });
+    expect(controller.maximizedPanelId).toBeNull();
+  });
+
+  it('reconcileMaximizedPanel keeps only panels docked on the page', () => {
+    const controller = createWorkbenchController(dockedDoc());
+    expect(reconcileMaximizedPanel('grid', controller.activePage)).toBe('grid');
+    expect(reconcileMaximizedPanel('nope', controller.activePage)).toBeNull();
+    expect(reconcileMaximizedPanel(null, controller.activePage)).toBeNull();
+    expect(reconcileMaximizedPanel('grid', undefined)).toBeNull();
+    expect(reconcileMaximizedPanel('grid', controller.activePage, { grid: { collapsed: true } })).toBeNull();
+    expect(reconcileMaximizedPanel('grid', controller.activePage, { grid: {} })).toBe('grid');
+  });
+});
+
+describe('WorkbenchController — Add palette and placement (transient view state)', () => {
+  const doc = () => createEmptyWorkbenchDocument({ profileId: 'profile.t', layoutId: 'layout.t' });
+  const placing = { kind: 'panel' as const, label: 'History', spots: [], activeSpotId: null, zone: 'center' as const, insert: null };
+
+  it('opens the palette only while editing; close is a no-op when closed', () => {
+    const controller = createWorkbenchController(doc());
+    controller.openAddPalette({ filter: 'all' });
+    expect(controller.addPalette).toBeNull();
+    controller.setEditMode(true);
+    let emits = 0;
+    const off = controller.subscribe(() => emits++);
+    emits = 0;
+    controller.openAddPalette({ filter: 'widgets', target: { kind: 'widget', zone: 'top.left', label: 'x' } });
+    expect(controller.addPalette).toMatchObject({ filter: 'widgets' });
+    controller.closeAddPalette();
+    expect(controller.addPalette).toBeNull();
+    controller.closeAddPalette();
+    expect(emits).toBe(2);
+    off();
+  });
+
+  it('leaving edit mode clears the palette and the placement; neither touches the document or history', () => {
+    const changes: WorkbenchDocument[] = [];
+    const controller = createWorkbenchController(doc(), { onChange: (d) => changes.push(d) });
+    controller.setEditMode(true);
+    controller.openAddPalette({ filter: 'all' });
+    controller.setPlacement(placing);
+    expect(controller.placement).toEqual(placing);
+    expect(changes).toHaveLength(0);
+    expect(controller.canUndoLayout).toBe(false);
+    controller.toggleEditMode();
+    expect(controller.addPalette).toBeNull();
+    expect(controller.placement).toBeNull();
+    controller.setEditMode(true);
+    controller.setPlacement(placing);
+    controller.setEditMode(false);
+    expect(controller.placement).toBeNull();
   });
 });

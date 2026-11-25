@@ -1,9 +1,12 @@
 <script lang="ts">
   // Full-view rail screen for a virtual effect (Setup / Controllers / Modifier / FC). It's the same
-  // widget-grid Control Surface as a block, pointed at effectId 1/2/3/199 — device-authentic editor
-  // pages come from the served layout, reads/writes go through the normal param path.
+  // control board as a block's (the Block Editor surface), pointed at effectId 1/2/3/199 — device-authentic
+  // editor pages come from the served layout, reads/writes go through the normal param path, and the
+  // board is stored under the same keys the Block Editor uses for that slug. Without a grid block the
+  // surface shows its compact row (page tabs · search · ⋯) instead of the Block Editor header, so Arrange,
+  // Top / Side, control size, layout profiles and the search stay reachable here.
   import { editor } from './editor.svelte';
-  import ControlSurface from './ControlSurface.svelte';
+  import BeSurface from './blockEditor/BeSurface.svelte';
 
   // accent per context (matches the rail's visual language)
   const ACCENT: Record<string, string> = {
@@ -33,7 +36,7 @@
       <div class="msg"><p>No parameters available for {editor.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <ControlSurface slug={editor.virtual.slug} {accent} />
+        <BeSurface slug={editor.virtual.slug} {accent} typeName={editor.virtual.name} />
       </div>
     {/if}
   </section>
@@ -92,7 +95,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* the ControlSurface scrolls internally (vertical only) — no sideways scroll here */
+    overflow: hidden; /* the board scrolls internally — nothing scrolls here */
   }
   .msg {
     flex: 1;

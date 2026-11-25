@@ -1,7 +1,7 @@
 // OFFLINE editor surface for the cross-device preset converter (P4b · META-24 · AXIS-48).
 //
-// A drop-in `EditorSurface` (see editorSurface.ts) that drives the REAL SignalGrid / BlockEditor /
-// ControlSurface from the pure `convertScratch` buffer with ZERO device I/O. A later milestone sets
+// A drop-in `EditorSurface` (see editorSurface.ts) that drives the REAL SignalGrid / BlockEditor (and its
+// board, blockEditor/BeSurface) from the pure `convertScratch` buffer with ZERO device I/O. A later milestone sets
 // this singleton into Svelte context so those components render + edit a converted preset exactly as
 // they render a live device — every mutator reroutes to `convertScratch` (never `forgefx`), and every
 // device-only concern (meters, monitors, cab, telemetry, cursor-mirror) degrades to a safe stub.
@@ -424,6 +424,9 @@ class ConvertEditor {
     return null;
   }
   looperControl = async (_action: string, _on: boolean): Promise<void> => {};
+  // an offline buffer has no device tempo and serves no graph displays
+  readonly bpm = 120;
+  readonly hasTempo = false;
   typeNameFor = (_effectId: number): string => '';
   monitorFor = (_effectId: number): LiveMonitor | null => null;
   monitorsFor = (_effectId: number): LiveMonitor[] => [];
@@ -445,6 +448,8 @@ class ConvertEditor {
   adjustSwipe = (_cell: Cell, _deltaNorm: number) => {};
   isSwipeControl = (_paramId: number): boolean => false;
   toggleSwipeControl = (_p: NamedParam) => {};
+  /** Offline: no swipe controls are kept. */
+  readonly canSwipeControl = false;
 
   // ── device-mirror — no device attached offline ──
   get detected(): DetectResult | null {

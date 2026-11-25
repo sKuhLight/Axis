@@ -1,19 +1,23 @@
-// Pure builder for the ControlSurface "Default" board from a device-authentic DeviceLayout (v2).
+// Device-layout helpers shared by the Block Editor (the v2 builder `blockEditor/deviceLayoutBoardV2.ts` and
+// `blockEditor/layoutPlacement.ts`) and the shape of the previous editor's boards (v1), which the v2
+// migration still reads (`axs.surface3.*`, `axs.surface2.*`; never written, never deleted).
 //
-// The layout arrives already variant-selected by the server (the block's current type picks the
-// variant), so we render its pages as tabs and, INSIDE each page, honour the editor's rows: controls
-// flow left→right within a row, rows flow top→bottom. The board model is a flat grid of positioned
-// widgets per page (`SurfaceWidget[]`); we compute each widget's grid cell from the row structure and
-// tag it with its source `row` so the responsive re-pack (ControlSurface.packRows) can preserve the
-// row breaks at any width. This module is UI-free (no Svelte) so the mapping + layout can be unit-tested.
-//
-// Widget-type → view mapping is deliberately conservative: whenever a control resolves to a live
-// catalog entry we start from that entry's own kind/default view (so FM3's mostly-`unknown` migrated
-// data renders exactly as it did pre-v2 — no regression) and only refine the VIEW when the layout's
-// widget hint is meaningful (slider/number for a continuous param, switch/button for a toggle). Controls
-// with no live parameter fall back to the block's meter / bypass / EQ catalog entries where they exist,
-// or advance the cursor as a gap (spacers, labels, and params the device didn't surface).
+// - `resolveControl`: one device-layout control → a catalog key + view, or a gap. Widget-type → view
+//   mapping is deliberately conservative: whenever a control resolves to a live catalog entry we start from
+//   that entry's own kind/default view (so FM3's mostly-`unknown` migrated data renders exactly as it did
+//   pre-v2 — no regression) and only refine the VIEW when the layout's widget hint is meaningful
+//   (slider/number for a continuous param, switch/button for a toggle). Controls with no live parameter
+//   fall back to the block's meter / bypass / EQ catalog entries where they exist, else a gap (spacers,
+//   labels, and params the device didn't surface). A graph slot keyed by the server (`graphKey`) becomes
+//   the served graph display of that key (`graph:<key>`), the EQ graph rule first. A control that belongs to ANOTHER block (a cross-block
+//   ref: Controllers › Modifiers, Tempo/Pitch, CS per Scene, …) is always a gap unless the server names
+//   its owner by effect id and that is the open block (`isForeignControl`): its paramId is in the
+//   owner's id space and must never bind to the open block's param with the same number.
+// - `layoutVariantSig`: the served layout variant's fingerprint (re-seeds the Default board on a type
+//   change).
+// UI-free (no Svelte), unit-tested in deviceLayoutBoard.test.ts.
 
+import { graphCatalogKey } from './blockVisuals';
 import type { DeviceLayout, LayoutControl } from './types';
 
 export interface SurfaceWidget {
@@ -24,7 +28,7 @@ export interface SurfaceWidget {
   w: number;
   h: number;
   view: string;
-  /** Source layout row index (device-authentic boards only) — drives row-preserving re-pack. */
+  /** Source layout row index (device-authentic boards only). */
   row?: number;
 }
 export interface SurfaceBoard {
@@ -35,7 +39,7 @@ export interface SurfaceBoard {
   variantSig?: string;
 }
 
-/** The subset of a ControlSurface `Ctl` the builder needs (catalog entry). */
+/** The subset of a catalog entry (`blockEditor/catalog.ts` BeCtl) the layout helpers need. */
 export interface BoardCtl {
   key: string;
   kind: string; // 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave'
@@ -57,7 +61,7 @@ function viewForWidget(widget: string, base: BoardCtl): string {
   if (base.kind === 'cont') {
     if (widget === 'slider') candidate = 'slider';
     else if (widget === 'fader') candidate = 'fader';
-    else if (widget === 'number' || widget === 'readout' || widget === 'meter') candidate = 'number';
+    else if (widget === 'number' || widget === 'readout') candidate = 'number';
     else if (widget === 'knob') candidate = 'knob';
   } else if (base.kind === 'toggle') {
     if (widget === 'toggle') candidate = 'switch';
@@ -66,47 +70,75 @@ function viewForWidget(widget: string, base: BoardCtl): string {
   return base.views.includes(candidate) ? candidate : base.view;
 }
 
-type Resolved = { key: string; view: string } | 'gap';
+export type Resolved = { key: string; view: string } | 'gap';
+
+/** What the open block is, for the cross-block guard. */
+export interface LayoutOwner {
+  /** Effect id of the block being edited (null/undefined = unknown: no ref naming an effect id binds). */
+  effectId?: number | null;
+  /** Catalog family of the open block's layout (`layout.family`). */
+  family?: string | null;
+}
+
+/** An editor owner token that names one instance of a multi-instance effect (`ID_OUTPUT1`, `ID_DISTORT1`):
+ *  it ends in an instance number. A single-instance token (`ID_FOOTCONTROLLER`) does not. */
+const isInstanceToken = (effect: unknown): boolean => typeof effect !== 'string' || /\d\s*$/.test(effect);
+
+/** True when a layout control belongs to another block than the open one: it carries a cross-block ref
+ *  whose owner is not proven to be the open block. Proven: the ref's `effectId` equals the open block's;
+ *  or, without an effect id, the ref names the open layout's own family (same param-id space) and a
+ *  single-instance effect (the Foot Controller screen's own params are tagged `ID_FOOTCONTROLLER`).
+ *  A same-family ref to one instance of a multi-instance effect (`ID_OUTPUT1` on an Output page) stays
+ *  foreign: binding it by family would put another instance's param under its heading. Such a control
+ *  never binds to a catalog entry of the open block. */
+export function isForeignControl(ctl: LayoutControl, owner: LayoutOwner = {}): boolean {
+  const x = (ctl as { crossBlock?: unknown }).crossBlock;
+  if (x == null || typeof x !== 'object') return false;
+  const ref = x as { effectId?: unknown; effect?: unknown; family?: unknown };
+  if (typeof ref.effectId === 'number') return !(typeof owner.effectId === 'number' && ref.effectId === owner.effectId);
+  const sameFamily = typeof ref.family === 'string' && !!ref.family && typeof owner.family === 'string' && ref.family === owner.family;
+  return !(sameFamily && !isInstanceToken(ref.effect));
+}
+
+/** A copy of a layout without cross-block refs: every control resolves by its bare paramId, as versions
+ *  before the guard did. ONLY for recognising a stored Default board that is still exactly such an old
+ *  built-in seed (`buildDeviceLayoutBoardV2` option `legacyUnguarded`); never for anything that is drawn. */
+export function withoutCrossBlockRefs(layout: DeviceLayout): DeviceLayout {
+  return {
+    ...layout,
+    pages: (layout.pages ?? []).map((pg) =>
+      !pg ? pg : { ...pg, rows: (pg.rows ?? []).map((r) => (!r ? r : { ...r, controls: (r.controls ?? []).map((c) => (c && c.crossBlock ? { ...c, crossBlock: undefined } : c)) })) }
+    )
+  };
+}
 
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
- *  spacers, labels, and parameters the device did not surface as a knob/enum). */
-function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>): Resolved {
+ *  spacers, labels, parameters the device did not surface as a knob/enum, and controls of another block
+ *  (`isForeignControl`)). */
+export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, BoardCtl>, owner: LayoutOwner = {}): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
+  if (isForeignControl(ctl, owner)) return 'gap';
   // A live param → its catalog entry (knob `k<id>` or enum `e<id>`), refined by the widget hint.
   if (ctl.paramId != null) {
     const knobKey = `k${ctl.paramId}`;
     const enumKey = `e${ctl.paramId}`;
     const base = byKey.get(knobKey) ?? byKey.get(enumKey);
-    if (base) return { key: base.key, view: viewForWidget(ctl.widget, base) };
+    if (base && (ctl.widget !== 'meter' || base.kind === 'meter')) return { key: base.key, view: viewForWidget(ctl.widget, base) };
   }
   // No live param → the block-level catalog entries the widget hint points at.
   if (ctl.widget === 'meter' && byKey.has('meter')) return { key: 'meter', view: 'meter' };
   if (ctl.widget === 'button' && isBypassControl(ctl) && byKey.has('bypass')) return { key: 'bypass', view: 'action' };
-  if ((ctl.widget === 'graph' || ctl.widget === 'label') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
+  if (ctl.widget === 'graph' && ctl.rawWidget === 'graph_looper' && byKey.has('wave')) return { key: 'wave', view: 'wave' };
+  if (ctl.widget === 'graph' && (!ctl.graphKey || ctl.graphKey === 'eq') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
+  // a graph slot the server keyed (`graphKey`) → the served display of that key, when the block serves it
+  // (the EQ rule above stays first: a PEQ / GEQ slot is the interactive EQ graph)
+  if (ctl.widget === 'graph' && typeof ctl.graphKey === 'string' && ctl.graphKey) {
+    const g = byKey.get(graphCatalogKey(ctl.graphKey));
+    if (g) return { key: g.key, view: 'graph' };
+  }
   // Labels, unresolved dropdowns, and anything else with no binding: leave a gap (matches the pre-v2
   // behaviour of silently skipping unmapped controls, but keeps neighbours' horizontal alignment).
   return 'gap';
-}
-
-/** Left→right, wrapping sweep of catalog entries into `cols` (used for the trailing "More" page — no
- *  row structure to preserve, just a tidy fill in catalog order). */
-function packSequential(ctls: BoardCtl[], cols: number): SurfaceWidget[] {
-  const out: SurfaceWidget[] = [];
-  let x = 0;
-  let y = 0;
-  let rowH = 1;
-  for (const c of ctls) {
-    const w = Math.min(c.w, cols);
-    if (x + w > cols) {
-      y += rowH;
-      x = 0;
-      rowH = 1;
-    }
-    out.push({ id: 'w' + c.key, key: c.key, x, y, w, h: c.h, view: c.view });
-    x += w;
-    rowH = Math.max(rowH, c.h);
-  }
-  return out;
 }
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
@@ -117,7 +149,7 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
     (n, pg) => n + (pg.rows ?? []).reduce((m, r) => m + (r.controls?.length ?? 0), 0),
     0
   );
-  return [
+  const base = [
     layout.family ?? '',
     layout.variantName ?? '',
     layout.variantValue ?? '',
@@ -125,129 +157,28 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
     (layout.pages ?? []).length,
     ctlCount
   ].join('|');
+  // A firmware-level variant can contain multiple choices for the same page. Amp models can
+  // switch between two pages with the same name and control count inside that one variant.
+  const alternatives = layout.pages
+    .filter((pg) => pg.selectorParamName != null && pg.value != null)
+    .map(({ name, selectorParamName, value }) => [name, selectorParamName, value]);
+  return alternatives.length ? `${base}${SELECTED_PAGES_MARKER}${JSON.stringify(alternatives)}` : base;
 }
 
-/** Build the device-authentic Default board from a v2 layout, or null when the layout carries no
- *  renderable controls (caller falls back to its curated heuristic board). `catalog` is the live control
- *  set (knobs `k<id>`, enums `e<id>`, plus `eq`/`bypass`/`meter`); `cols` is the target grid width. */
-export function buildDeviceLayoutBoard(
-  layout: DeviceLayout | null | undefined,
-  catalog: BoardCtl[],
-  cols: number
-): SurfaceBoard | null {
-  if (!layout?.pages?.length) return null;
-  const columns = Math.max(1, cols);
-  const byKey = new Map(catalog.map((c) => [c.key, c]));
+const SELECTED_PAGES_MARKER = '|selected-pages:';
 
-  // Page names key the {#each} in ControlSurface, so they MUST be unique — a layout can repeat a name
-  // (this INPUT block ships three pages all named "Gate"); suffix any repeat.
-  const usedNames = new Set<string>();
-  const uniqName = (n: string): string => {
-    const base = n || 'Page';
-    let name = base;
-    for (let i = 2; usedNames.has(name); i++) name = `${base} ${i}`;
-    usedNames.add(name);
-    return name;
-  };
-
-  const boards: Record<string, SurfaceWidget[]> = {};
-  const pageOrder: string[] = [];
-
-  for (const pg of layout.pages) {
-    const widgets: SurfaceWidget[] = [];
-    const seen = new Set<string>();
-    let gridRow = 0;
-    (pg.rows ?? []).forEach((row, rowIndex) => {
-      let x = 0;
-      let rowH = 1;
-      let placed = false;
-      for (const ctl of row.controls ?? []) {
-        const r = resolveControl(ctl, byKey);
-        if (r === 'gap') {
-          x += 1;
-          continue;
-        }
-        if (seen.has(r.key)) {
-          x += 1; // a param listed twice — keep the slot so neighbours don't shift left
-          continue;
-        }
-        const base = byKey.get(r.key);
-        if (!base) {
-          x += 1;
-          continue;
-        }
-        const w = Math.min(base.w, columns);
-        if (x + w > columns) {
-          // control doesn't fit the rest of this line — wrap onto a new grid line (still this row)
-          gridRow += rowH;
-          x = 0;
-          rowH = 1;
-        }
-        seen.add(r.key);
-        widgets.push({ id: 'w' + r.key, key: r.key, x, y: gridRow, w, h: base.h, view: r.view, row: rowIndex });
-        x += w;
-        rowH = Math.max(rowH, base.h);
-        placed = true;
-      }
-      if (placed) gridRow += rowH; // next layout row starts below the tallest widget of this one
-    });
-    if (!widgets.length) continue;
-    const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
-    boards[name] = widgets;
-    pageOrder.push(name);
-  }
-
-  if (!pageOrder.length) return null;
-
-  // Sweep anything the layout never referenced onto a trailing "More" page so nothing is lost.
-  const placedKeys = new Set(pageOrder.flatMap((p) => boards[p]!.map((w) => w.key)));
-  const rest = catalog.filter((c) => !placedKeys.has(c.key));
-  if (rest.length) {
-    const name = uniqName('More');
-    boards[name] = packSequential(rest, columns);
-    pageOrder.push(name);
-  }
-
-  return { pageOrder, page: pageOrder[0]!, boards, variantSig: layoutVariantSig(layout) };
+/** Older boards predate page alternatives in their signature. A match on their complete, older
+ *  identity lets migration recognize untouched defaults without dropping customized boards. */
+export function sameLayoutVariant(stored: string | undefined, current: string): boolean {
+  return stored === current || (!!stored && current.startsWith(`${stored}${SELECTED_PAGES_MARKER}`));
 }
 
-/** Row-preserving re-pack for a device-authentic board at a narrower column count: groups widgets by
- *  their source `row`, lays each group left→right (wrapping within the group), and starts every source
- *  row on a fresh grid line so the editor's row structure survives responsive reflow. */
-export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
-  const columns = Math.max(1, cols);
-  const rows = new Map<number, SurfaceWidget[]>();
-  const noRow: SurfaceWidget[] = [];
-  for (const w of list) {
-    if (w.row == null) noRow.push(w);
-    else {
-      const bucket = rows.get(w.row);
-      if (bucket) bucket.push(w);
-      else rows.set(w.row, [w]);
-    }
-  }
-  const out: SurfaceWidget[] = [];
-  let gy = 0;
-  for (const key of [...rows.keys()].sort((a, b) => a - b)) {
-    const rw = rows.get(key)!.slice().sort((a, b) => a.x - b.x);
-    let x = 0;
-    let rowH = 1;
-    for (const w of rw) {
-      const ww = Math.min(w.w, columns);
-      if (x + ww > columns) {
-        gy += rowH;
-        x = 0;
-        rowH = 1;
-      }
-      out.push({ ...w, x, y: gy, w: ww });
-      x += ww;
-      rowH = Math.max(rowH, w.h);
-    }
-    gy += rowH;
-  }
-  for (const w of noRow) {
-    out.push({ ...w, x: 0, y: gy });
-    gy += w.h;
-  }
-  return out;
+/** Whether changing a served parameter can select different pages of this block. */
+export function isLayoutPageSelector(layout: DeviceLayout | null, paramId: number, effectId: number): boolean {
+  if (!layout) return false;
+  const selectors = new Set(layout.pages.flatMap((pg) => pg.selectorParamName ? [pg.selectorParamName] : []));
+  return selectors.size > 0 && layout.pages.some((pg) => [
+    ...(pg.pageControls ?? []), ...pg.rows.flatMap((r) => r.controls)
+  ].some((ctl) => ctl.paramId === paramId && ctl.paramName != null && selectors.has(ctl.paramName)
+    && !isForeignControl(ctl, { family: layout.family, effectId })));
 }

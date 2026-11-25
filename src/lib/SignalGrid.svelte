@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BlockGlyph from './BlockGlyph.svelte';
   import { onMount } from 'svelte';
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
@@ -537,7 +538,7 @@
         dragTarget = null;
         document.body.style.cursor = '';
         // a barely-moved pointerup on the port = a TAP → arm link mode (tap-to-connect: pick the
-        // destination with a second tap, on this grid or on the Grid Map — survives page swipes).
+        // destination with a second tap on any grid view — survives page swipes).
         // A real drag keeps the classic drag-a-cable connect.
         if (Math.hypot(e.clientX - portStart.x, e.clientY - portStart.y) < TAP_PX) {
           editor.armLink(src);
@@ -800,7 +801,7 @@
                     <div class="sh-name">{swipeHud.m.name}</div>
                   </div>
                 {/if}
-                <span class="glyph">{cat.glyph}</span>
+                <span class="glyph"><BlockGlyph glyph={cat.glyph} /></span>
                 {#if !mapMode}
                   <span class="b-label">{label}</span>
                   {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
@@ -874,15 +875,8 @@
       </div>
     </div>
 
-    {#if !fixedTile}
-      <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
-    {/if}
   {/if}
   </div>
-  {#if fixedTile && editor.status !== 'loading' && editor.status !== 'offline'}
-    <!-- outside the scrolling viewport so it stays pinned while the fixed-size grid pans -->
-    <button class="regrid pin" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
-  {/if}
   {#if paged && editor.status === 'ready' && pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
     <button class="pgarrow" aria-label="Next page" disabled={page === pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => gridChangePage(1)}>›</button>
@@ -1481,38 +1475,6 @@
     border-radius: 1px;
   }
 
-  /* compact re-read button, floated in the grid corner (replaces the old info line) */
-  .regrid {
-    position: absolute;
-    right: 14px;
-    bottom: 12px;
-    z-index: 4;
-    border: 1px solid var(--border2);
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
-    color: var(--textdim);
-    border-radius: 9px;
-    width: 30px;
-    height: 30px;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(4px);
-  }
-  .regrid.pin {
-    right: 36px;
-    bottom: 34px;
-  }
-  .regrid:hover {
-    border-color: var(--accent);
-    color: var(--text);
-  }
-  .regrid.unsaved {
-    border-color: var(--amber-border);
-    color: var(--amber);
-  }
   .hint {
     color: var(--text-dim);
   }

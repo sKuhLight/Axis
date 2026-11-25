@@ -1,19 +1,61 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { effectiveZoom, resolveMenuPlacement, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
-  import { focusTrap, focusableWithin, nextFocusIndex } from './focusTrap';
+  import {
+    MENU_INTERACTION_IDLE,
+    activateMenuRow,
+    backMenuStep,
+    cancelMenuRow,
+    confirmMenuRow,
+    editMenuDraft,
+    effectiveZoom,
+    escapeMenuStep,
+    menuInputKey,
+    menuItemKind,
+    nextMenuItemIndex,
+    resolveAnchoredMenuPlacement,
+    resolveMenuPath,
+    resolveMenuPlacement,
+    submitMenuInput,
+    type MenuFocusTarget,
+    type MenuInteractionState,
+    type MenuStep,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition
+  } from './contextMenu';
+  import { focusTrap, focusableWithin } from './focusTrap';
 
   let {
     open,
     position,
+    anchor = null,
+    boundary = null,
     items,
     label = 'Context menu',
+    touch = false,
+    overlay = false,
     onClose
   }: {
     open: boolean;
-    position: WorkbenchMenuPosition;
+    /** Pointer position (context menus). Ignored when `anchor` is set. */
+    position?: WorkbenchMenuPosition;
+    /** Trigger element: the menu opens BELOW it, clamped inside the viewport (dropdowns). */
+    anchor?: HTMLElement | null;
+    /**
+     * Anchored menus: an element (the bar holding the trigger) the menu must not
+     * cover — it opens below this element's bottom edge, and re-places whenever
+     * the element (or the anchor) changes size.
+     */
+    boundary?: HTMLElement | null;
     items: WorkbenchMenuItem[];
     label?: string;
+    /** Touch presentation: 44px rows. */
+    touch?: boolean;
+    /**
+     * Stack in the shell-overlay band (above app chrome such as the nav sheet and
+     * dock drawers, below toasts and the drag layer) — for menus opened from the
+     * edit bar, which sits outside the app.
+     */
+    overlay?: boolean;
     onClose: () => void;
   } = $props();
 
@@ -25,65 +67,201 @@
   let scrimEl = $state<HTMLElement | null>(null);
   let left = $state(0);
   let top = $state(0);
+  let maxHeight = $state<number | null>(null);
 
-  function run(item: WorkbenchMenuItem) {
-    if (item.disabled) return;
-    item.run();
-    onClose();
+  // ── Drill-in / inline-row state (pure state machine in contextMenu.ts; reset
+  //    whenever the menu closes) ─────────────────────────────────────────────
+  let menu = $state.raw<MenuInteractionState>(MENU_INTERACTION_IDLE);
+
+  const level = $derived(resolveMenuPath(items, menu.path));
+  // The state with its path trimmed to the levels that still exist.
+  const current = $derived<MenuInteractionState>({ ...menu, path: level.path });
+  const BACK_ROW: WorkbenchMenuItem = { id: '__aw-menu-back__', label: 'Back', run: () => {} };
+  // Every rendered row (Back first when drilled in). Row indexes drive roving focus.
+  const rows = $derived(level.path.length ? [BACK_ROW, ...level.items] : level.items);
+  const rowOffset = $derived(level.path.length ? 1 : 0);
+  const levelTitle = $derived(level.trail.length ? level.trail[level.trail.length - 1].label : '');
+  const levelKey = $derived(`${level.path.join('/')}|${menu.confirmingId ?? ''}|${menu.editingId ?? ''}`);
+
+  $effect.pre(() => {
+    if (!open) menu = MENU_INTERACTION_IDLE;
+  });
+
+  function focusRow(index: number) {
+    if (!menuEl || index < 0) return;
+    const rowEl = menuEl.querySelector<HTMLElement>(`[data-menu-row="${index}"]`);
+    if (!rowEl) return;
+    if (rowEl.matches('button')) {
+      rowEl.focus();
+      return;
+    }
+    focusableWithin(rowEl)[0]?.focus();
   }
 
-  // Roving arrow-key navigation between the (enabled) menu items — the platform
-  // convention for a `role="menu"`. Tab-trap + Escape + focus-restore come from
-  // `use:focusTrap`; here we add ↑/↓/Home/End and Enter/Space activation.
-  function moveFocus(delta: number) {
+  /** After a level / inline-row swap the focused node is gone — put focus back inside. */
+  async function refocus(target: MenuFocusTarget) {
+    await tick();
     if (!menuEl) return;
-    const items = focusableWithin(menuEl);
-    if (items.length === 0) return;
-    const current = items.indexOf(document.activeElement as HTMLElement);
-    const next = nextFocusIndex(current, items.length, delta);
-    items[next]?.focus();
-  }
-
-  function menuKeydown(event: KeyboardEvent) {
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        moveFocus(1);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        moveFocus(-1);
-        break;
-      case 'Home': {
-        event.preventDefault();
-        const first = focusableWithin(menuEl!)[0];
-        first?.focus();
+    switch (target.kind) {
+      case 'first-child': {
+        // First child row (skip the Back row) when there is one, else Back.
+        const first = nextMenuItemIndex(rows, 0, 1);
+        focusRow(first > 0 ? first : 0);
         break;
       }
-      case 'End': {
-        event.preventDefault();
-        const all = focusableWithin(menuEl!);
-        all[all.length - 1]?.focus();
+      case 'row': {
+        const index = level.items.findIndex((item) => item.id === target.id);
+        focusRow(index >= 0 ? index + rowOffset : nextMenuItemIndex(rows, -1, 1));
+        break;
+      }
+      case 'cancel':
+        menuEl.querySelector<HTMLElement>('[data-menu-cancel]')?.focus();
+        break;
+      case 'input': {
+        const input = menuEl.querySelector<HTMLInputElement>('[data-menu-input]');
+        input?.focus();
+        input?.select();
         break;
       }
     }
   }
 
+  /** Apply a state-machine step: adopt the state, run / close, move focus. */
+  function apply(step: MenuStep, item?: WorkbenchMenuItem) {
+    menu = step.state;
+    if (step.run && item) item.run();
+    if (step.close) {
+      onClose();
+      return;
+    }
+    if (step.focus) void refocus(step.focus);
+  }
+
+  function currentRowIndex(): number {
+    const active = document.activeElement as HTMLElement | null;
+    const rowEl = active?.closest<HTMLElement>('[data-menu-row]');
+    return rowEl && menuEl?.contains(rowEl) ? Number(rowEl.dataset.menuRow) : -1;
+  }
+
+  const activate = (item: WorkbenchMenuItem) => apply(activateMenuRow(current, item), item);
+  const confirmRun = (item: WorkbenchMenuItem) => apply(confirmMenuRow(current, item), item);
+  const cancelInline = () => apply(cancelMenuRow(current));
+  const goBack = () => apply(backMenuStep(current));
+  const submitInput = (item: WorkbenchMenuItem) => apply(submitMenuInput(current, item));
+  const setDraft = (value: string) => (menu = editMenuDraft(menu, value));
+
+  function inputKeydown(event: KeyboardEvent, item: WorkbenchMenuItem) {
+    const step = menuInputKey(current, item, event.key);
+    if (!step) return;
+    event.preventDefault();
+    // Escape cancels only the inline field; the menu (focusTrap) must not see it.
+    if (event.key === 'Escape') event.stopPropagation();
+    apply(step);
+  }
+
+  // Escape (routed through use:focusTrap): unwind one step — inline field /
+  // confirm first, then one drill level — and close only at the root.
+  const handleEscape = () => apply(escapeMenuStep(current));
+
+  // Roving arrow-key navigation between the (enabled) rows — the platform
+  // convention for a `role="menu"`. Tab-trap + Escape + focus-restore come from
+  // `use:focusTrap`; here we add ↑/↓/Home/End, ←/→ for drill-in levels, and
+  // Enter/Space activation (native on the row buttons).
+  function menuKeydown(event: KeyboardEvent) {
+    if ((event.target as HTMLElement | null)?.tagName === 'INPUT') return;
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        focusRow(nextMenuItemIndex(rows, currentRowIndex(), 1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusRow(nextMenuItemIndex(rows, currentRowIndex(), -1));
+        break;
+      case 'Home':
+        event.preventDefault();
+        focusRow(nextMenuItemIndex(rows, -1, 1));
+        break;
+      case 'End':
+        event.preventDefault();
+        focusRow(nextMenuItemIndex(rows, -1, -1));
+        break;
+      case 'ArrowLeft':
+        if (level.path.length) {
+          event.preventDefault();
+          goBack();
+        }
+        break;
+      case 'ArrowRight': {
+        const row = rows[currentRowIndex()];
+        if (row && menuItemKind(row) === 'submenu' && !row.disabled) {
+          event.preventDefault();
+          activate(row);
+        }
+        break;
+      }
+    }
+  }
+
+  /** The visual bottom edge the anchored menu must stay below (the boundary bar), if any. */
+  function boundaryFloor(): number | undefined {
+    return boundary && boundary.isConnected ? boundary.getBoundingClientRect().bottom : undefined;
+  }
+
+  /**
+   * Measure + place an anchored menu. A detached anchor (the trigger re-rendered
+   * away) keeps the last placement instead of jumping to (0,0).
+   */
+  function placeAnchored(anchorEl: HTMLElement) {
+    if (!menuEl || !anchorEl.isConnected) return;
+    const rect = menuEl.getBoundingClientRect();
+    const zoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const next = resolveAnchoredMenuPlacement(
+      anchorEl.getBoundingClientRect(),
+      viewport,
+      { width: rect.width, height: rect.height },
+      zoom,
+      4,
+      boundaryFloor()
+    );
+    left = next.x;
+    top = next.y;
+    maxHeight = next.maxHeight;
+  }
+
   $effect(() => {
     if (!open) return;
-    // First paint: place at the raw pointer position divided by the current best
-    // zoom estimate so a zoomed menu doesn't flash at the wrong spot before the
-    // post-tick measure refines it.
+    // Re-place whenever the drill level or an inline row changes the menu size.
+    void levelKey;
+    const anchorEl = anchor;
+    // First paint: place at the raw anchor / pointer position divided by the
+    // current best zoom estimate so a zoomed menu doesn't flash at the wrong spot
+    // before the post-tick measure refines it.
     const preZoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
-    left = position.x / preZoom;
-    top = position.y / preZoom;
+    if (anchorEl) {
+      if (anchorEl.isConnected) {
+        const rect = anchorEl.getBoundingClientRect();
+        const floor = boundaryFloor();
+        left = rect.left / preZoom;
+        top = (Math.max(rect.bottom, floor ?? rect.bottom) + 4) / preZoom;
+      }
+    } else {
+      left = (position?.x ?? 0) / preZoom;
+      top = (position?.y ?? 0) / preZoom;
+    }
     void tick().then(() => {
       if (!menuEl) return;
+      if (anchorEl) {
+        placeAnchored(anchorEl);
+        return;
+      }
       const rect = menuEl.getBoundingClientRect();
       const zoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
       const next = resolveMenuPlacement(
-        position,
-        { width: window.innerWidth, height: window.innerHeight },
+        position ?? { x: 0, y: 0 },
+        viewport,
         { width: rect.width, height: rect.height },
         zoom
       );
@@ -91,33 +269,115 @@
       top = next.y;
     });
   });
+
+  // An anchored menu follows its anchor: when the anchor, the boundary bar, or
+  // any positioned ancestor of the anchor changes size (e.g. the edit bar grows
+  // a second row for an error chip), re-place on the next frame.
+  $effect(() => {
+    if (!open || !anchor || typeof ResizeObserver === 'undefined') return;
+    const anchorEl = anchor;
+    const observed = new Set<Element>([anchorEl]);
+    if (boundary) observed.add(boundary);
+    for (let el = anchorEl.offsetParent; el; el = el instanceof HTMLElement ? el.offsetParent : null) observed.add(el);
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => placeAnchored(anchorEl));
+    };
+    const observer = new ResizeObserver(schedule);
+    observed.forEach((el) => observer.observe(el));
+    window.addEventListener('resize', schedule);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', schedule);
+    };
+  });
 </script>
 
 {#if open}
-  <button class="aw-menu-scrim" type="button" aria-label="Close menu" bind:this={scrimEl} onclick={onClose}></button>
+  <button class="aw-menu-scrim" class:overlay type="button" aria-label="Close menu" bind:this={scrimEl} onclick={onClose}></button>
   <div
     class="aw-context-menu"
+    class:anchored={!!anchor}
+    class:overlay
+    class:touch
     bind:this={menuEl}
-    use:focusTrap={{ onClose }}
+    use:focusTrap={{ onClose: handleEscape }}
     role="menu"
-    aria-label={label}
+    aria-label={levelTitle ? `${label} · ${levelTitle}` : label}
     tabindex="-1"
     onkeydown={menuKeydown}
-    style={`left:${left}px; top:${top}px;`}
+    style={`left:${left}px; top:${top}px;${anchor && maxHeight !== null ? ` max-height:${maxHeight}px;` : ''}`}
   >
-    {#each items as item (item.id)}
-      <button
-        class="aw-menu-item"
-        class:danger={item.danger}
-        class:separated={item.separatorBefore}
-        type="button"
-        role="menuitem"
-        disabled={item.disabled}
-        onclick={() => run(item)}
-      >
-        <span>{item.label}</span>
-        {#if item.hint}<i>{item.hint}</i>{/if}
+    {#if level.path.length}
+      <button class="aw-menu-item aw-menu-back" type="button" role="menuitem" data-menu-row="0" onclick={goBack}>
+        <span class="aw-menu-glyph" aria-hidden="true">‹</span>
+        <span>Back</span>
       </button>
+      {#if !level.items[0] || menuItemKind(level.items[0]) !== 'header'}
+        <!-- The level's own title, unless its rows already start with a header. -->
+        <div class="aw-menu-header" role="presentation">{levelTitle}</div>
+      {/if}
+    {/if}
+    {#each level.items as item, index (item.id)}
+      {@const kind = menuItemKind(item)}
+      {@const row = index + rowOffset}
+      {#if kind === 'header'}
+        <div class="aw-menu-header {item.className ?? ''}" class:separated={item.separatorBefore} role="presentation" data-menu-row={row}>
+          {item.label}
+        </div>
+      {:else if item.confirm && menu.confirmingId === item.id}
+        <div class="aw-menu-confirm" class:separated={item.separatorBefore} role="group" aria-label={item.confirm.prompt} data-menu-row={row}>
+          <p class="aw-menu-confirm-prompt">{item.confirm.prompt}</p>
+          <div class="aw-menu-confirm-actions">
+            <button
+              class="aw-menu-confirm-btn"
+              class:danger={item.danger}
+              type="button"
+              role="menuitem"
+              data-menu-confirm
+              onclick={() => confirmRun(item)}
+            >
+              {item.confirm.confirmLabel ?? 'Confirm'}
+            </button>
+            <button class="aw-menu-confirm-btn" type="button" role="menuitem" data-menu-cancel onclick={cancelInline}>
+              {item.confirm.cancelLabel ?? 'Cancel'}
+            </button>
+          </div>
+        </div>
+      {:else if kind === 'input' && menu.editingId === item.id}
+        <div class="aw-menu-input" class:separated={item.separatorBefore} role="group" aria-label={item.label} data-menu-row={row}>
+          <input
+            value={menu.draft}
+            oninput={(event) => setDraft(event.currentTarget.value)}
+            type="text"
+            aria-label={item.label}
+            placeholder={item.placeholder ?? ''}
+            data-menu-input
+            onkeydown={(event) => inputKeydown(event, item)}
+          />
+          <button class="aw-menu-confirm-btn" type="button" role="menuitem" onclick={() => submitInput(item)}>Save</button>
+        </div>
+      {:else}
+        <button
+          class="aw-menu-item {item.className ?? ''}"
+          class:danger={item.danger}
+          class:separated={item.separatorBefore}
+          type="button"
+          role={kind === 'radio' ? 'menuitemradio' : 'menuitem'}
+          aria-checked={kind === 'radio' ? !!item.checked : undefined}
+          aria-haspopup={kind === 'submenu' ? 'menu' : undefined}
+          disabled={item.disabled}
+          data-menu-row={row}
+          onclick={() => activate(item)}
+        >
+          {#if kind === 'radio'}<span class="aw-menu-check" class:on={item.checked} aria-hidden="true"></span>{/if}
+          <span>{item.label}</span>
+          {#if item.hint}<i>{item.hint}</i>{/if}
+          {#if kind === 'submenu'}<b class="aw-menu-chev" aria-hidden="true">›</b>{/if}
+        </button>
+      {/if}
     {/each}
   </div>
 {/if}
@@ -141,6 +401,24 @@
     background: var(--aw-surface);
     box-shadow: 0 18px 54px rgba(0, 0, 0, 0.46);
     outline: none;
+  }
+  /* Shell-overlay band (edit-bar menus): above every piece of app chrome (the
+     hamburger 120, dock openers 170, dock drawer 180, nav sheet 230, the
+     Customize drawers 237/238), below toasts (300) and the drag layer (1000). */
+  .aw-menu-scrim.overlay {
+    z-index: 239;
+  }
+  .aw-context-menu.overlay {
+    z-index: 240;
+  }
+  /* Dropdowns opened from a trigger (edit bar): a fixed comfortable width that
+     still fits a phone, scrolling when taller than the space below the bar. */
+  .aw-context-menu.anchored {
+    width: 268px;
+    max-width: calc(100vw - 16px);
+    overflow-y: auto;
+    border-color: var(--aw-border-3);
+    border-radius: 12px;
   }
   .aw-menu-item {
     width: 100%;
@@ -175,7 +453,10 @@
   .aw-menu-item.danger {
     color: var(--aw-danger);
   }
-  .aw-menu-item.separated {
+  .aw-menu-item.separated,
+  .aw-menu-header.separated,
+  .aw-menu-confirm.separated,
+  .aw-menu-input.separated {
     margin-top: 6px;
     border-top: 1px solid var(--aw-border);
     border-top-left-radius: 0;
@@ -194,5 +475,109 @@
     color: var(--aw-text-faint);
     font: 700 10px/1 var(--aw-font-mono);
     font-style: normal;
+  }
+  /* Radio rows: a leading check slot (CSS-drawn so the row text stays the label). */
+  .aw-menu-item .aw-menu-check {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--aw-border-3);
+    border-radius: 50%;
+  }
+  .aw-menu-item .aw-menu-check.on {
+    border-color: var(--aw-accent);
+    background: radial-gradient(circle, var(--aw-accent) 0 3px, transparent 3.5px);
+  }
+  .aw-menu-item[aria-checked='true'] {
+    color: var(--aw-text);
+  }
+  .aw-menu-chev {
+    flex: none;
+    color: var(--aw-text-muted);
+    font: 600 15px/1 var(--aw-font-ui);
+  }
+  .aw-menu-item .aw-menu-glyph {
+    flex: none;
+    color: var(--aw-text-muted);
+    font: 600 15px/1 var(--aw-font-ui);
+  }
+  .aw-menu-header {
+    padding: 9px 9px 6px;
+    color: var(--aw-text-faint);
+    font: 700 10px/1.3 var(--aw-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .aw-menu-confirm,
+  .aw-menu-input {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 9px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--aw-danger) 7%, transparent);
+  }
+  .aw-menu-input {
+    flex-direction: row;
+    align-items: center;
+    background: transparent;
+  }
+  .aw-menu-confirm-prompt {
+    margin: 0;
+    color: var(--aw-text);
+    font: 600 12px/1.4 var(--aw-font-ui);
+  }
+  .aw-menu-confirm-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .aw-menu-confirm-btn {
+    flex: 1;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--aw-border-2);
+    border-radius: 6px;
+    background: var(--aw-bg-2);
+    color: var(--aw-text-2);
+    cursor: pointer;
+    font: 700 12px/1 var(--aw-font-ui);
+  }
+  .aw-menu-input .aw-menu-confirm-btn {
+    flex: none;
+  }
+  .aw-menu-confirm-btn:hover {
+    border-color: var(--aw-accent);
+    color: var(--aw-text);
+  }
+  .aw-menu-confirm-btn.danger {
+    border-color: var(--aw-danger);
+    background: color-mix(in srgb, var(--aw-danger) 16%, var(--aw-bg-2));
+    color: var(--aw-text);
+  }
+  .aw-menu-confirm-btn:focus-visible,
+  .aw-menu-input input:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 1px;
+  }
+  .aw-menu-input input {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--aw-border-3);
+    border-radius: 6px;
+    background: var(--aw-bg);
+    color: var(--aw-text);
+    font: 600 12px/1 var(--aw-font-ui);
+  }
+  /* Touch presentation (edit bar below the phone breakpoint): 44px rows. */
+  .aw-context-menu.touch .aw-menu-item,
+  .aw-context-menu.touch .aw-menu-confirm-btn,
+  .aw-context-menu.touch .aw-menu-input input {
+    min-height: 44px;
+    font-size: 14px;
   }
 </style>

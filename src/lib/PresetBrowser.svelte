@@ -471,8 +471,9 @@
   let folderFilter = $state<string | null>(null);
   async function addFolder() {
     const r = await library.importFolder();
-    if (r) editor.showToast(`Imported ${r.ok} preset${r.ok === 1 ? '' : 's'}${r.failed ? ` · ${r.failed} skipped` : ''}`, r.ok ? '#33c46b' : '#f5a623');
-    else editor.showToast('No .syx files found in that folder', '#f5a623');
+    if (!r) return; // picker cancelled — nothing to report
+    if (!r.ok && !r.failed) editor.showToast('No .syx files found in that folder', '#f5a623');
+    else editor.showToast(`Imported ${r.ok} preset${r.ok === 1 ? '' : 's'}${r.failed ? ` · ${r.failed} skipped` : ''}`, r.ok ? '#33c46b' : '#f5a623');
   }
 
   // ── context menu (desktop right-click · mobile long-press) ──

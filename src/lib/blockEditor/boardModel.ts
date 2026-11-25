@@ -1,0 +1,1307 @@
+// Block Editor board model (v2): a free 2D grid per page, measured in CELLS.
+//
+// One knob is 2×2 cells and a page is at most `MAXC` (24) cells wide, i.e. twelve knobs side by side;
+// the height is free (capped at `MAX_ROWS`). Items are either controls (bound to a catalog key such as
+// `k12`, `e4`, `eq`) or dividers (horizontal / vertical rules with an optional label, one cell thick).
+//
+// A board may also have a FIXED AREA: items that stay in view beside every page (`fixed`, 2..8 cells wide,
+// with a coordinate space of its own). In every operation it is one more list of items under the reserved
+// page id `FIXED_PAGE`: the same functions move, resize, add and remove there. It is no page: it is never in
+// `pageOrder`, never the current page, and the page operations (rename, duplicate, move, delete) refuse it.
+//
+// Everything here is pure and immutable: every operation returns a new board / list, and an operation
+// that changes nothing hands back the very same reference so callers can skip a save or a render.
+// No Svelte, no DOM — unit-tested in node (boardModel.test.ts).
+
+import { isGraphKey } from '../blockVisuals';
+import type { SurfaceBoard } from '../deviceLayoutBoard';
+
+// ── types ────────────────────────────────────────────────────────────────────────────────────────
+
+export type BeView =
+  | 'knob'
+  | 'fader'
+  | 'slider'
+  | 'number'
+  | 'button'
+  | 'switch'
+  | 'select'
+  | 'eq'
+  // EQ renderings of the same footprint: the block's input EQ, its output EQ, or a PEQ (see eqStyles.ts).
+  | 'eqIn'
+  | 'eqOut'
+  | 'eqPeq'
+  | 'action'
+  | 'meter'
+  | 'wave'
+  | 'graph';
+export type BeDividerKind = 'hdiv' | 'vdiv';
+
+export const BE_VIEWS: readonly BeView[] = ['knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'eqIn', 'eqOut', 'eqPeq', 'action', 'meter', 'wave', 'graph'];
+export const BE_DIVIDER_KINDS: readonly BeDividerKind[] = ['hdiv', 'vdiv'];
+
+export interface BeRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+export interface BeControl extends BeRect {
+  id: string;
+  /** Catalog key (`k<paramId>`, `e<paramId>`, `eq`, `bypass`, `meter`, `wave`, `graph:<visual key>`). */
+  key: string;
+  view: BeView;
+  /** Source row of a device-layout board; keeps rows together when the page reflows. */
+  row?: number;
+}
+export interface BeDivider extends BeRect {
+  id: string;
+  kind: BeDividerKind;
+  label?: string;
+}
+export type BeItem = BeControl | BeDivider;
+
+/** The fixed area: items that stay in view beside every page, in cells of its own (0..cols). */
+export interface BeFixedArea {
+  /** Width in cells (2..8; a knob is 2 cells wide). */
+  cols: number;
+  items: BeItem[];
+}
+
+export interface BeBoard {
+  v: 2;
+  pageOrder: string[];
+  page: string;
+  boards: Record<string, BeItem[]>;
+  /** Absent: the board has no fixed area (its pages use the full width). */
+  fixed?: BeFixedArea;
+  /** Fingerprint of the device-layout variant a Default board was seeded from. */
+  variantSig?: string;
+}
+
+/** The pre-rework board shape (no `v`, one control = one cell). */
+export type BeBoardV1 = SurfaceBoard;
+
+/** A divider is recognised by a valid `kind`; anything else (even with a stray `kind`) is a control. */
+export const isDivider = (it: BeItem): it is BeDivider => {
+  const k = (it as { kind?: unknown }).kind;
+  return k === 'hdiv' || k === 'vdiv';
+};
+export const isControl = (it: BeItem): it is BeControl => !isDivider(it);
+export const isBeView = (v: unknown): v is BeView => typeof v === 'string' && (BE_VIEWS as readonly string[]).includes(v);
+
+/** Own-property check, so page names like `constructor` or `toString` never hit Object.prototype. */
+export const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+/** The fixed area's page id in the operation layer. It starts with a control character, so no page name a
+ *  user can type (or a layout can give) ever equals it. Never stored, never in `pageOrder`. */
+export const FIXED_PAGE = '\u0001fixed';
+/** Page names that can never be used (`__proto__` would rewrite an object's prototype; the fixed area's id). */
+export const isReservedPageName = (n: string): boolean => n === '__proto__' || n === FIXED_PAGE;
+/** How a page (or the fixed area) is named in menus and lists, and inside a sentence. */
+export const pageLabel = (page: string): string => (page === FIXED_PAGE ? 'Fixed area' : page);
+export const pageInText = (page: string): string => (page === FIXED_PAGE ? 'the fixed area' : page);
+
+// ── size table ───────────────────────────────────────────────────────────────────────────────────
+
+/** Maximum page width in cells (12 knobs). */
+export const MAXC = 24;
+/** Maximum page height in cells; positions are clamped so no page can grow without bound. */
+export const MAX_ROWS = 512;
+/** Width limits of the fixed area in cells, and the width a new one gets (two knobs). */
+export const FIXED_MIN_COLS = 2;
+export const FIXED_MAX_COLS = 8;
+export const FIXED_DEFAULT_COLS = 4;
+
+export interface BeSpec {
+  w: number;
+  h: number;
+  minW: number;
+  maxW: number;
+  minH: number;
+  maxH: number;
+}
+
+/** Default size and limits per view / divider kind, in cells. */
+export const BE_SPEC: Readonly<Record<BeView | BeDividerKind, BeSpec>> = {
+  knob: { w: 2, h: 2, minW: 2, maxW: 6, minH: 2, maxH: 6 },
+  fader: { w: 2, h: 4, minW: 1, maxW: 3, minH: 3, maxH: 8 },
+  slider: { w: 6, h: 1, minW: 3, maxW: 20, minH: 1, maxH: 2 },
+  number: { w: 2, h: 2, minW: 2, maxW: 4, minH: 1, maxH: 2 },
+  button: { w: 2, h: 2, minW: 2, maxW: 4, minH: 1, maxH: 2 },
+  switch: { w: 2, h: 2, minW: 1, maxW: 3, minH: 1, maxH: 3 },
+  select: { w: 2, h: 2, minW: 2, maxW: 6, minH: 1, maxH: 2 },
+  eq: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  // The EQ style variants share the eq tile's footprint exactly (see eqStyles.ts): switching a view
+  // never resizes or moves the tile.
+  eqIn: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  eqOut: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  eqPeq: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  action: { w: 2, h: 1, minW: 2, maxW: 6, minH: 1, maxH: 2 },
+  // Upright by default (a block can report several bars, e.g. L/R); a wide, one-cell-high shape gives the
+  // lying read-out variant.
+  meter: { w: 2, h: 4, minW: 1, maxW: 24, minH: 1, maxH: 8 },
+  wave: { w: 8, h: 4, minW: 6, maxW: 24, minH: 3, maxH: 8 },
+  // read-only graph display (dynamics curve, LFO scope, filter response, …): one phone row wide by default
+  graph: { w: 8, h: 4, minW: 4, maxW: 24, minH: 3, maxH: 8 },
+  hdiv: { w: 6, h: 1, minW: 2, maxW: MAXC, minH: 1, maxH: 1 },
+  vdiv: { w: 1, h: 4, minW: 1, maxW: 1, minH: 2, maxH: 24 }
+};
+
+export type BeSizeLabel = 'S' | 'M' | 'L';
+export interface BePreset {
+  w: number;
+  h: number;
+  label: BeSizeLabel;
+}
+const P = (w: number, h: number, label: BeSizeLabel): BePreset => ({ w, h, label });
+
+/** S/M/L size presets per view (the arrange bar's size buttons). */
+export const BE_PRESETS: Readonly<Record<BeView, readonly BePreset[]>> = {
+  knob: [P(2, 2, 'S'), P(3, 3, 'M'), P(4, 4, 'L')],
+  fader: [P(2, 4, 'S'), P(2, 5, 'M'), P(2, 6, 'L')],
+  slider: [P(4, 1, 'S'), P(6, 1, 'M'), P(8, 1, 'L')],
+  number: [P(2, 1, 'S'), P(2, 2, 'M'), P(3, 2, 'L')],
+  button: [P(2, 1, 'S'), P(2, 2, 'M'), P(3, 2, 'L')],
+  switch: [P(2, 1, 'S'), P(2, 2, 'M')],
+  select: [P(2, 1, 'S'), P(2, 2, 'M'), P(4, 2, 'L')],
+  eq: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqIn: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqOut: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  eqPeq: [P(8, 4, 'S'), P(10, 4, 'M'), P(12, 5, 'L')],
+  action: [P(2, 1, 'S'), P(3, 1, 'M'), P(2, 2, 'L')],
+  meter: [P(1, 4, 'S'), P(2, 4, 'M'), P(2, 6, 'L')],
+  wave: [P(8, 4, 'S'), P(12, 4, 'M'), P(16, 6, 'L')],
+  graph: [P(6, 3, 'S'), P(8, 4, 'M'), P(12, 6, 'L')]
+};
+
+const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
+const int = (v: number): number => (Number.isFinite(v) ? Math.round(v) : 0);
+
+/** Clamp a size to a view's / divider's limits and to the page width. */
+export function clampSize(spec: BeSpec, w: number, h: number): { w: number; h: number } {
+  return { w: clamp(int(w), spec.minW, Math.min(spec.maxW, MAXC)), h: clamp(int(h), spec.minH, spec.maxH) };
+}
+
+/** The view a key gets when nothing better is known (used for unknown stored views). */
+export function defaultViewForKey(key: string): BeView {
+  if (key === 'eq') return 'eq';
+  if (key === 'bypass') return 'action';
+  if (key === 'meter') return 'meter';
+  if (key === 'wave') return 'wave';
+  if (isGraphKey(key)) return 'graph';
+  if (key.startsWith('e')) return 'button';
+  return 'knob';
+}
+
+// ── ids ──────────────────────────────────────────────────────────────────────────────────────────
+
+export type BeIdGen = () => string;
+
+let idCounter = 0;
+/** Default id generator for user actions: time-seeded, monotonic within a session. */
+export const defaultIdGen: BeIdGen = () => 'be' + Date.now().toString(36) + (idCounter++).toString(36);
+
+/** Deterministic generator for tests and reproducible builds (`p1`, `p2`, …). */
+export function sequentialIdGen(prefix = 'id'): BeIdGen {
+  let n = 0;
+  return () => `${prefix}${++n}`;
+}
+
+// ── geometry on one page ─────────────────────────────────────────────────────────────────────────
+
+type Placed = BeRect & { id: string };
+
+/** Extent of a page in cells, never less than 1×1. */
+export function bbox(list: readonly BeRect[]): { C: number; R: number } {
+  let C = 1;
+  let R = 1;
+  for (const it of list) {
+    C = Math.max(C, it.x + it.w);
+    R = Math.max(R, it.y + it.h);
+  }
+  return { C, R };
+}
+
+// Page dividers can lie on a grid line. Only a positive-area intersection occupies cells.
+const overlaps = (a: BeRect, b: BeRect): boolean =>
+  Math.max(a.x, b.x) < Math.min(a.x + a.w, b.x + b.w) &&
+  Math.max(a.y, b.y) < Math.min(a.y + a.h, b.y + b.h);
+
+/** True when a w×h rect at (x,y) stays inside the page (`cols` cells wide) and touches nothing else on it. */
+export function fits(list: readonly Placed[], x: number, y: number, w: number, h: number, exceptId?: string, cols: number = MAXC): boolean {
+  if (x < 0 || y < 0 || x + w > cols) return false;
+  // A line divider (h = 0 / w = 0) covers no cell: it always fits and never blocks a control, even where it
+  // sits on the same row edge.
+  if (w === 0 || h === 0) return true;
+  const r = { x, y, w, h };
+  return !list.some((o) => o.id !== exceptId && o.w > 0 && o.h > 0 && overlaps(r, o));
+}
+
+/** First free spot (row-major from the top-left) for a w×h rect; below everything if the page is full. */
+export function findFree(list: readonly Placed[], w: number, h: number, exceptId?: string, cols: number = MAXC): { x: number; y: number } {
+  const ww = Math.min(w, cols);
+  const { R } = bbox(list);
+  for (let y = 0; y <= R + h; y++) {
+    for (let x = 0; x <= cols - ww; x++) if (fits(list, x, y, ww, h, exceptId, cols)) return { x, y };
+  }
+  return { x: 0, y: R };
+}
+
+/** Nearest free spot to (x0,y0): first the same line to the right, then the following lines, closest
+ *  column first. Used to resolve overlaps without throwing an item across the page. */
+export function findNear(list: readonly Placed[], w: number, h: number, x0: number, y0: number, exceptId?: string, cols: number = MAXC): { x: number; y: number } {
+  const ww = Math.min(w, cols);
+  const sx = clamp(int(x0), 0, cols - ww);
+  const sy = Math.max(0, int(y0));
+  for (let x = sx; x <= cols - ww; x++) if (fits(list, x, sy, ww, h, exceptId, cols)) return { x, y: sy };
+  const xs = Array.from({ length: cols - ww + 1 }, (_, i) => i).sort(
+    (a, b) => Math.abs(a - sx) - Math.abs(b - sx) || (a < sx ? 1 : 0) - (b < sx ? 1 : 0)
+  );
+  const { R } = bbox(list);
+  const last = Math.max(R, sy + 1);
+  for (let y = sy + 1; y <= last; y++) for (const x of xs) if (fits(list, x, y, ww, h, exceptId, cols)) return { x, y };
+  return { x: sx, y: last };
+}
+
+/** Map coordinates so the gaps between covered spans disappear (leading gap included). Works on
+ *  intervals, so it never allocates per cell. */
+function squeeze(spans: [number, number][]): (v: number) => number {
+  const merged: [number, number, number][] = []; // [start, end, shift]
+  let removed = 0;
+  let end = 0;
+  for (const [a, b] of spans.slice().sort((p, q) => p[0] - q[0])) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else {
+      removed += a - end;
+      merged.push([a, b, removed]);
+    }
+    end = merged[merged.length - 1]![1];
+  }
+  return (v) => {
+    for (const [a, b, shift] of merged) if (v >= a && v < b) return v - shift;
+    return v;
+  };
+}
+
+/** Remove empty rows and columns (also leading ones) from a page. Same reference when nothing moves.
+ *  A full-width horizontal divider covers every column, so no column is removed then (as in the
+ *  design template). */
+export function closeGaps<T extends BeItem>(list: readonly T[]): T[] {
+  if (!list.length) return list as T[];
+  const mx = squeeze(list.map((it) => [it.x, it.x + it.w]));
+  const my = squeeze(list.map((it) => [it.y, it.y + it.h]));
+  let changed = false;
+  const out = list.map((it) => {
+    const x = mx(it.x);
+    const y = my(it.y);
+    if (x === it.x && y === it.y) return it;
+    changed = true;
+    return { ...it, x, y };
+  });
+  return changed ? out : (list as T[]);
+}
+
+/** Gravity tidy: in reading order every item (dividers included) slides up as far as it can, then left.
+ *  An item only checks against items already tidied AND the ones still waiting at their original
+ *  positions, so valid input never ends up overlapping. Relative order is kept: a section under a
+ *  horizontal divider stays under it. Same reference when nothing moves. */
+export function tidy<T extends BeItem>(list: readonly T[]): T[] {
+  const order = list.map((it, i) => ({ it, i })).sort((a, b) => a.it.y - b.it.y || a.it.x - b.it.x || a.i - b.i);
+  const placed: Placed[] = [];
+  const pending = new Map<number, Placed>(order.map(({ it, i }) => [i, { id: `#${i}`, x: it.x, y: it.y, w: it.w, h: it.h }]));
+  const next = new Array<T>(list.length);
+  let changed = false;
+  for (const { it, i } of order) {
+    pending.delete(i);
+    const others = [...placed, ...pending.values()];
+    let y = it.y;
+    while (y > 0 && fits(others, it.x, y - 1, it.w, it.h)) y--;
+    let x = it.x;
+    while (x > 0 && fits(others, x - 1, y, it.w, it.h)) x--;
+    placed.push({ id: `#${i}`, x, y, w: it.w, h: it.h });
+    if (x !== it.x || y !== it.y) {
+      changed = true;
+      next[i] = { ...it, x, y };
+    } else next[i] = it;
+  }
+  return changed ? next : (list as T[]);
+}
+
+export interface BeReflow {
+  /** Display position per item id (dividers are not part of a reflow). */
+  pos: Record<string, BeRect>;
+  rows: number;
+}
+
+/** Re-pack a page into `cols` columns for a narrow display (the board itself is not changed).
+ *  Dividers are dropped. Items carrying a source `row` keep their rows: each row starts on a fresh line
+ *  and wraps within itself (like the previous editor's row-preserving pack). Other items flow into the
+ *  first free spot in reading order. */
+export function reflowPack(list: readonly BeItem[], cols: number): BeReflow {
+  const columns = Math.max(1, Math.floor(cols));
+  const controls = list.filter(isControl);
+  const pos: Record<string, BeRect> = {};
+  const placed: Placed[] = [];
+  const fitsIn = (x: number, y: number, w: number, h: number): boolean =>
+    x >= 0 && y >= 0 && x + w <= columns && !placed.some((p) => overlaps({ x, y, w, h }, p));
+  let rows = 1;
+  const put = (it: BeControl, x: number, y: number, w: number): void => {
+    const r = { x, y, w, h: it.h };
+    pos[it.id] = r;
+    placed.push({ id: it.id, ...r });
+    rows = Math.max(rows, y + it.h);
+  };
+
+  // 1) row-tagged items: one source row after another, wrapping inside the row
+  const byRow = new Map<number, BeControl[]>();
+  for (const it of controls) {
+    if (it.row == null) continue;
+    const bucket = byRow.get(it.row);
+    if (bucket) bucket.push(it);
+    else byRow.set(it.row, [it]);
+  }
+  let gy = 0;
+  for (const key of [...byRow.keys()].sort((a, b) => a - b)) {
+    const items = byRow.get(key)!.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+    let x = 0;
+    let rowH = 1;
+    for (const it of items) {
+      const w = Math.min(it.w, columns);
+      if (x + w > columns) {
+        gy += rowH;
+        x = 0;
+        rowH = 1;
+      }
+      put(it, x, gy, w);
+      x += w;
+      rowH = Math.max(rowH, it.h);
+    }
+    gy += rowH;
+  }
+
+  // 2) free items: first free spot in reading order (bounded: a free line always exists below `rows`)
+  const free = controls.filter((it) => it.row == null).sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const it of free) {
+    const w = Math.min(it.w, columns);
+    let spot: { x: number; y: number } | null = null;
+    for (let y = 0; !spot && y <= rows; y++) {
+      for (let x = 0; x <= columns - w; x++) {
+        if (fitsIn(x, y, w, it.h)) {
+          spot = { x, y };
+          break;
+        }
+      }
+    }
+    put(it, spot?.x ?? 0, spot?.y ?? rows, w);
+  }
+  return { pos, rows };
+}
+
+// ── phone re-wrap ────────────────────────────────────────────────────────────────────────────────
+
+/** Width of a page on the phone layout, in cells: four 2×2 knobs side by side at most. */
+export const PHONE_COLS = 8;
+
+/** Re-wrap a page for the phone layout (`cols` cells wide; the board itself is not changed — the result
+ *  is display positions only, like `reflowPack`). Row-faithful:
+ *  - The page is cut into bands of vertically overlapping items (its visual rows, in reading order); a
+ *    horizontal divider joins the next line with content under it, and a band holding a divider runs on
+ *    through the lines that follow it without a gap, up to an empty line or the next divider line — so a
+ *    title stays over every row of the group it heads.
+ *  - A band wider than `cols` is cut into chunks at the widest column no item straddles, and the chunks
+ *    go one under the other, each keeping its 2D arrangement (a row of twelve knobs → three rows of four;
+ *    a fader beside two knob rows stays beside them). Inner gaps stay, a leading indent goes.
+ *  - Items wider than `cols` take `cols` (an EQ graph, a long slider, a full-width divider), and so does every
+ *    graph display (one full-width row); a horizontal
+ *    divider then runs to the right edge of its chunk wherever the line is free, so section rules span the
+ *    phone page. A vertical divider is kept only between items of its chunk (at a chunk edge it separates
+ *    nothing and is left out of `pos`).
+ *  - Nothing overlaps: an item whose spot is taken (only after a hard cut through chained items) goes to
+ *    the nearest free spot on its line or below.
+ *  Pure and deterministic (stable sorts by y, x, list order). */
+export function phoneWrap(list: readonly BeItem[], cols: number = PHONE_COLS): BeReflow {
+  const C = Math.max(1, Math.floor(cols));
+  // A horizontal divider heads its group, but a compacted one sits ON the group's line (layoutPlacement
+  // `compactDividers` gives it h = 0 at that row). The phone puts the heading back on a line of its own,
+  // so every title stays over the rows it heads.
+  const heads = new Set(
+    list.filter((it) => isDivider(it) && it.kind === 'hdiv' && list.some((o) => isControl(o) && o.y === it.y)).map((it) => Math.max(0, it.y))
+  );
+  /** Lines the headings above `y` take. */
+  const above = (y: number): number => {
+    let n = 0;
+    for (const r of heads) if (r < y) n++;
+    return n;
+  };
+  const items = list
+    // a graph display is always one full-width row on the phone (whatever its board width)
+    .map((it, i) => {
+      const y0 = Math.max(0, it.y);
+      const head = isDivider(it) && it.kind === 'hdiv';
+      // the heading keeps its line; the controls of that row move below it
+      const y = y0 + above(y0) + (head || !heads.has(y0) ? 0 : 1);
+      const w = !isDivider(it) && it.view === 'graph' ? C : Math.max(1, Math.min(it.w, C));
+      return { it, i, x: Math.max(0, it.x), y, w, h: Math.max(1, it.h) };
+    })
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
+  type Cell = (typeof items)[number];
+  const isH = (c: Cell) => isDivider(c.it) && c.it.kind === 'hdiv';
+  const isV = (c: Cell) => isDivider(c.it) && c.it.kind === 'vdiv';
+
+  // 1) bands. A horizontal divider heads the next line with content under it (empty lines between them
+  //    stay inside the band) — unless that line holds a divider of its own. A band that holds a divider
+  //    (a titled group) then runs on through every following line that starts right where the band ends,
+  //    up to an empty line or the next divider line: a title stays over all the rows of its group, and the
+  //    next section's rows never land under it.
+  const hLines = new Set(items.filter(isH).map((c) => c.y));
+  const headed = (c: Cell): number => {
+    const next = items.find((o) => o.y >= c.y + c.h);
+    return next && !hLines.has(next.y) ? next.y + 1 : c.y + c.h + 1;
+  };
+  const bands: { top: number; bottom: number; reach: number; titled: boolean; cells: Cell[] }[] = [];
+  for (const c of items) {
+    const reach = isH(c) ? headed(c) : c.y + c.h;
+    const last = bands[bands.length - 1];
+    if (last && (c.y < last.reach || (last.titled && c.y === last.bottom && !hLines.has(c.y)))) {
+      last.cells.push(c);
+      last.bottom = Math.max(last.bottom, c.y + c.h);
+      last.reach = Math.max(last.reach, reach);
+      last.titled ||= isH(c);
+    } else bands.push({ top: c.y, bottom: c.y + c.h, reach, titled: isH(c), cells: [c] });
+  }
+
+  // 2) chunks per band, placed one under the other
+  const pos: Record<string, BeRect> = {};
+  const placed: BeRect[] = [];
+  const free = (x: number, y: number, w: number, h: number): boolean =>
+    x >= 0 && y >= 0 && x + w <= C && !placed.some((p) => overlaps({ x, y, w, h }, p));
+  /** Put an item at (x, y), or — when that is taken — at the nearest free spot on its line to the right,
+   *  then on the lines below (a free line always exists below everything placed). */
+  const place = (id: string, x: number, y: number, w: number, h: number): void => {
+    let spot = { x, y };
+    if (!free(x, y, w, h)) {
+      search: for (let yy = y; ; yy++) {
+        for (let xx = yy === y ? x : 0; xx <= C - w; xx++) {
+          if (free(xx, yy, w, h)) {
+            spot = { x: xx, y: yy };
+            break search;
+          }
+        }
+      }
+    }
+    const r = { x: spot.x, y: spot.y, w, h };
+    pos[id] = r;
+    placed.push(r);
+  };
+  const straddles = (c: Cell, cut: number) => c.x < cut && c.x + c.w > cut;
+
+  let cursor = 0;
+  let prevBottom: number | null = null;
+  for (const band of bands) {
+    if (prevBottom != null) cursor += Math.max(0, band.top - prevBottom); // empty lines between bands stay
+    prevBottom = band.bottom;
+    let rest = band.cells.slice().sort((a, b) => a.x - b.x || a.y - b.y || a.i - b.i);
+    while (rest.length) {
+      const start = Math.min(...rest.map((c) => c.x));
+      const right = Math.max(...rest.map((c) => c.x + c.w));
+      let cut = right;
+      if (right - start > C) {
+        cut = -1;
+        for (let k = start + C; k > start; k--) {
+          if (!rest.some((c) => straddles(c, k))) {
+            cut = k;
+            break;
+          }
+        }
+        if (cut < 0) {
+          // items chained edge to edge across every column: cut hard, straddlers start the next chunk
+          cut = start + C;
+          rest = rest.map((c) => (straddles(c, cut) ? { ...c, x: cut } : c));
+        }
+      }
+      let chunk = rest.filter((c) => c.x < cut);
+      rest = rest.filter((c) => c.x >= cut);
+      // a vertical divider at the edge of its chunk separates nothing
+      chunk = chunk.filter((v) => !isV(v) || (chunk.some((c) => !isV(c) && c.x + c.w <= v.x) && chunk.some((c) => !isV(c) && c.x >= v.x + v.w)));
+      if (!chunk.length) continue;
+      const ox = Math.min(...chunk.map((c) => c.x));
+      const oy = Math.min(...chunk.map((c) => c.y));
+      const ordered = chunk.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
+      const at = (c: Cell): BeRect => ({ x: c.x - ox, y: cursor + c.y - oy, w: c.w, h: c.h });
+      for (const c of ordered) {
+        if (isH(c)) continue;
+        const r = at(c);
+        place(c.it.id, r.x, r.y, r.w, r.h);
+      }
+      // horizontal dividers last: each runs to the right while its line is free (up to the next divider)
+      const dividers = ordered.filter(isH);
+      for (const c of dividers) {
+        const r = at(c);
+        const others = dividers.filter((d) => d !== c).map(at);
+        const open = (x: number) => free(x, r.y, 1, 1) && !others.some((o) => overlaps({ x, y: r.y, w: 1, h: 1 }, o));
+        if (free(r.x, r.y, r.w, 1)) while (r.x + r.w < C && open(r.x + r.w)) r.w++;
+        place(c.it.id, r.x, r.y, r.w, 1);
+      }
+      cursor = Math.max(cursor, ...placed.map((p) => p.y + p.h));
+    }
+  }
+  return { pos, rows: Math.max(1, ...placed.map((p) => p.y + p.h)) };
+}
+
+// ── board helpers ────────────────────────────────────────────────────────────────────────────────
+
+export type BeOpFailure = 'missing' | 'bounds' | 'collision' | 'duplicate' | 'invalid' | 'last-page';
+export interface BeOpResult {
+  board: BeBoard;
+  ok: boolean;
+  reason?: BeOpFailure;
+  /** setView / sizeItem: the item had to move to a free spot to fit its new view or size. */
+  moved?: boolean;
+}
+
+const ok = (board: BeBoard, extra: Partial<BeOpResult> = {}): BeOpResult => ({ board, ok: true, ...extra });
+const fail = (board: BeBoard, reason: BeOpFailure): BeOpResult => ({ board, ok: false, reason });
+
+/** Pages and — when the board has one — the fixed area: every list of items, in order. */
+export const regions = (board: BeBoard): string[] => (board.fixed ? [...board.pageOrder, FIXED_PAGE] : board.pageOrder);
+/** The board has this page (or the fixed area). */
+export const hasPage = (board: BeBoard, page: string): boolean => (page === FIXED_PAGE ? !!board.fixed : hasOwn(board.boards, page));
+export function pageItems(board: BeBoard, page: string): BeItem[] {
+  if (page === FIXED_PAGE) return board.fixed?.items ?? [];
+  return hasPage(board, page) ? (board.boards[page] ?? []) : [];
+}
+/** Width of a page in cells (the fixed area's own width, else a full page). */
+export const pageCols = (board: BeBoard, page: string): number => (page === FIXED_PAGE ? (board.fixed?.cols ?? FIXED_DEFAULT_COLS) : MAXC);
+
+const specOf = (it: BeItem): BeSpec => BE_SPEC[isDivider(it) ? it.kind : it.view];
+/** An item as a page `cols` cells wide takes it: a wider item is narrowed to the page (a slider or a divider
+ *  in the fixed area); null when its view cannot be that narrow. Same reference when it fits as it is. */
+export function sizedFor<T extends BeItem>(it: T, cols: number): T | null {
+  if (it.w <= cols) return it;
+  return specOf(it).minW > cols ? null : { ...it, w: cols };
+}
+
+/** Find an item anywhere on the board (pages, then the fixed area). */
+export function locate(board: BeBoard, id: string): { page: string; item: BeItem; index: number } | null {
+  for (const page of regions(board)) {
+    const list = pageItems(board, page);
+    const index = list.findIndex((it) => it.id === id);
+    if (index >= 0) return { page, item: list[index]!, index };
+  }
+  return null;
+}
+
+/** The board with one page's (or the fixed area's) item list replaced. */
+export function writePage(board: BeBoard, page: string, list: BeItem[]): BeBoard {
+  if (page === FIXED_PAGE) return { ...board, fixed: { cols: pageCols(board, page), items: list } };
+  return { ...board, boards: { ...board.boards, [page]: list } };
+}
+function replaceItem(board: BeBoard, page: string, id: string, next: BeItem): BeBoard {
+  return writePage(board, page, pageItems(board, page).map((it) => (it.id === id ? next : it)));
+}
+const hasKey = (list: readonly BeItem[], key: string, exceptId?: string): boolean =>
+  list.some((it) => isControl(it) && it.key === key && it.id !== exceptId);
+
+/** Move an item to (x,y) on `toPage` (its own page, another one, or the fixed area). Rejects positions
+ *  outside the page, collisions, and a parameter that already sits on the target page. An item wider than
+ *  the fixed area is narrowed to it (`sizedFor`; refused when its view cannot be that narrow). A control
+ *  moved to another page loses its source `row` (that row belongs to the old page). */
+export function moveItem(board: BeBoard, id: string, toPage: string, x: number, y: number): BeOpResult {
+  const f = locate(board, id);
+  if (!f || !hasPage(board, toPage)) return fail(board, 'missing');
+  const nx = int(x);
+  const ny = int(y);
+  const cols = pageCols(board, toPage);
+  const it = sizedFor(f.item, cols);
+  if (!it || nx < 0 || ny < 0 || nx + it.w > cols || ny + it.h > MAX_ROWS) return fail(board, 'bounds');
+  if (toPage === f.page) {
+    if (nx === it.x && ny === it.y) return ok(board);
+    if (!fits(pageItems(board, toPage), nx, ny, it.w, it.h, id, cols)) return fail(board, 'collision');
+    return ok(replaceItem(board, toPage, id, { ...it, x: nx, y: ny }));
+  }
+  const target = pageItems(board, toPage);
+  if (isControl(it) && hasKey(target, it.key)) return fail(board, 'duplicate');
+  if (!fits(target, nx, ny, it.w, it.h, undefined, cols)) return fail(board, 'collision');
+  let moved: BeItem;
+  if (isControl(it)) {
+    const { row: _row, ...rest } = it;
+    moved = { ...rest, x: nx, y: ny };
+  } else moved = { ...it, x: nx, y: ny };
+  const taken = writePage(board, f.page, pageItems(board, f.page).filter((o) => o.id !== id));
+  return ok(writePage(taken, toPage, [...target, moved]));
+}
+
+/** Resize an item in place (clamped to its view's limits). Rejects a size that would collide. */
+export function resizeItem(board: BeBoard, id: string, w: number, h: number): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  const spec = BE_SPEC[isDivider(it) ? it.kind : it.view];
+  const s = clampSize(spec, w, h);
+  if (s.w === it.w && s.h === it.h) return ok(board);
+  const cols = pageCols(board, f.page);
+  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id, cols)) return fail(board, it.x + s.w > cols ? 'bounds' : 'collision');
+  return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
+}
+
+/** Change a control's view; it takes the new view's default size (no wider than the fixed area there).
+ *  When that does not fit where the control sits, it moves to the next free spot on the same page
+ *  (`moved: true`). */
+export function setView(board: BeBoard, id: string, view: BeView): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  if (isDivider(it) || !isBeView(view)) return fail(board, 'invalid');
+  if (it.view === view) return ok(board);
+  const cols = pageCols(board, f.page);
+  const next = sizedFor<BeControl>({ ...it, view, w: BE_SPEC[view].w, h: BE_SPEC[view].h }, cols);
+  if (!next) return fail(board, 'bounds');
+  const list = pageItems(board, f.page);
+  if (fits(list, it.x, it.y, next.w, next.h, id, cols)) return ok(replaceItem(board, f.page, id, next));
+  const p = findFree(list, next.w, next.h, id, cols);
+  return ok(replaceItem(board, f.page, id, { ...next, x: p.x, y: p.y }), { moved: true });
+}
+
+/** Give an item a new size (a size preset of the control menu), clamped to its view's limits. When the new
+ *  size does not fit where the item sits, it moves to the nearest free spot on the same page
+ *  (`moved: true`) instead of being refused (as setView does for a new view). */
+export function sizeItem(board: BeBoard, id: string, w: number, h: number): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  const cols = pageCols(board, f.page);
+  const c = clampSize(specOf(it), w, h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
+  if (s.w === it.w && s.h === it.h) return ok(board);
+  const list = pageItems(board, f.page);
+  if (fits(list, it.x, it.y, s.w, s.h, id, cols)) return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
+  const p = findNear(list, s.w, s.h, it.x, it.y, id, cols);
+  return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h, x: p.x, y: p.y }), { moved: true });
+}
+
+/** Move an item to the first free spot of another page or of the fixed area ("Move to page"). Refuses a
+ *  parameter that already sits there, and an item the fixed area is too narrow for; the item's own page is
+ *  a no-op. */
+export function moveToPage(board: BeBoard, id: string, toPage: string): BeOpResult {
+  const f = locate(board, id);
+  if (!f || !hasPage(board, toPage)) return fail(board, 'missing');
+  if (toPage === f.page) return ok(board);
+  const target = pageItems(board, toPage);
+  if (isControl(f.item) && hasKey(target, f.item.key)) return fail(board, 'duplicate');
+  const cols = pageCols(board, toPage);
+  const it = sizedFor(f.item, cols);
+  if (!it) return fail(board, 'bounds');
+  const p = findFree(target, it.w, it.h, undefined, cols);
+  return moveItem(board, id, toPage, p.x, p.y);
+}
+
+/** Turn a horizontal divider into a vertical one (and back), swapping width and height. */
+export function rotateDivider(board: BeBoard, id: string): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  if (!isDivider(it)) return fail(board, 'invalid');
+  const kind: BeDividerKind = it.kind === 'hdiv' ? 'vdiv' : 'hdiv';
+  const cols = pageCols(board, f.page);
+  // A line divider stays a line when rotated (h = 0 / w = 0); the fixed area packs cells, so it keeps the
+  // old cell-sized divider there.
+  if (f.page !== FIXED_PAGE && (it.h === 0 || it.w === 0)) {
+    const span = it.h || it.w;
+    const w = kind === 'hdiv' ? Math.max(BE_SPEC.hdiv.minW, span) : 0;
+    const h = kind === 'vdiv' ? span : 0;
+    if (w > cols) return fail(board, 'bounds');
+    return ok(replaceItem(board, f.page, id, { ...it, kind, w, h }));
+  }
+  const s = clampSize(BE_SPEC[kind], it.h, it.w);
+  if (!fits(pageItems(board, f.page), it.x, it.y, s.w, s.h, id, cols)) return fail(board, it.x + s.w > cols ? 'bounds' : 'collision');
+  return ok(replaceItem(board, f.page, id, { ...it, kind, w: s.w, h: s.h }));
+}
+
+/** Set (or clear, with an empty string) a divider's label. */
+export function setDividerLabel(board: BeBoard, id: string, label: string): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  if (!isDivider(it)) return fail(board, 'invalid');
+  const next = label.trim();
+  if ((it.label ?? '') === next) return ok(board);
+  const { label: _old, ...rest } = it;
+  return ok(replaceItem(board, f.page, id, next ? { ...rest, label: next } : rest));
+}
+
+export function removeItem(board: BeBoard, id: string): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  return ok(writePage(board, f.page, pageItems(board, f.page).filter((it) => it.id !== id)));
+}
+
+/** Add a control to a page (or the fixed area), at `at` when given (must fit) or at the first free spot. A
+ *  parameter can sit on a page only once. */
+export function addControl(
+  board: BeBoard,
+  page: string,
+  ctl: { key: string; view: BeView; w?: number; h?: number; row?: number },
+  at?: { x: number; y: number } | null,
+  idGen: BeIdGen = defaultIdGen
+): BeOpResult & { id?: string } {
+  if (!hasPage(board, page)) return fail(board, 'missing');
+  const list = pageItems(board, page);
+  if (!isBeView(ctl.view)) return fail(board, 'invalid');
+  if (hasKey(list, ctl.key)) return fail(board, 'duplicate');
+  const sp = BE_SPEC[ctl.view];
+  const cols = pageCols(board, page);
+  if (sp.minW > cols) return fail(board, 'bounds');
+  const c = clampSize(sp, ctl.w ?? sp.w, ctl.h ?? sp.h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
+  const p = at ? { x: int(at.x), y: int(at.y) } : findFree(list, s.w, s.h, undefined, cols);
+  if (at && !fits(list, p.x, p.y, s.w, s.h, undefined, cols)) return fail(board, p.x < 0 || p.y < 0 || p.x + s.w > cols ? 'bounds' : 'collision');
+  const id = idGen();
+  const item: BeControl = { id, key: ctl.key, view: ctl.view, x: p.x, y: p.y, w: s.w, h: s.h };
+  if (ctl.row != null) item.row = ctl.row;
+  return { ...ok(writePage(board, page, [...list, item])), id };
+}
+
+/** Add a divider to a page (first free spot unless `at` is given and fits). */
+export function addDivider(
+  board: BeBoard,
+  page: string,
+  kind: BeDividerKind,
+  at?: { x: number; y: number } | null,
+  idGen: BeIdGen = defaultIdGen,
+  label?: string
+): BeOpResult & { id?: string } {
+  if (!hasPage(board, page)) return fail(board, 'missing');
+  const list = pageItems(board, page);
+  const cols = pageCols(board, page);
+  // A divider takes no cell: it sits ON a grid line (h = 0 for an hdiv, w = 0 for a vdiv) so adding one
+  // never moves a control or changes the page height. It spans the controls' own extent.
+  const controls = list.filter(isControl);
+  const left = controls.length ? Math.min(...controls.map((c) => c.x)) : 0;
+  const right = controls.length ? Math.max(...controls.map((c) => c.x + c.w)) : cols;
+  const top = controls.length ? Math.min(...controls.map((c) => c.y)) : 0;
+  const bottom = controls.reduce((n, c) => Math.max(n, c.y + c.h), top + 1);
+  const id = idGen();
+  // Without a drop point: the first grid line that has no divider yet (row tops for an hdiv, column edges
+  // for a vdiv), so repeated "Add divider" stacks lines instead of piling them on top of each other.
+  const taken = (line: number): boolean =>
+    list.some((it) => isDivider(it) && it.kind === kind && (kind === 'hdiv' ? it.y === line : it.x === line));
+  const rowLines = [...new Set([...controls.map((c) => c.y), bottom])].sort((a, b) => a - b);
+  const colLines = [...new Set([...controls.map((c) => c.x), right])].sort((a, b) => a - b);
+  const line = kind === 'hdiv'
+    ? (rowLines.find((y) => !taken(y)) ?? bottom)
+    : (colLines.find((x) => !taken(x)) ?? right);
+  const item: BeDivider = kind === 'hdiv'
+    ? { id, kind, x: at ? clamp(int(at.x), 0, Math.max(0, cols - 1)) : Math.max(0, left), y: at ? Math.max(0, int(at.y)) : line, w: Math.max(BE_SPEC.hdiv.minW, Math.min(cols, at ? cols - int(at.x) : right) - (at ? int(at.x) : left)), h: 0 }
+    : { id, kind, x: at ? clamp(int(at.x), 0, Math.max(0, cols - 1)) : line, y: at ? Math.max(0, int(at.y)) : top, w: 0, h: Math.max(1, at ? bottom - int(at.y) : bottom - top) };
+  if (label?.trim()) item.label = label.trim();
+  return { ...ok(writePage(board, page, [...list, item])), id };
+}
+
+// ── the fixed area ───────────────────────────────────────────────────────────────────────────────
+
+/** Pack items into `cols` columns in reading order, each at the first free spot (a wider item is narrowed
+ *  to the area). Pure and deterministic; nothing overlaps. */
+export function packArea<T extends BeItem>(items: readonly T[], cols: number): T[] {
+  const out: T[] = [];
+  const order = items.map((it, i) => ({ it, i })).sort((a, b) => a.it.y - b.it.y || a.it.x - b.it.x || a.i - b.i);
+  for (const { it } of order) {
+    const s = sizedFor(it, cols) ?? it;
+    const p = findFree(out, s.w, s.h, undefined, cols);
+    out.push(s.x === p.x && s.y === p.y ? s : { ...s, x: p.x, y: p.y });
+  }
+  return out;
+}
+
+/** The narrowest the fixed area may get: no item narrower than its view allows. */
+export const fixedMinCols = (items: readonly BeItem[]): number => Math.max(FIXED_MIN_COLS, ...items.map((it) => Math.min(specOf(it).minW, FIXED_MAX_COLS)));
+
+/** Give the board an (empty) fixed area; a board that has one stays as it is. */
+export function addFixed(board: BeBoard, cols: number = FIXED_DEFAULT_COLS): BeOpResult {
+  if (board.fixed) return ok(board);
+  return ok({ ...board, fixed: { cols: clamp(int(cols), FIXED_MIN_COLS, FIXED_MAX_COLS), items: [] } });
+}
+
+/** Take the fixed area (and whatever is in it) off the board. */
+export function removeFixed(board: BeBoard): BeOpResult {
+  if (!board.fixed) return fail(board, 'missing');
+  const { fixed: _area, ...rest } = board;
+  return ok(rest);
+}
+
+/** Set the fixed area's width (clamped to 2..8 cells and to what its items allow). Items keep their places
+ *  while they all fit; a narrower area is packed again in reading order. */
+export function setFixedCols(board: BeBoard, cols: number): BeOpResult {
+  const area = board.fixed;
+  if (!area) return fail(board, 'missing');
+  const next = clamp(int(cols), fixedMinCols(area.items), FIXED_MAX_COLS);
+  if (next === area.cols) return ok(board);
+  const items = area.items.length && bbox(area.items).C > next ? packArea(area.items, next) : area.items;
+  return ok({ ...board, fixed: { cols: next, items } });
+}
+
+/** Reset the fixed area to its seed: the board gets a copy of the seed's fixed area (none when the seed has
+ *  none). Seed items whose id is already used on a page of the board get a fresh id. The pages stay. */
+export function resetFixedFrom(board: BeBoard, seed: BeBoard, idGen: BeIdGen = defaultIdGen): BeOpResult {
+  const area = seed.fixed;
+  if (!area) return board.fixed ? removeFixed(board) : ok(board);
+  const used = new Set<string>();
+  for (const pg of board.pageOrder) for (const it of pageItems(board, pg)) used.add(it.id);
+  return ok({ ...board, fixed: { cols: area.cols, items: copyWithIds(area.items, used, idGen) } });
+}
+
+/** Copies of items; an id that is missing or already in `used` is replaced by a fresh one. */
+function copyWithIds(items: readonly BeItem[], used: Set<string>, idGen: BeIdGen): BeItem[] {
+  return items.map((it) => {
+    let id = it.id;
+    while (!id || used.has(id)) id = idGen();
+    used.add(id);
+    return { ...it, id };
+  });
+}
+
+// ── pages ────────────────────────────────────────────────────────────────────────────────────────
+
+const pageTaken = (board: BeBoard, n: string): boolean => isReservedPageName(n) || board.pageOrder.includes(n) || hasPage(board, n);
+
+function uniquePageName(board: BeBoard, base: string): string {
+  if (!pageTaken(board, base)) return base;
+  for (let i = 2; ; i++) {
+    const n = `${base} ${i}`;
+    if (!pageTaken(board, n)) return n;
+  }
+}
+
+/** Append a page (named `Page N` unless `name` is given; made unique) and make it the current page. */
+export function addPage(board: BeBoard, name?: string): { board: BeBoard; page: string } {
+  let page: string;
+  const wanted = name?.trim();
+  if (wanted && !isReservedPageName(wanted)) page = uniquePageName(board, wanted);
+  else {
+    let n = board.pageOrder.length + 1;
+    page = `Page ${n}`;
+    while (pageTaken(board, page)) page = `Page ${++n}`;
+  }
+  return { board: { ...board, pageOrder: [...board.pageOrder, page], page, boards: { ...board.boards, [page]: [] } }, page };
+}
+
+/** Rename a page. Rejects an empty or reserved name and a name another page already uses. */
+export function renamePage(board: BeBoard, from: string, to: string): BeOpResult {
+  const next = to.trim();
+  if (!board.pageOrder.includes(from)) return fail(board, 'missing');
+  if (!next || isReservedPageName(next)) return fail(board, 'invalid');
+  if (next === from) return ok(board);
+  if (pageTaken(board, next)) return fail(board, 'duplicate');
+  const boards: Record<string, BeItem[]> = {};
+  for (const k of Object.keys(board.boards)) boards[k === from ? next : k] = board.boards[k]!;
+  return ok({
+    ...board,
+    pageOrder: board.pageOrder.map((p) => (p === from ? next : p)),
+    page: board.page === from ? next : board.page,
+    boards
+  });
+}
+
+/** Copy a page (items get fresh ids) right after the original, named `<page> copy` (made unique), and
+ *  make the copy the current page. */
+export function duplicatePage(board: BeBoard, page: string, idGen: BeIdGen = defaultIdGen): { board: BeBoard; page: string | null } {
+  const i = board.pageOrder.indexOf(page);
+  if (i < 0) return { board, page: null };
+  const name = uniquePageName(board, `${page} copy`);
+  const order = board.pageOrder.slice();
+  order.splice(i + 1, 0, name);
+  const items = pageItems(board, page).map((it) => ({ ...it, id: idGen() }));
+  return { board: { ...board, pageOrder: order, page: name, boards: { ...board.boards, [name]: items } }, page: name };
+}
+
+/** Move a page `delta` places in the page order. Same reference when that leaves the order unchanged. */
+export function movePage(board: BeBoard, page: string, delta: number): BeBoard {
+  const i = board.pageOrder.indexOf(page);
+  const j = i + Math.trunc(delta);
+  if (i < 0 || j < 0 || j >= board.pageOrder.length || j === i) return board;
+  const order = board.pageOrder.slice();
+  order.splice(i, 1);
+  order.splice(j, 0, page);
+  return { ...board, pageOrder: order };
+}
+
+/** Reset one page to its seed: the page gets the seed's items for the page of the same name (copies),
+ *  or none when the seed has no such page. Seed items whose id is already used on another page of the
+ *  board (or in its fixed area) get a fresh id. Everything else stays as it is. */
+export function resetPageFrom(board: BeBoard, seed: BeBoard, page: string, idGen: BeIdGen = defaultIdGen): BeOpResult {
+  if (page === FIXED_PAGE) return resetFixedFrom(board, seed, idGen);
+  if (!board.pageOrder.includes(page)) return fail(board, 'missing');
+  const used = new Set<string>();
+  for (const pg of regions(board)) if (pg !== page) for (const it of pageItems(board, pg)) used.add(it.id);
+  return ok(writePage(board, page, copyWithIds(pageItems(seed, page), used, idGen)));
+}
+
+const keysOn = (board: BeBoard, pages: readonly string[]): Set<string> => new Set(pages.flatMap((pg) => pageItems(board, pg).flatMap((it) => (isControl(it) ? [it.key] : []))));
+
+/** Keys (of `keys`: the ones drawn now) that are somewhere on `before` and nowhere on `after`, in board order. */
+export function lostKeys(before: BeBoard, after: BeBoard, keys: ReadonlySet<string>): string[] {
+  const left = keysOn(after, regions(after));
+  return [...keysOn(before, regions(before))].filter((k) => keys.has(k) && !left.has(k));
+}
+
+export interface PageResetPlan {
+  board: BeBoard;
+  /** Controls the page gives up because the seed has them in its fixed area: they are in the board's now. */
+  toFixed: string[];
+  /** The board had no fixed area: it gets a copy of the seed's. */
+  addsFixed: boolean;
+  /** Controls that are on no page and not in the fixed area afterwards. */
+  lost: string[];
+}
+
+/** What resetting a page to its seed does (`resetPageFrom`) — without a control going away only because the
+ *  seed shows it in its fixed area: a board without one gets a copy of the seed's, one that lacks the control
+ *  gets it there (at the first free spot). Null for a page the board does not have. `keys`: the ones drawn now. */
+export function planPageReset(board: BeBoard, seed: BeBoard, page: string, keys: ReadonlySet<string>, idGen: BeIdGen = defaultIdGen): PageResetPlan | null {
+  if (page === FIXED_PAGE) return null;
+  const r = resetPageFrom(board, seed, page, idGen);
+  if (!r.ok) return null;
+  let next = r.board;
+  const toFixed: string[] = [];
+  let addsFixed = false;
+  if (seed.pageOrder.includes(page) && seed.fixed) {
+    const was = keysOn(board, [page]);
+    const has = keysOn(next, regions(next));
+    const goes = seed.fixed.items.filter((it): it is BeControl => isControl(it) && keys.has(it.key) && was.has(it.key) && !has.has(it.key));
+    if (goes.length && !next.fixed) {
+      next = resetFixedFrom(next, seed, idGen).board;
+      addsFixed = true;
+      toFixed.push(...goes.map((it) => it.key));
+    } else {
+      for (const it of goes) {
+        const a = addControl(next, FIXED_PAGE, { key: it.key, view: it.view, w: it.w, h: it.h }, null, idGen);
+        if (!a.ok) continue;
+        next = a.board;
+        toFixed.push(it.key);
+      }
+    }
+  }
+  return { board: next, toFixed, addsFixed, lost: lostKeys(board, next, keys) };
+}
+
+/** Delete a page. The last remaining page is never deleted. */
+export function deletePage(board: BeBoard, page: string): BeOpResult {
+  const i = board.pageOrder.indexOf(page);
+  if (i < 0) return fail(board, 'missing');
+  if (board.pageOrder.length < 2) return fail(board, 'last-page');
+  const order = board.pageOrder.filter((p) => p !== page);
+  const boards = { ...board.boards };
+  delete boards[page];
+  const current = board.page === page ? order[Math.max(0, i - 1)]! : board.page;
+  return ok({ ...board, pageOrder: order, page: current, boards });
+}
+
+// ── normalization ────────────────────────────────────────────────────────────────────────────────
+
+/** Block-level catalog entries that depend on data arriving after the parameters (EQ bands, level
+ *  meters, loop waveform). Persistence keeps them even while they are missing from the catalog. */
+export const BLOCK_LEVEL_KEYS: ReadonlySet<string> = new Set(['meter', 'wave', 'eq', 'bypass']);
+/** A block-level key: one of BLOCK_LEVEL_KEYS, or a graph display (`graph:<key>`, served with the block's
+ *  params — kept while a re-read has not brought it back yet, like the meter). */
+export const isBlockLevelKey = (key: string): boolean => BLOCK_LEVEL_KEYS.has(key) || isGraphKey(key);
+
+export interface NormalizeOptions {
+  /** Allowed views per catalog key; a stored view outside the list falls back to the first one. */
+  viewsByKey?: ReadonlyMap<string, readonly BeView[]>;
+  /** Keys kept even when the catalog does not list them (yet): a set, or a predicate (`isBlockLevelKey`).
+   *  The renderer shows only keys that are in the catalog, so a kept-but-absent control is simply not
+   *  drawn until its data arrives. */
+  keepKeys?: ReadonlySet<string> | ((key: string) => boolean);
+}
+
+/** The view a stored control is drawn in: its own when it is one the catalog allows, else the first
+ *  allowed one (an unknown view: the key's default). */
+function viewOf(it: BeControl, viewsByKey?: ReadonlyMap<string, readonly BeView[]>): BeView {
+  const allowed = viewsByKey?.get(it.key);
+  const view: BeView = isBeView(it.view) ? it.view : defaultViewForKey(it.key);
+  return allowed?.length && !allowed.includes(view) ? allowed[0]! : view;
+}
+function cleanControl(it: BeControl, viewsByKey: ReadonlyMap<string, readonly BeView[]> | undefined, cols: number): BeControl {
+  const view = viewOf(it, viewsByKey);
+  const c = clampSize(BE_SPEC[view], it.w, it.h);
+  const s = { w: Math.min(c.w, cols), h: c.h };
+  const out: BeControl = {
+    id: typeof it.id === 'string' ? it.id : '',
+    key: it.key,
+    view,
+    x: clamp(int(it.x), 0, cols - s.w),
+    y: clamp(int(it.y), 0, MAX_ROWS - s.h),
+    w: s.w,
+    h: s.h
+  };
+  if (typeof it.row === 'number' && Number.isFinite(it.row)) out.row = int(it.row);
+  return out;
+}
+function cleanDivider(it: BeDivider, cols: number): BeDivider {
+  // A line divider keeps its zero thickness (h = 0 for an hdiv, w = 0 for a vdiv); only a cell-sized
+  // divider (the fixed area's) is clamped to the spec.
+  const c = clampSize(BE_SPEC[it.kind], it.w, it.h);
+  const s = it.h === 0 || it.w === 0
+    ? { w: it.kind === 'vdiv' ? 0 : Math.max(1, Math.min(cols, int(it.w))), h: it.kind === 'hdiv' ? 0 : Math.max(1, int(it.h)) }
+    : { w: Math.min(c.w, cols), h: c.h };
+  const out: BeDivider = {
+    id: typeof it.id === 'string' ? it.id : '',
+    kind: it.kind,
+    x: clamp(int(it.x), 0, cols - s.w),
+    y: clamp(int(it.y), 0, MAX_ROWS - s.h),
+    w: s.w,
+    h: s.h
+  };
+  const label = typeof it.label === 'string' ? it.label.trim() : '';
+  if (label) out.label = label;
+  return out;
+}
+
+/** Reconcile a stored (already schema-checked) board with the live catalog:
+ *  - pages: unique, every page in `pageOrder` has a list, stray lists are appended, never zero pages,
+ *    `page` points at an existing page, the reserved name `__proto__` is dropped;
+ *  - controls whose key is no longer in the catalog are dropped (unless listed in `keepKeys`);
+ *  - a key appears once per page — a duplicate on the same page (the previous editor could create one
+ *    by dragging past a page edge) is dropped, the first occurrence wins;
+ *  - sizes are clamped to the view's limits, positions to the 24-cell page and `MAX_ROWS`;
+ *  - ids are unique across the board; a missing or repeated id is replaced by one derived from the
+ *    page index and key (deterministic, so reloading the same input gives the same ids);
+ *  - overlaps are resolved by moving the LATER item to the nearest free spot (same line to the right
+ *    first, then the following lines);
+ *  - the fixed area is reconciled the same way in its own coordinates (a key once in it, whatever the pages
+ *    hold; ids unique across pages and area; no source rows): its width is clamped to 2..8 cells and widened
+ *    to its widest item's minimum, an emptied area stays;
+ *  - `variantSig` is kept.
+ *  Idempotent: normalizing a normalized board yields a deep-equal board. */
+export function normalizeBoard(raw: BeBoard, catalogKeys: Iterable<string>, opts: NormalizeOptions = {}): BeBoard {
+  const valid = catalogKeys instanceof Set ? (catalogKeys as Set<string>) : new Set(catalogKeys);
+  const keepOpt = opts.keepKeys;
+  const keep: { has(key: string): boolean } | null = keepOpt == null ? null : typeof keepOpt === 'function' ? { has: keepOpt } : keepOpt;
+  const rawBoards: object = raw.boards && typeof raw.boards === 'object' ? raw.boards : {};
+  const listOf = (pg: string): unknown => (hasOwn(rawBoards, pg) ? (rawBoards as Record<string, unknown>)[pg] : undefined);
+
+  const order: string[] = [];
+  for (const p of [...(Array.isArray(raw.pageOrder) ? raw.pageOrder : []), ...Object.keys(rawBoards)]) {
+    if (typeof p === 'string' && p && !isReservedPageName(p) && !order.includes(p)) order.push(p);
+  }
+  if (!order.length) order.push('Page 1');
+
+  // ids already in use anywhere on the input, so a derived id never steals one a later item owns
+  const rawFixed = raw.fixed && typeof raw.fixed === 'object' ? raw.fixed : null;
+  const rawIds = new Set<string>();
+  for (const src of [...order.map(listOf), rawFixed?.items]) {
+    if (Array.isArray(src)) for (const it of src) if (it && typeof (it as BeItem).id === 'string') rawIds.add((it as BeItem).id);
+  }
+  const usedIds = new Set<string>();
+  const derivedId = (pi: number | 'f', item: BeItem): string => {
+    const base = `n${pi}.${isDivider(item) ? `${item.kind}${item.x}_${item.y}` : item.key}`;
+    let id = base;
+    for (let n = 2; usedIds.has(id) || rawIds.has(id); n++) id = `${base}~${n}`;
+    return id;
+  };
+
+  const cleanList = (src: unknown, pi: number | 'f', cols: number): BeItem[] => {
+    const placed: BeItem[] = [];
+    const keys = new Set<string>();
+    for (const it of Array.isArray(src) ? (src as BeItem[]) : []) {
+      if (!it || typeof it !== 'object') continue;
+      let item: BeItem;
+      if (isDivider(it)) item = cleanDivider(it, cols);
+      else {
+        const key = (it as { key?: unknown }).key;
+        if (typeof key !== 'string' || !(valid.has(key) || keep?.has(key)) || keys.has(key)) continue;
+        keys.add(key);
+        item = cleanControl(it, opts.viewsByKey, cols);
+        if (pi === 'f') delete item.row;
+      }
+      if (!item.id || usedIds.has(item.id)) item = { ...item, id: derivedId(pi, item) };
+      usedIds.add(item.id);
+      if (!fits(placed, item.x, item.y, item.w, item.h, undefined, cols)) item = { ...item, ...findNear(placed, item.w, item.h, item.x, item.y, undefined, cols) };
+      placed.push(item);
+    }
+    return placed;
+  };
+
+  const boards: Record<string, BeItem[]> = {};
+  order.forEach((pg, pi) => {
+    boards[pg] = cleanList(listOf(pg), pi, MAXC);
+  });
+  const out: BeBoard = { v: 2, pageOrder: order, page: order.includes(raw.page) ? raw.page : order[0]!, boards };
+  if (rawFixed) {
+    // the area is at least as wide as the narrowest form of what stays in it
+    const stays = (Array.isArray(rawFixed.items) ? rawFixed.items : []).flatMap((it): BeItem[] => {
+      if (!it || typeof it !== 'object') return [];
+      if (isDivider(it)) return [it];
+      return typeof it.key === 'string' && (valid.has(it.key) || keep?.has(it.key)) ? [{ ...it, view: viewOf(it, opts.viewsByKey) }] : [];
+    });
+    const wanted = typeof rawFixed.cols === 'number' ? int(rawFixed.cols) : FIXED_DEFAULT_COLS;
+    const cols = clamp(wanted, fixedMinCols(stays), FIXED_MAX_COLS);
+    out.fixed = { cols, items: cleanList(rawFixed.items, 'f', cols) };
+  }
+  if (typeof raw.variantSig === 'string') out.variantSig = raw.variantSig;
+  return out;
+}
+
+// ── migration v1 → v2 ────────────────────────────────────────────────────────────────────────────
+
+/** Split one band of items into chunks no wider than `maxC`, cutting only between items when possible.
+ *  The first chunk keeps its x positions; later chunks start at their leftmost item. */
+function segmentBand<T extends BeItem>(band: readonly T[], maxC: number): { start: number; items: T[] }[] {
+  let rest = band.map((it) => ({ ...it })).sort((a, b) => a.x - b.x);
+  const out: { start: number; items: T[] }[] = [];
+  let start = 0;
+  while (rest.length) {
+    const right = Math.max(...rest.map((it) => it.x + it.w));
+    if (right - start <= maxC) {
+      out.push({ start, items: rest });
+      break;
+    }
+    let cut = -1;
+    for (let c = start + maxC; c > start; c--) {
+      if (rest.every((it) => it.x >= c || it.x + it.w <= c)) {
+        cut = c;
+        break;
+      }
+    }
+    if (cut < 0) {
+      // items chained edge-to-edge past the limit: cut hard, push straddlers into the next chunk
+      cut = start + maxC;
+      rest = rest.map((it) => (it.x < cut && it.x + it.w > cut ? { ...it, x: cut } : it)).sort((a, b) => a.x - b.x);
+    }
+    out.push({ start, items: rest.filter((it) => it.x < cut) });
+    rest = rest.filter((it) => it.x >= cut);
+    if (rest.length) start = Math.min(...rest.map((it) => it.x));
+  }
+  return out;
+}
+
+/** Wrap a page wider than `maxC` cells onto extra lines, keeping rows together: items with a source
+ *  `row` form one band per row, the others form bands of vertically overlapping items. */
+export function wrapWidePage<T extends BeItem>(list: readonly T[], maxC: number = MAXC): T[] {
+  if (!list.length || bbox(list).C <= maxC) return list as T[];
+  const bands: { top: number; bottom: number; items: T[] }[] = [];
+  const byRow = new Map<number, T[]>();
+  const loose: T[] = [];
+  for (const it of list) {
+    const row = isControl(it) ? it.row : undefined;
+    if (row != null) {
+      const b = byRow.get(row);
+      if (b) b.push(it);
+      else byRow.set(row, [it]);
+    } else loose.push(it);
+  }
+  for (const items of byRow.values()) {
+    bands.push({ top: Math.min(...items.map((i) => i.y)), bottom: Math.max(...items.map((i) => i.y + i.h)), items });
+  }
+  for (const it of loose.slice().sort((a, b) => a.y - b.y || a.x - b.x)) {
+    const last = bands.length ? bands[bands.length - 1] : undefined;
+    const looseBand = last && !last.items.some((i) => isControl(i) && i.row != null) ? last : undefined;
+    if (looseBand && it.y < looseBand.bottom) {
+      looseBand.items.push(it);
+      looseBand.bottom = Math.max(looseBand.bottom, it.y + it.h);
+    } else bands.push({ top: it.y, bottom: it.y + it.h, items: [it] });
+  }
+  bands.sort((a, b) => a.top - b.top);
+
+  const out: T[] = [];
+  let cursor = 0;
+  let prevBottom = 0;
+  for (const band of bands) {
+    cursor += Math.max(0, band.top - prevBottom);
+    prevBottom = Math.max(prevBottom, band.bottom);
+    for (const seg of segmentBand(band.items, maxC)) {
+      let segH = 0;
+      for (const it of seg.items) {
+        out.push({ ...it, x: it.x - seg.start, y: cursor + it.y - band.top });
+        segH = Math.max(segH, it.y + it.h - band.top);
+      }
+      cursor += segH;
+    }
+  }
+  return out;
+}
+
+/** One migrated control plus where it sat in the previous editor (for the row re-layout). */
+interface Scaled {
+  item: BeControl;
+  /** Previous editor's grid line and doubled x / width before the size was fitted to the view. */
+  v1y: number;
+  sx: number;
+  sw: number;
+}
+
+/** Re-lay a device-layout page row by row (like the v2 builder): rows top→bottom in `row` order, items
+ *  left→right in their previous order. Gaps between neighbours on the same previous grid line are kept;
+ *  a row the previous editor had wrapped is joined back up; a line wider than 24 cells wraps. */
+function relayRows(items: Scaled[]): BeControl[] {
+  const byRow = new Map<number, Scaled[]>();
+  for (const s of items) {
+    const r = s.item.row!;
+    const b = byRow.get(r);
+    if (b) b.push(s);
+    else byRow.set(r, [s]);
+  }
+  const out: BeControl[] = [];
+  let gy = 0;
+  for (const r of [...byRow.keys()].sort((a, b) => a - b)) {
+    const row = byRow.get(r)!.slice().sort((a, b) => a.v1y - b.v1y || a.sx - b.sx);
+    let x = 0;
+    let lineY = gy;
+    let lineH = 0;
+    let prev: Scaled | null = null;
+    for (const s of row) {
+      const { w, h } = s.item;
+      let nx: number;
+      if (!prev) nx = Math.min(s.sx, MAXC - w);
+      else if (s.v1y !== prev.v1y) nx = x;
+      else nx = x + Math.max(0, s.sx - (prev.sx + prev.sw));
+      if (nx + w > MAXC) {
+        lineY += lineH;
+        nx = 0;
+        lineH = 0;
+      }
+      out.push({ ...s.item, x: nx, y: lineY });
+      x = nx + w;
+      lineH = Math.max(lineH, h);
+      prev = s;
+    }
+    gy = lineY + lineH;
+  }
+  return out;
+}
+
+/** Upgrade a pre-rework board (one control = one cell) to v2:
+ *  - coordinates and sizes ×2, sizes then fitted to the view's limits;
+ *  - row-tagged (device-layout) controls are re-laid row by row so grown controls push their
+ *    neighbours along instead of being thrown elsewhere; other controls keep their positions;
+ *  - a page that still ends up wider than 24 cells is wrapped, rows kept together.
+ *  The result still goes through `normalizeBoard` (which resolves any remaining overlap nearby).
+ *  A v2 board is returned unchanged (same reference). */
+export function migrateV1(board: BeBoardV1 | BeBoard): BeBoard {
+  if ((board as BeBoard).v === 2) return board as BeBoard;
+  const v1 = board as BeBoardV1;
+  const boards: Record<string, BeItem[]> = {};
+  const src: object = v1.boards && typeof v1.boards === 'object' ? v1.boards : {};
+  for (const pg of Object.keys(src)) {
+    if (isReservedPageName(pg)) continue;
+    const list = (src as Record<string, unknown>)[pg];
+    const scaled: Scaled[] = (Array.isArray(list) ? (list as BeBoardV1['boards'][string]) : []).map((w) => {
+      const view = isBeView(w.view) ? w.view : defaultViewForKey(w.key);
+      const sw = Math.max(1, int(w.w)) * 2;
+      const s = clampSize(BE_SPEC[view], sw, Math.max(1, int(w.h)) * 2);
+      const sx = Math.max(0, int(w.x)) * 2;
+      const item: BeControl = { id: w.id, key: w.key, view, x: sx, y: Math.max(0, int(w.y)) * 2, w: s.w, h: s.h };
+      if (typeof w.row === 'number' && Number.isFinite(w.row)) item.row = w.row;
+      return { item, v1y: int(w.y), sx, sw };
+    });
+    const tagged = scaled.filter((s) => s.item.row != null);
+    const loose = scaled.filter((s) => s.item.row == null).map((s) => s.item);
+    if (tagged.length) {
+      // device-layout rows first; anything the user added freely keeps its spot below / around them
+      boards[pg] = [...relayRows(tagged), ...wrapWidePage(loose)];
+    } else boards[pg] = wrapWidePage(loose);
+  }
+  const out: BeBoard = { v: 2, pageOrder: Array.isArray(v1.pageOrder) ? v1.pageOrder.slice() : [], page: v1.page, boards };
+  if (typeof v1.variantSig === 'string') out.variantSig = v1.variantSig;
+  return out;
+}

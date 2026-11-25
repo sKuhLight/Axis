@@ -4,6 +4,7 @@ import type {
   DockNode,
   DockRegionId,
   FloatingRect,
+  JsonObject,
   NavigationEntryState,
   PanelInstance,
   SplitDockNode,
@@ -19,8 +20,9 @@ import { DEFAULT_WIDGET_ZONES, isDockRegionId } from './schema';
 import { createWorkbenchId } from './ids';
 import { createEmptyDockLayout } from './defaults';
 import { cloneWorkbenchDocument, normalizeRatios, repairWorkbenchDocument } from './invariants';
-import { remintWorkbenchPage } from './layoutPackage';
-import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInPageDock } from './selectors';
+import { remapDockLayout, remintWorkbenchPage } from './layoutPackage';
+import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInDockTree, panelIdsInPageDock, selectActiveLayout } from './selectors';
+import { removePanelFromDock } from './dockTree';
 import type { DockTarget, WorkbenchCommand, WorkbenchCommandResult, WorkbenchErrorCode } from './commands';
 
 interface InsertResult {
@@ -76,53 +78,6 @@ const makeSplit = (axis: DockAxis, children: DockNode[]): SplitDockNode => ({
   children
 });
 
-function removePanelFromNode(node: DockNode | null, panelId: string): { node: DockNode | null; removed: boolean } {
-  if (!node) return { node, removed: false };
-  if (node.kind === 'tabs') {
-    if (!node.panelIds.includes(panelId)) return { node, removed: false };
-    const panelIds = node.panelIds.filter((id) => id !== panelId);
-    if (panelIds.length === 0) return { node: null, removed: true };
-    return {
-      removed: true,
-      node: {
-        ...node,
-        panelIds,
-        activePanelId: panelIds.includes(node.activePanelId) ? node.activePanelId : panelIds[0]
-      }
-    };
-  }
-
-  let removed = false;
-  const children = node.children
-    .map((child) => {
-      const result = removePanelFromNode(child, panelId);
-      removed = removed || result.removed;
-      return result.node;
-    })
-    .filter((child): child is DockNode => !!child);
-  if (!removed) return { node, removed: false };
-  if (children.length === 0) return { node: null, removed: true };
-  if (children.length === 1) return { node: children[0], removed: true };
-  return {
-    removed: true,
-    node: {
-      ...node,
-      children,
-      ratio: normalizeRatios(node.ratio, children.length)
-    }
-  };
-}
-
-function removePanelFromDock(dock: DockLayout, panelId: string): boolean {
-  let removed = false;
-  for (const region of Object.keys(dock.root) as DockRegionId[]) {
-    const result = removePanelFromNode(dock.root[region], panelId);
-    dock.root[region] = result.node;
-    removed = removed || result.removed;
-  }
-  return removed;
-}
-
 // A panel id may appear in at most one page's dock, but removal sweeps ALL
 // pages defensively so a move/close can never leave a stale reference behind.
 function removePanelFromAllPages(layout: WorkbenchLayout, panelId: string): boolean {
@@ -131,6 +86,157 @@ function removePanelFromAllPages(layout: WorkbenchLayout, panelId: string): bool
     removed = removePanelFromDock(page.dock, panelId) || removed;
   }
   return removed;
+}
+
+/** Panel ids docked on every page EXCEPT `pageId`. */
+function panelIdsDockedElsewhere(layout: WorkbenchLayout, pageId: string): Set<string> {
+  const ids = new Set<string>();
+  for (const page of orderedWorkbenchPages(layout)) {
+    if (page.id === pageId) continue;
+    for (const panelId of panelIdsInPageDock(page)) ids.add(panelId);
+  }
+  return ids;
+}
+
+/**
+ * A working copy of an incoming page dock (page.add / page.setDock) that never
+ * takes a panel away from another page: references to panels docked elsewhere
+ * are dropped, so they stay where they are. References to missing panels are
+ * left for repair to prune. The command's own dock is never mutated.
+ */
+function ownDockFor(layout: WorkbenchLayout, pageId: string, dock: DockLayout | undefined): DockLayout {
+  const copy: DockLayout = dock ? (JSON.parse(JSON.stringify(dock)) as DockLayout) : createEmptyDockLayout();
+  copy.regions = copy.regions ?? createEmptyDockLayout().regions;
+  copy.root = copy.root ?? createEmptyDockLayout().root;
+  const elsewhere = panelIdsDockedElsewhere(layout, pageId);
+  if (!elsewhere.size) return copy;
+  const referenced = Object.values(copy.root).flatMap((node) => panelIdsInDockTree(node ?? null));
+  for (const panelId of referenced) {
+    if (elsewhere.has(panelId)) removePanelFromDock(copy, panelId);
+  }
+  return copy;
+}
+
+/** JSON with sorted keys: a deep-equality key for panel state. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/** Equality key of a panel state: an absent state and `{}` are the same. */
+function stateKeyOf(state: JsonObject | undefined): string {
+  return !state || Object.keys(state).length === 0 ? 'null' : stableJson(state);
+}
+
+/** A fresh panel id the layout does not use yet. */
+function freshPanelId(layout: WorkbenchLayout, sourceId: string): string {
+  const prefix = sourceId.split(/[.\-:]/)[0] || 'panel';
+  let id = createWorkbenchId(prefix);
+  while (layout.panels[id]) id = createWorkbenchId(prefix);
+  return id;
+}
+
+interface AppliedPageLayout {
+  dock: DockLayout;
+  /** Distinct single-instance panels that live on another page (they stay there). */
+  keptElsewhere: number;
+}
+
+/**
+ * Map a stored page layout onto the live layout for `pageLayout.apply`
+ * (`page.setDock` semantics — nothing is deleted, nothing is duplicated):
+ *
+ *   - a stored panel with a `singletonKey` is the instance that carries that
+ *     key (created with the key when none exists); if that instance is docked
+ *     on ANOTHER page it stays there (counted in `keptElsewhere`);
+ *   - a keyless stored panel reuses a keyless instance with the same type +
+ *     title + deep-equal state (absent state = `{}`): one already on the target
+ *     page first, else a parked one — but a parked one only when it owns no
+ *     widgets (identical custom panels differ only by their widgets, so the
+ *     target's own panel must win and a parked panel carrying widgets is never
+ *     swapped in for an empty one). Only otherwise is a copy minted — applying
+ *     the same layout twice creates nothing new.
+ *
+ * Mutates `layout.panels` (created instances); returns the target page's new
+ * dock (fresh node ids). The caller docks it through {@link ownDockFor}, which
+ * parks the target's unused panels and drops elsewhere-docked references.
+ */
+function mapStoredPageLayout(layout: WorkbenchLayout, stored: WorkbenchPageLayout, targetPageId: string): AppliedPageLayout {
+  const storedPanels = stored.panels ?? {};
+  const dockedOn = new Map<string, string>();
+  for (const page of orderedWorkbenchPages(layout)) {
+    for (const panelId of panelIdsInPageDock(page)) if (!dockedOn.has(panelId)) dockedOn.set(panelId, page.id);
+  }
+  const referenced = [...new Set(Object.values(stored.page?.dock?.root ?? {}).flatMap((node) => panelIdsInDockTree(node ?? null)))];
+  const remap = new Map<string, string>();
+  const claimed = new Set<string>();
+  const unknown: string[] = [];
+  const keptElsewhere = new Set<string>();
+  // Reuse candidates, computed once: keyless instances on the target page
+  // (preferred) and parked ones that own no widgets, with their state key.
+  const zonesWithWidgets = new Set(Object.values(layout.widgets ?? {}).map((widget) => widget.zone));
+  const candidates = Object.values(layout.panels)
+    .filter((panel) => {
+      if (panel.singletonKey) return false;
+      const at = dockedOn.get(panel.id);
+      if (at) return at === targetPageId;
+      return !zonesWithWidgets.has(`panel:${panel.id}`);
+    })
+    .map((panel) => ({ panel, onTarget: dockedOn.get(panel.id) === targetPageId, stateKey: stateKeyOf(panel.state) }))
+    .sort((a, b) => Number(b.onTarget) - Number(a.onTarget));
+
+  for (const storedId of referenced) {
+    const source = storedPanels[storedId];
+    if (!source) {
+      unknown.push(storedId);
+      continue;
+    }
+    if (source.singletonKey) {
+      const existing = Object.values(layout.panels).find((panel) => panel.singletonKey === source.singletonKey);
+      if (existing) {
+        remap.set(storedId, existing.id);
+        const at = dockedOn.get(existing.id);
+        if (at && at !== targetPageId) keptElsewhere.add(existing.id);
+        continue;
+      }
+      const id = layout.panels[source.id] ? freshPanelId(layout, source.id) : source.id;
+      layout.panels[id] = { ...(JSON.parse(JSON.stringify(source)) as PanelInstance), id };
+      remap.set(storedId, id);
+      continue;
+    }
+    const stateKey = stateKeyOf(source.state);
+    const reuse = candidates.find(
+      (candidate) =>
+        !claimed.has(candidate.panel.id) &&
+        candidate.panel.type === source.type &&
+        (candidate.panel.title ?? '') === (source.title ?? '') &&
+        candidate.stateKey === stateKey
+    )?.panel;
+    if (reuse) {
+      claimed.add(reuse.id);
+      remap.set(storedId, reuse.id);
+      continue;
+    }
+    const id = freshPanelId(layout, source.id);
+    const copy: PanelInstance = { ...(JSON.parse(JSON.stringify(source)) as PanelInstance), id, closable: source.closable ?? true };
+    delete copy.locked;
+    layout.panels[id] = copy;
+    claimed.add(id);
+    remap.set(storedId, id);
+  }
+
+  const sourceDock: DockLayout = JSON.parse(JSON.stringify(stored.page?.dock ?? createEmptyDockLayout()));
+  sourceDock.regions = sourceDock.regions ?? createEmptyDockLayout().regions;
+  sourceDock.root = sourceDock.root ?? createEmptyDockLayout().root;
+  for (const storedId of unknown) removePanelFromDock(sourceDock, storedId);
+  return { dock: remapDockLayout(sourceDock, remap), keptElsewhere: keptElsewhere.size };
 }
 
 // Run `finder` against each region root and return the first defined match. Every dock lookup
@@ -163,8 +269,18 @@ function findTabStackById(node: DockNode | null, tabStackId: string): TabStackDo
   return undefined;
 }
 
+/**
+ * A panel dropped into a region the user collapsed (region.collapse) would land
+ * invisibly inside the strip: every insert into a region expands it.
+ */
+function expandRegion(dock: DockLayout, region: DockRegionId): void {
+  const state = dock.regions[region];
+  if (state?.collapsed) state.collapsed = false;
+}
+
 function appendPanelToRegion(dock: DockLayout, panelId: string, region: DockRegionId, index?: number): InsertResult {
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
+  expandRegion(dock, region);
   const root = dock.root[region];
   if (!root) {
     dock.root[region] = makeTabStack(panelId);
@@ -186,9 +302,15 @@ function appendPanelToRegion(dock: DockLayout, panelId: string, region: DockRegi
 }
 
 function insertPanelIntoTab(dock: DockLayout, panelId: string, target: Extract<DockTarget, { kind: 'tab' }>): InsertResult {
-  const stack = findAcrossRegions(dock, (node) =>
-    target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined
-  );
+  let stack: TabStackDockNode | undefined;
+  for (const region of Object.keys(dock.root) as DockRegionId[]) {
+    const node = dock.root[region];
+    stack = target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined;
+    if (stack) {
+      expandRegion(dock, region);
+      break;
+    }
+  }
   if (!stack) return { success: false, code: 'missing-target', message: 'Target tab stack was not found.' };
   const panelIds = stack.panelIds.filter((id) => id !== panelId);
   const index = Math.max(0, Math.min(target.index ?? panelIds.length, panelIds.length));
@@ -232,6 +354,7 @@ function insertPanelAsSplit(dock: DockLayout, panelId: string, target: Extract<D
       const result = splitNearTarget(dock.root[region], panelId, target.targetPanelId, target.axis, position);
       if (result.inserted) {
         dock.root[region] = result.node;
+        expandRegion(dock, region);
         return { success: true };
       }
     }
@@ -241,6 +364,7 @@ function insertPanelAsSplit(dock: DockLayout, panelId: string, target: Extract<D
   const region = target.region;
   if (!region) return { success: false, code: 'missing-target', message: 'Split target needs a region or target panel.' };
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
+  expandRegion(dock, region);
   const root = dock.root[region];
   if (!root) {
     dock.root[region] = makeTabStack(panelId);
@@ -490,20 +614,54 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       const result = insertPanel(dock, command.panel.id, command.target, command.region);
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not add panel.');
     }
+    case 'panel.create': {
+      const panel = command.panel;
+      if (!panel || typeof panel.id !== 'string' || !panel.id) return fail(doc, 'invalid-command', 'panel.create needs a panel with an id.');
+      if (layout.panels[panel.id]) return fail(doc, 'duplicate-id', `Panel ${panel.id} already exists.`);
+      const conflict = findSingletonConflict(layout, panel);
+      if (conflict) return fail(doc, 'duplicate-singleton', `Panel singleton ${panel.singletonKey} already exists as ${conflict.id}.`);
+      // Parked: in the roster, on no page.
+      layout.panels[panel.id] = { ...panel };
+      return ok(next);
+    }
     case 'panel.close': {
       const panel = layout.panels[command.panelId];
       if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
-      if (panel.locked) return fail(doc, 'locked-panel', `Panel ${command.panelId} is locked and cannot be closed.`);
+      // Locked = cannot leave the layout — except a keyless COPY of a
+      // single-instance panel (another panel of its type carries the key):
+      // older page duplicates kept the lock, and the original stays anyway.
+      const lockedCopy =
+        !!panel.locked &&
+        !panel.singletonKey &&
+        Object.values(layout.panels).some((other) => other.id !== panel.id && other.type === panel.type && !!other.singletonKey);
+      if (panel.locked && !lockedCopy) return fail(doc, 'locked-panel', `Panel ${command.panelId} is locked and cannot be closed.`);
       removePanelFromAllPages(layout, command.panelId);
       removePanelOwnedWidgets(layout, command.panelId);
       delete layout.panels[command.panelId];
       return ok(next);
     }
+    case 'panel.remove': {
+      // Park: the panel leaves every page, the instance (state, owned widget
+      // zone + widgets) stays so it can be docked again.
+      const panel = layout.panels[command.panelId];
+      if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
+      if (panel.locked) return fail(doc, 'locked-panel', `Panel ${command.panelId} is locked and cannot be removed.`);
+      removePanelFromAllPages(layout, command.panelId);
+      return ok(next);
+    }
     case 'panel.move': {
-      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
+      // `pageId` targets ANOTHER page's dock (drop on a nav page / "Move to ▸
+      // Page"): the panel leaves wherever it is and `to` is applied to that
+      // page's dock. The active page does not change.
+      const targetDock = command.pageId ? layout.pages[command.pageId]?.dock : dock;
+      if (command.pageId && !targetDock) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      if (!targetDock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
       removePanelFromAllPages(layout, command.panelId);
-      const result = insertPanel(dock, command.panelId, command.to, 'main');
+      // A moved panel arrives expanded: the drop preview shows it at full size,
+      // so it must never land as a collapsed strip (old docs / strip menus).
+      delete layout.panels[command.panelId].collapsed;
+      const result = insertPanel(targetDock, command.panelId, command.to, 'main');
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not move panel.');
     }
     case 'panel.tab': {
@@ -554,6 +712,12 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       panel.title = title;
       return ok(next);
     }
+    case 'panel.state': {
+      const panel = layout.panels[command.panelId];
+      if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
+      panel.state = { ...panel.state, ...command.state };
+      return ok(next);
+    }
     case 'panel.collapse': {
       const panel = layout.panels[command.panelId];
       if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
@@ -588,27 +752,28 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
         return fail(doc, 'duplicate-id', `Navigation entry ${command.navEntry.id} already exists.`);
       }
       const label = typeof page.label === 'string' && page.label.trim() ? page.label.trim() : page.id;
-      const inserted: WorkbenchPage = { ...page, label, dock: page.dock ?? createEmptyDockLayout() };
+      // A new page docks only parked panels: one already on another page stays there.
+      const inserted: WorkbenchPage = { ...page, label, dock: ownDockFor(layout, page.id, page.dock) };
       layout.pages[page.id] = inserted;
       const order = layout.pageOrder.filter((id) => id !== page.id);
       order.splice(Math.max(0, Math.min(command.index ?? order.length, order.length)), 0, page.id);
       layout.pageOrder = order;
-      const entry = command.navEntry
-        ? { ...command.navEntry, pageId: page.id }
-        : defaultPageNavigationEntry(layout, inserted);
-      insertNavigationEntry(layout, entry, command.index);
+      // `navEntry: null` adds a nav-less page (reached programmatically only).
+      if (command.navEntry !== null) {
+        const entry = command.navEntry
+          ? { ...command.navEntry, pageId: page.id }
+          : defaultPageNavigationEntry(layout, inserted);
+        insertNavigationEntry(layout, entry, command.navIndex ?? command.index);
+      }
       return ok(next);
     }
     case 'page.remove': {
       const page = layout.pages[command.pageId];
       if (!page) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
       if (Object.keys(layout.pages).length <= 1) return fail(doc, 'protected-page', 'The last page cannot be removed.');
-      // Panels docked on this page exist only here (panel-in-≤1-page invariant),
-      // so their instances — and any panel-owned widgets — go with the page.
-      for (const panelId of panelIdsInPageDock(page)) {
-        removePanelOwnedWidgets(layout, panelId);
-        delete layout.panels[panelId];
-      }
+      // The page's panels are PARKED, never deleted: dropping the page drops
+      // its dock references, while the instances (locked ones too) keep their
+      // state and owned widgets in `layout.panels`, ready to be docked again.
       const removedIndex = layout.pageOrder.indexOf(command.pageId);
       delete layout.pages[command.pageId];
       layout.pageOrder = layout.pageOrder.filter((id) => id !== command.pageId);
@@ -622,6 +787,16 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
         const at = Math.max(0, Math.min(removedIndex < 0 ? layout.pageOrder.length - 1 : removedIndex, layout.pageOrder.length - 1));
         layout.activePageId = layout.pageOrder[at];
       }
+      return ok(next);
+    }
+    case 'page.setDock': {
+      const page = layout.pages[command.pageId];
+      if (!page) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      // Panels the new dock does not reference are parked (they simply drop out
+      // of the page); panels docked on another page stay there. Without a dock
+      // (Clear page) the region sizes stay and only the roots empty.
+      const cleared: DockLayout = { regions: JSON.parse(JSON.stringify(page.dock.regions)), root: createEmptyDockLayout().root };
+      page.dock = ownDockFor(layout, page.id, command.dock ?? cleared);
       return ok(next);
     }
     case 'page.rename': {
@@ -707,23 +882,16 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       const targetId = command.pageId ?? layout.activePageId;
       const target = layout.pages[targetId];
       if (!target) return fail(doc, 'missing-page', `Page ${targetId} does not exist.`);
-      // The target page keeps its identity (id/label/icon/metadata + its bound
-      // nav entry); only its dock + panels are replaced by a re-minted copy of
-      // the stored layout, so the applied dock never shares ids with anything
-      // live. Drop the target's current panels (and their owned widgets) first.
-      for (const panelId of panelIdsInPageDock(target)) {
-        removePanelOwnedWidgets(layout, panelId);
-        delete layout.panels[panelId];
-      }
-      const { page: reminted, panels: remintedPanels } = remintWorkbenchPage(stored.page, stored.panels ?? {}, {
-        pageId: target.id,
-        label: target.label
-      });
-      reminted.icon = target.icon;
-      reminted.metadata = target.metadata;
-      for (const panel of Object.values(remintedPanels)) layout.panels[panel.id] = panel;
-      layout.pages[target.id] = reminted;
-      return ok(next);
+      // `page.setDock` semantics: the target page keeps its identity (id /
+      // label / icon / metadata + its bound nav entry) and gets the stored dock
+      // (fresh node ids) mapped onto live instances — single-instance panels
+      // ARE their live instance (one on another page stays there), keyless ones
+      // reuse an identical instance before a copy is minted. The target's
+      // panels the new dock does not use are PARKED, never deleted.
+      const applied = mapStoredPageLayout(layout, stored, target.id);
+      target.dock = ownDockFor(layout, target.id, applied.dock);
+      const kept = applied.keptElsewhere;
+      return ok(next, kept ? [kept === 1 ? '1 panel stays on another page' : `${kept} panels stay on other pages`] : undefined);
     }
     case 'widget.add': {
       if (layout.widgets[command.widget.id]) return fail(doc, 'duplicate-id', `Widget ${command.widget.id} already exists.`);
@@ -781,6 +949,13 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       const groupId = command.groupId ?? createWorkbenchId('group');
       const existingGroup = layout.widgetGroups[groupId];
       if (existingGroup?.locked) return fail(doc, 'locked-widget-group', `Widget group ${groupId} is locked and cannot be changed.`);
+      // A member of another LOCKED group cannot leave it (that group would change).
+      for (const widgetId of widgetIds) {
+        const from = layout.widgets[widgetId].groupId;
+        if (from && from !== groupId && layout.widgetGroups[from]?.locked) {
+          return fail(doc, 'locked-widget-group', `Widget ${widgetId} is in the locked group ${from} and cannot be grouped elsewhere.`);
+        }
+      }
       const zone = command.zone ?? layout.widgets[widgetIds[0]].zone;
       // An explicit `memberOrder` (V14b positional insert / in-group reorder)
       // pins the member sequence verbatim, restricted to the ids actually being
@@ -885,8 +1060,26 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
     case 'profile.activate': {
       const profile = next.profiles[command.profileId];
       if (!profile) return fail(doc, 'missing-profile', `Profile ${command.profileId} does not exist.`);
-      if (!next.layouts[profile.layoutId]) return fail(doc, 'missing-layout', `Layout ${profile.layoutId} does not exist.`);
+      const incoming = next.layouts[profile.layoutId];
+      if (!incoming) return fail(doc, 'missing-layout', `Layout ${profile.layoutId} does not exist.`);
+      // Carry the active PAGE across the profile switch. Every profile owns its own
+      // layout, and each layout remembers its own `activePageId` — so without this the
+      // viewport resolver (a window resize crossing 760/1366) silently moves the user
+      // from, say, the Preset Browser to whatever page that profile's layout was last
+      // left on. The page is the user's "where am I", not a per-device preference:
+      // chrome adapts to the width, the view must not.
+      //
+      // Deliberately applies to EVERY activation path — resize, ribbon pin, Auto, and
+      // the boot-time resolve — so the active page reads as one selection shared across
+      // profiles rather than three that drift apart. Do not "fix" this back to a
+      // resize-only carry.
+      //
+      // Layouts whose pages diverged (custom pages) keep their own page: only carry an
+      // id the incoming layout actually has, so `activePageId` never dangles.
+      const outgoing = selectActiveLayout(next);
+      const carriedPageId = outgoing?.activePageId;
       next.activeProfileId = command.profileId;
+      if (carriedPageId && incoming.pages?.[carriedPageId]) incoming.activePageId = carriedPageId;
       return ok(next);
     }
     case 'profile.rename': {

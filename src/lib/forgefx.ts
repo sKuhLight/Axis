@@ -46,8 +46,24 @@ import type {
   CaptureUploadResult
 } from './types';
 import { checkSaveTarget, saveBlockedText } from './saveTarget';
+import { parseBlockState } from './blockState';
+import { parseBlockVisuals } from './blockVisuals';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
+
+/** Normalize the additive `blockState` and `visuals` of a block-params response (each absent when not
+ *  served or malformed). */
+function withParsedBlockState(r: BlockParams): BlockParams {
+  if (!r || typeof r !== 'object') return r;
+  const blockState = parseBlockState((r as { blockState?: unknown }).blockState);
+  const visuals = parseBlockVisuals((r as { visuals?: unknown }).visuals);
+  const out: BlockParams = { ...r };
+  if (blockState) out.blockState = blockState;
+  else delete out.blockState;
+  if (visuals) out.visuals = visuals;
+  else delete out.visuals;
+  return out;
+}
 
 // Per-tab client id, stamped onto config writes (putDoc) so the live cross-UI sync can tell a UI's own echo
 // from a genuine change made elsewhere (host↔remote). See editor.applyDeviceEvent('config').
@@ -274,7 +290,10 @@ export const forgefx = {
     }),
 
   // ── live block parameters (addressed by the placed instance's effect id) ──
-  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`),
+  /** `blockState` (Scene Ignore + Bypass Mode, cap `blockState`) is normalized: absent on servers / devices
+   *  without it, and a malformed tag reads as absent rather than breaking the editor. */
+  blockParams: (eid: number, opts: { observe?: boolean } = {}) =>
+    req<BlockParams>(`/preset/blocks/${eid}/params${opts.observe === false ? '?observe=0' : ''}`).then(withParsedBlockState),
   /** Set a parameter. continuous=true (knob, value 0..1) by default; false sends an enum ordinal. */
   setParam: (eid: number, paramId: number, value: number, continuous = true) =>
     req<{ ok: boolean }>(`/preset/blocks/${eid}/params/${paramId}`, {
@@ -422,6 +441,9 @@ export const forgefx = {
   /** Set the device-telemetry polling mode. 400 on an unknown mode; 404/501 on servers without the control. */
   setTelemetryMode: (mode: TelemetryMode) =>
     req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ mode }) }),
+  /** Ask the server to run its meter round-robin (on) or stop it (off). Off unless a client asks. */
+  setTelemetryMeters: (on: boolean) =>
+    req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ meters: on }) }),
   uploadDebugReport: (report: DebugReport) =>
     req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
 

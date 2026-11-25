@@ -65,7 +65,9 @@ describe('Axis Workbench integration contracts', () => {
       'axis.paramControl',
       'axis.hint',
       'axis.legal',
-      'axis.telemetry'
+      'axis.telemetry',
+      'axis.horizontalDivider',
+      'axis.verticalDivider'
     ]);
 
     expect(AXIS_WORKBENCH_NAVIGATION_IDS).toEqual([

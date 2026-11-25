@@ -55,22 +55,39 @@ export type LayoutWidget =
   | 'readout'
   | 'unknown';
 
-/** A layout control that binds to a DIFFERENT block than the one being edited (rendered live via the
- *  pinned-param hydration when `paramId` resolves; display-only otherwise). */
+/** A layout control that belongs to a DIFFERENT block than the one being edited (the global metronome on
+ *  a Tempo page, a modifier's source on the Controllers' Modifiers page, …). Its `paramId` is in the
+ *  OWNER's id space, so it must never bind to the open block's param with the same id: the Block Editor
+ *  draws it as a gap unless `effectId` is present and is the open block, or (no effect id) the ref names
+ *  the open layout's own family and a single-instance effect — e.g. the Foot Controller screen's own
+ *  params, tagged `ID_FOOTCONTROLLER` (deviceLayoutBoard.ts `isForeignControl`). Today's servers send only
+ *  the `effect` token. */
 export interface LayoutCrossBlock {
-  /** Effect id of the block that owns the parameter. */
-  effect: number;
-  family: string;
+  /** The device editor's token for the owning effect (e.g. `ID_GLOBAL`, `ID_MODIFIER1`). */
+  effect: string;
+  /** Effect id of the owning block, when the server resolves it (not sent yet). Must be in the same id
+   *  space as the `:eid` the client reads the block with (`/preset/blocks/:eid/params`, i.e. the open
+   *  cell's `effectId`): the guard compares the two directly. */
+  effectId?: number;
+  /** Catalog family of the referenced parameter, or null. */
+  family: string | null;
   paramName: string | null;
+  /** paramId in the OWNER's id space, or null. */
   paramId: number | null;
 }
 
-/** Fine placement metadata from the editor grid (stored, not yet rendered — later polish pass). */
+/** Fine placement metadata from the device editor's page (the Block Editor's default board converts it to
+ *  cells, see blockEditor/layoutPlacement.ts). Passed through by the server unchanged, so every field is
+ *  read defensively. */
 export interface LayoutPlacement {
+  /** Zero-based column (one knob slot) within the control's row. */
   col?: number;
+  /** Pixel nudge from the column slot. */
   offsetX?: number;
   offsetY?: number;
-  positionExact?: boolean;
+  /** Exact position of the control, as an `"x,y"` pixel string (top-left corner in the device editor's
+   *  page coordinates). Not a boolean. */
+  positionExact?: string;
 }
 
 /** One control on a device-authentic editor page: a display label + widget kind bound to a paramId. */
@@ -84,10 +101,14 @@ export interface LayoutControl {
   placement?: LayoutPlacement;
   crossBlock?: LayoutCrossBlock;
   fw?: unknown;
+  /** Graph slots only: the key of the served visual this slot is for (cap `blockVisuals`). A key whose
+   *  visual the block does not serve (its current type lacks the params, or `eq`) is a gap. */
+  graphKey?: string;
 }
 /** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
 export interface LayoutRow {
-  /** Editor section tag (e.g. `parameters`, `mixer`) — informational. */
+  /** Editor section tag (e.g. `parameters`, `mixer`); a change between rows starts a labelled divider on
+   *  the default board. */
   section?: string;
   controls: LayoutControl[];
 }
@@ -96,7 +117,14 @@ export interface LayoutPage {
   name: string;
   pageNum?: number;
   fw?: unknown;
+  /** Selector and value set for the active page alternative, when the device layout has one. */
+  selectorParamName?: string;
+  value?: string;
   rows: LayoutRow[];
+  /** Controls placed directly on the page, outside its rows (document order; placement.positionExact, fw as
+   *  for row controls). Absent on servers that do not serve them. Entries without a param (section titles,
+   *  separators) are not used. */
+  pageControls?: LayoutControl[];
 }
 /** Device-authentic UI layout for a block/virtual effect. The server has ALREADY selected the variant
  *  matching the block's current type, so `pages` are the arrangement to render as-is. */
@@ -117,8 +145,72 @@ export interface BlockParams {
   named: NamedParam[];
   enums: EnumParam[];
   type: { value: number; name: string } | null;
-  /** Device-authentic editor pages (seeds the ControlSurface "Default" layout). */
+  /** Device-authentic editor pages (seeds the Block Editor's "Default" layout). */
   layout?: DeviceLayout;
+  /** Scene Ignore + Bypass Mode of the block's active channel, tagged by the server (cap `blockState`).
+   *  Absent on servers / devices without it. */
+  blockState?: BlockState;
+  /** Read-only displays ("graphs") the block can show, served by the server (cap `blockVisuals`) and
+   *  already narrowed to the block's current type/variant. Absent on servers / devices without them. */
+  visuals?: BlockVisual[];
+}
+
+/** One served read-only display of a block (GET /preset/blocks/:eid/params `visuals`). `roles` maps a role
+ *  (an input of the client's own display math: `threshold`, `rate`, `time`, …) to a paramId of THIS
+ *  response (a served knob or selector) or of a read-only monitor; the client draws from the values it
+ *  holds for those ids and never needs a catalog symbol. Role semantics per kind: forgefx-midi
+ *  `src/visuals.ts`. */
+export interface VisualEqBand {
+  key: string; gain?: number; freq?: number; q?: number; type?: number; centerHz?: number;
+  label?: string;
+  shape?: 'bell' | 'lowshelf' | 'highshelf' | 'lowcut' | 'highcut';
+}
+export interface BlockVisual {
+  /** Stable key, unique per block (`dynamics`, `lfo`, `lfo1`, `response`, `echo`, `adsr1`, `cabAlign`, …). */
+  key: string;
+  kind: BlockVisualKind;
+  title: string;
+  /** Sub-variant whose display law differs (`compressor` / `gate`, `mod` / `tremolo` / `panner`,
+   *  `filter` / `wah`). */
+  mode?: string;
+  roles: Record<string, number>;
+  bands?: VisualEqBand[];
+}
+export type BlockVisualKind = 'dynamics' | 'lfo' | 'response' | 'decay' | 'echo' | 'adsr' | 'cabAlign' | 'eq' | 'dynaCab';
+
+/** The block's Scene Ignore toggle on its ACTIVE channel (the device param is per channel). `paramId` is
+ *  the same id as the block's own `enums[]` entry: a toggle is the ordinary enum write. */
+export interface BlockSceneIgnore {
+  paramId: number;
+  /** 0 = OFF, 1 = ON (the block keeps its state on scene changes). */
+  value: number;
+  /** False when the device firmware is known and below the param's gate (`reason` says which). */
+  supported: boolean;
+  reason?: string;
+}
+
+/** One bypass-mode option: the device's own label, and whether the mode silences the block. */
+export interface BypassModeOption {
+  value: number;
+  label: string;
+  muting: boolean;
+}
+
+/** The block's Bypass Mode (what it does WHILE bypassed) on its active channel. */
+export interface BlockBypassMode {
+  paramId: number;
+  value: number;
+  options: BypassModeOption[];
+}
+
+/** `blockState` on GET /preset/blocks/:eid/params. A null member = the block has no such param.
+ *  Not to be confused with the `DeviceEvent` kind `'blockState'` (a pushed bypass / channel change of some
+ *  block, which only triggers a re-read): this is the open block's Scene Ignore + Bypass Mode. */
+export interface BlockState {
+  sceneIgnore: BlockSceneIgnore | null;
+  bypassMode: BlockBypassMode | null;
+  /** The server could not read the block (its values unknown): neither control is usable. */
+  readError?: boolean;
 }
 
 /** Foot Controller (eid 199) address model — field bases + config formula + enums. */
@@ -230,6 +322,8 @@ export interface TelemetryConfig {
   mode: TelemetryMode;
   effective: Record<string, unknown>;
   modes: TelemetryMode[];
+  /** The server's meter round-robin is on (only while a client asks for it). */
+  meters?: boolean;
 }
 /** Cumulative device-traffic counters pushed on the DeviceEvent bus (`traffic` event). Rates are computed
  *  client-side from deltas between successive snapshots. `loops` = the currently-active poll loops. */
@@ -525,6 +619,8 @@ export type DeviceEvent =
   // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
   // `changed` = a structural change (grid/preset) → reload.
   | { type: 'param'; effectId: number; paramId: number; norm: number }
+  // a block's bypass / channel changed (re-read the scene state) — unrelated to `BlockState` (the open
+  // block's Scene Ignore + Bypass Mode on the block params)
   | { type: 'blockState'; effectId?: number }
   | { type: 'changed'; scope: 'grid' | 'preset' }
   // A shared Axis config doc (layouts / swipe quick-actions / tags / surface arrange …) was written by
@@ -636,6 +732,20 @@ export interface DeviceCaps {
    *  produces a redacted result bundle the user can save or upload for analysis. True for gen-3 devices
    *  that self-describe. Absent on older servers → the Debug tab only explains why it is unavailable. */
   diagnosticCapture?: boolean;
+  /** The block-params response carries `blockState` (Scene Ignore + Bypass Mode of the open block). True on
+   *  the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older servers → the Block Editor header's
+   *  Scene Ignore / Bypass mode controls are disabled with "Needs a newer ForgeFX server". */
+  blockState?: boolean;
+  /** The block-params response carries `visuals` (read-only graph displays) and the served layout's graph
+   *  slots carry `graphKey`. True on the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older
+   *  servers → no graph tiles. */
+  blockVisuals?: boolean;
+  /** The server serves the device-rendered graph curves (`GET /preset/blocks/:eid/curve`, telemetry cap
+   *  `graphCurves`): EQ/PEQ/filter/comp/LFO/ADSR/modifier/cab/RTA curves straight from the unit. FM3 only
+   *  by design; absent on older servers (the tiles then keep computing locally). */
+  graphCurves?: boolean;
+  /** The server can poll the open Looper's waveform and playhead. */
+  looperTelemetry?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */

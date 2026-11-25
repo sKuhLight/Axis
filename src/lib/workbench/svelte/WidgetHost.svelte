@@ -3,16 +3,13 @@
   import {
     capWidgetSize,
     clampFloatingPosition,
-    createCustomPanelFromWidgetsCommands,
-    healFloatingRect,
     raiseFloatingOrder,
-    selectVisibleWidgetsByZone,
-    type DockRegionId,
+    resolveFloatingHeal,
     type WidgetInstance,
     type WidgetSize,
     type WorkbenchCommand
   } from '../core';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import ContextMenu from './ContextMenu.svelte';
   import {
     menuPositionBelowRect,
@@ -20,20 +17,12 @@
     type WorkbenchMenuItem,
     type WorkbenchMenuPosition
   } from './contextMenu';
-  import {
-    anchoredWidgetIndex,
-    fullRegionHighlightRect,
-    pointerDistance,
-    rectContainsPointer,
-    widgetDropCommand,
-    widgetDropIndex,
-    widgetIndexForUnitIndex,
-    zoneUnitWidgetCounts,
-    type WorkbenchRect
-  } from './drag';
-  import { groupInsertIndex, groupHitArea } from './groupInsertion';
+  import { pointerDistance } from './drag';
   import { createWidgetTemplateFromWidget } from './library';
   import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
+  import { beginPointerDrag } from './dragSession';
+  import { groupWithMenuItem, widgetInLockedGroup } from './widgetDrop';
+  import { beginWidgetDrag } from './widgetDragSession';
 
   let {
     widget,
@@ -52,6 +41,9 @@
   );
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  // A member of a LOCKED group cannot leave it (drag, move, hide) nor join
+  // another one: the group would change. Its own size stays its own.
+  const placementLocked = $derived(!!widget.locked || widgetInLockedGroup($controller.activeLayout, widget.id));
 
   const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
     {
@@ -75,12 +67,24 @@
       disabled: widget.locked || widget.size === 'mini',
       run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'mini' })
     },
+    // Slice 4b: grouping by menu — the neighbours in this zone (a member's own
+    // group is its own unit and is not listed). A group neighbour takes it in.
+    groupWithMenuItem({
+      doc: () => controller.document,
+      self: { key: widget.groupId ?? widget.id, widgetIds: [widget.id] },
+      movingIds: [widget.id],
+      locked: placementLocked,
+      typeLabel: catalogLabel,
+      isAvailable: (type) => registry.widgetSizing?.isAvailable?.(type) ?? true,
+      dispatch: (command) => controller.dispatch(command),
+      separatorBefore: true
+    }),
     ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
       id: `move-${option.id}`,
       label: option.label,
       separatorBefore: index === 0,
       danger: option.id === 'hidden',
-      disabled: widget.locked || widget.zone === option.id,
+      disabled: placementLocked || widget.zone === option.id,
       run: () =>
         controller.dispatch({
           type: 'widget.move',
@@ -97,7 +101,7 @@
       run: saveWidgetTemplate
     },
     // The widget's "settings" surface is exactly the items above — size,
-    // placement (move-to), and save. No widget type exposes per-widget custom
+    // grouping, placement (move-to), and save. No widget type exposes per-widget custom
     // settings today, so there is nothing else to wire here. This explicit
     // danger item is the replacement for the removed inset × close button.
     {
@@ -105,10 +109,15 @@
       label: 'Remove Widget',
       separatorBefore: true,
       danger: true,
-      disabled: widget.locked,
+      disabled: placementLocked,
       run: () => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })
     }
   ]);
+
+  // The host's catalog label for a widget type (e.g. "CPU load"), for menus and chips.
+  function catalogLabel(type: string): string | undefined {
+    return registry.canonicalWidgets().find((spec) => spec.type === type)?.label;
+  }
 
   function saveWidgetTemplate() {
     const template = createWidgetTemplateFromWidget($controller.document, widget.id);
@@ -144,266 +153,36 @@
     moveByKey(e);
   }
 
-  // Measured member rects for a group, in member order, excluding the widget
-  // being dragged (it renders `display:none` while dragged, so its slot must not
-  // count toward the insertion math — design `draggingId`).
-  function memberRectsOf(groupEl: HTMLElement, groupWidgetIds: string[]): { id: string; rect: WorkbenchRect }[] {
-    return groupWidgetIds
-      .filter((id) => id !== widget.id)
-      .map((id) => {
-        const el = groupEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`);
-        return el ? { id, rect: rectOf(el) } : null;
-      })
-      .filter((entry): entry is { id: string; rect: WorkbenchRect } => !!entry);
-  }
-
-  // Resolve an in-group insert (or same-group reorder) for the dragged widget at
-  // a pointer. Returns the target group, the computed insertion index, and the
-  // resulting member sequence. Ported from the design's group hover scan: every
-  // group module is tested with its hit-area expanded ±8px/±4px (03-groups §3),
-  // so a near-miss still targets the group. The index is measured against live
-  // member rects EXCLUDING the lifted (display:none) dragged member and the
-  // in-flow slot — the slot only ever pushes members away from the pointer, so
-  // the index is reflow-stable without a snapshot.
-  function groupInsertAt(
-    x: number,
-    y: number
-  ): { groupId: string; index: number; memberOrder: string[]; zone: string; anchorOrder: number } | null {
-    const layout = $controller.activeLayout;
-    if (!layout) return null;
-    const pointer = { x, y };
-    for (const groupEl of Array.from(document.querySelectorAll<HTMLElement>('[data-widget-group]'))) {
-      const groupId = groupEl.dataset.widgetGroup;
-      if (!groupId) continue;
-      const group = layout.widgetGroups[groupId];
-      if (!group || group.locked) continue;
-      const moduleRect = rectOf(groupEl);
-      // A hidden module (collapsed panel, lifted unit) measures 0×0 — never a target.
-      if (moduleRect.width <= 0 || moduleRect.height <= 0) continue;
-      if (!rectContainsPointer(groupHitArea(moduleRect), pointer)) continue;
-      const membersWithRects = memberRectsOf(groupEl, group.widgetIds);
-      const index = groupInsertIndex(pointer, membersWithRects.map((m) => m.rect), 'horizontal');
-      const remaining = membersWithRects.map((m) => m.id);
-      const memberOrder = [...remaining.slice(0, index), widget.id, ...remaining.slice(index)];
-      const anchor = group.widgetIds.map((id) => layout.widgets[id]).filter(Boolean).sort((a, b) => a.order - b.order)[0];
-      return {
-        groupId,
-        index,
-        memberOrder,
-        zone: anchor?.zone ?? widget.zone,
-        anchorOrder: anchor?.order ?? widget.order
-      };
-    }
-    return null;
-  }
-
-  // Create a fresh group by dropping onto a LOOSE widget's centre band (design
-  // create rule: pointer inside the target's middle 28% width). Outside that
-  // band the drop is a plain zone insert next to it, not a group.
-  function groupCreateAt(x: number, y: number): { command: WorkbenchCommand; rect: WorkbenchRect } | null {
-    const layout = $controller.activeLayout;
-    if (!layout || widget.groupId) return null;
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    // Never create a group from a widget already inside a group module here —
-    // that path is handled as an insert by `groupInsertAt`.
-    if (el?.closest<HTMLElement>('[data-widget-group]')) return null;
-    const widgetEl = el?.closest<HTMLElement>('[data-widget-host]');
-    const targetId = widgetEl?.dataset.widget;
-    if (!widgetEl || !targetId || targetId === widget.id) return null;
-    const target = layout.widgets[targetId];
-    if (!target || target.locked || target.groupId) return null;
-    // Centre 28% band (0.36 insets) of the target's width (design create rule).
-    const r = widgetEl.getBoundingClientRect();
-    if (x < r.left + r.width * 0.36 || x > r.right - r.width * 0.36) return null;
-    return {
-      command: {
-        type: 'widget.group',
-        widgetIds: [target.id, widget.id],
-        zone: target.zone,
-        // Anchor the new group where the TARGET currently sits (count of
-        // non-moving zone widgets before it — `placeWidgets` splices into the
-        // zone minus the moved ids, so the raw `target.order` would drift by
-        // one whenever the dragged widget sat before the target).
-        index: anchoredWidgetIndex(selectVisibleWidgetsByZone($controller.document, target.zone), [target.id, widget.id], target.order)
-      },
-      rect: rectOf(widgetEl)
-    };
-  }
-
-  function rectOf(el: Element): WorkbenchRect {
-    const rect = el.getBoundingClientRect();
-    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-  }
-
-  function workspaceEdgeDropAt(x: number, y: number): { region: DockRegionId; rect: WorkbenchRect } | null {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const workspace = el?.closest<HTMLElement>('.aw-workspace');
-    if (!workspace) return null;
-    const rect = workspace.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    const nx = (x - rect.left) / rect.width;
-    const ny = (y - rect.top) / rect.height;
-    const edge = 0.18;
-    let region: DockRegionId | null = null;
-    if (nx < edge) region = 'left';
-    else if (nx > 1 - edge) region = 'right';
-    else if (ny < edge) region = 'top';
-    else if (ny > 1 - edge) region = 'bottom';
-    if (!region) return null;
-    // T21 directive #1: highlight the WHOLE region frame (full drop area), not a
-    // small band on the edge — shared with the parameter-source edge drop.
-    const highlight = fullRegionHighlightRect(region);
-    return { region, rect: highlight ?? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
-  }
-
-  // Top-level zone units under a zone element: loose widget hosts + group
-  // modules, in DOM order. Nested member hosts (inside a module) and the
-  // in-flow drag slot are NOT units; the lifted (display:none) dragged widget
-  // is excluded so its empty slot never skews the midpoint math.
-  function zoneUnitEls(zoneEl: HTMLElement): HTMLElement[] {
-    return Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-widget-host], [data-widget-group]')).filter((item) => {
-      if (item.dataset.widget != null && item.closest('[data-widget-group]')) return false;
-      if (item.dataset.widget === widget.id) return false;
-      return true;
-    });
-  }
-
-  // Zone drop resolution: `index` is the UNIT index among visible top-level
-  // units (what the in-flow gap renders against — design `overIndex`). It is
-  // converted to a widget-order index only at drop time.
-  function widgetDropAt(x: number, y: number) {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const zoneEl = el?.closest<HTMLElement>('[data-zone]');
-    const zone = zoneEl?.dataset.zone;
-    if (!zone || !zoneEl) return null;
-    const orientation = zone === 'rail' ? 'vertical' : 'horizontal';
-    const index = widgetDropIndex({ x, y }, zoneUnitEls(zoneEl).map(rectOf), orientation);
-    if (zone === 'floating') {
-      const root = zoneEl.getBoundingClientRect();
-      return { zone, index, floatingRect: { x: x - root.left, y: y - root.top } };
-    }
-    return { zone, index };
-  }
-
-  // Single source of truth for what a drop at (x,y) does. Priority (design §7):
-  // in-group insert/reorder → group-create on a loose widget's centre band →
-  // plain zone insert → new-panel workspace edge. The pull-OUT case is just a
-  // plain zone drop that resolves outside the member's group; the reducer's
-  // `detachPartialGroupMembers` handles the detach (regression-tested).
-  function resolveDropAt(x: number, y: number): { command: WorkbenchCommand } | { edgeDrop: { region: DockRegionId } } | null {
-    const insert = groupInsertAt(x, y);
-    if (insert) {
-      // Same-group drop = reorder (no detach); foreign/loose = insert. Both are
-      // `widget.group` with an explicit member sequence, so neither routes
-      // through `widget.move` / detach. The zone index keeps the group BLOCK
-      // anchored where it currently sits (design zone re-numbering) — without
-      // it, `placeWidgets` would append the whole group to the end of the zone.
-      return {
-        command: {
-          type: 'widget.group',
-          groupId: insert.groupId,
-          widgetIds: insert.memberOrder,
-          memberOrder: insert.memberOrder,
-          zone: insert.zone as WidgetInstance['zone'],
-          index: anchoredWidgetIndex(
-            selectVisibleWidgetsByZone($controller.document, insert.zone),
-            insert.memberOrder,
-            insert.anchorOrder
-          )
-        }
-      };
-    }
-    const groupCreate = groupCreateAt(x, y);
-    if (groupCreate) return { command: groupCreate.command };
-    const target = widgetDropAt(x, y);
-    if (target) {
-      // Unit index → widget-order index (a 3-member group before the gap
-      // counts 3), computed against the zone's widgets minus the dragged one —
-      // matching the reducer's `placeWidgets` exclusion.
-      const counts = zoneUnitWidgetCounts(selectVisibleWidgetsByZone($controller.document, target.zone), [widget.id]);
-      return {
-        command: widgetDropCommand([widget.id], {
-          zone: target.zone,
-          index: widgetIndexForUnitIndex(counts, target.index),
-          floatingRect: target.floatingRect
-        })
-      };
-    }
-    const edge = workspaceEdgeDropAt(x, y);
-    return edge ? { edgeDrop: { region: edge.region } } : null;
-  }
-
+  // Widget drag (slice 4b, `widgetDragSession.ts`): plain drops insert (the
+  // insert line marks where); resting 350 ms on a foreign unit arms grouping
+  // (Group frame); inside its own group a member reorders directly; the
+  // workspace edge opens a new custom panel. A tap (no drag past 5 px) opens the
+  // widget menu below the host (touch-friendly replacement for the inset buttons).
   function dragPointerDown(e: PointerEvent) {
     if (!$controller.editMode || widget.locked || e.button !== 0) return;
-    const startedAt = { x: e.clientX, y: e.clientY };
+    if (placementLocked) {
+      // In a locked group: no drag — a tap still opens the menu.
+      beginPointerDrag({ event: e, shouldActivate: () => false, onMove: () => {}, onDrop: () => {}, onTap: openMenuBelowHost });
+      return;
+    }
     // Origin rect captured at pointerdown (design startDrag: drag.w/h +
-    // offx/offy) — it sizes the in-flow slots and anchors the full-size ghost.
-    // Captured BEFORE the origin lifts (display:none makes later reads zero).
-    // `size` is layout px (offset*) so in-flow slots stay correct under an
-    // ancestor CSS zoom; `grabOffset` is visual px (client coords) for the
-    // DragLayer ghost, which self-calibrates the zoom factor.
+    // offx/offy), BEFORE the origin lifts (display:none makes later reads zero).
+    // `size` is layout px (offset*); `grabOffset` is visual px (client coords)
+    // for the DragLayer ghost, which self-calibrates the zoom factor.
     const originRect = hostEl?.getBoundingClientRect();
     const size = hostEl ? { width: hostEl.offsetWidth || 120, height: hostEl.offsetHeight || 38 } : { width: 120, height: 38 };
     const grabOffset = originRect ? { x: e.clientX - originRect.left, y: e.clientY - originRect.top } : { x: 60, y: 19 };
-    let dragging = false;
-
-    const onMove = (ev: PointerEvent) => {
-      const pointer = { x: ev.clientX, y: ev.clientY };
-      if (!dragging && pointerDistance(startedAt, pointer) < 5) return;
-      dragging = true;
-      // Setting the drag state lifts the origin (display:none) on the NEXT
-      // flush; the very first tick therefore measures pre-lift geometry, which
-      // self-corrects one pointermove later — same ordering as the design's
-      // startDrag → pointermove sequence.
-      const base = { kind: 'widget' as const, widgetIds: [widget.id], startedAt, pointer, size, grabOffset };
-      const insert = groupInsertAt(pointer.x, pointer.y);
-      const create = insert ? null : groupCreateAt(pointer.x, pointer.y);
-      const target = insert || create ? null : widgetDropAt(pointer.x, pointer.y);
-      const edgeDrop = insert || create || target ? null : workspaceEdgeDropAt(pointer.x, pointer.y);
-      controller.setDrag({
-        ...base,
-        targetLabel: insert
-          ? insert.groupId === widget.groupId ? 'Reorder in group' : 'Place in group'
-          : create
-            ? 'Group widgets'
-            : target
-              ? target.zone
-              : edgeDrop
-                ? `New panel in ${edgeDrop.region}`
-                : undefined,
-        previewRect: create?.rect ?? edgeDrop?.rect,
-        previewKind: create ? 'group' : edgeDrop ? 'zone' : undefined,
-        groupInsert: insert ? { groupId: insert.groupId, index: insert.index } : undefined,
-        zoneInsert: target ? { zone: target.zone, index: target.index } : undefined
-      });
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (dragging) {
-        const resolved = resolveDropAt(ev.clientX, ev.clientY);
-        if (resolved && 'command' in resolved) controller.dispatch(resolved.command);
-        else if (resolved && 'edgeDrop' in resolved) {
-          controller.dispatchMany(
-            createCustomPanelFromWidgetsCommands($controller.document, {
-              widgetIds: [widget.id],
-              title: 'Custom Panel',
-              region: resolved.edgeDrop.region
-            })
-          );
-        }
-        controller.setDrag(null);
-      } else {
-        // A tap that never crossed the drag threshold opens the widget menu
-        // below the host (touch-friendly replacement for the inset buttons).
-        openMenuBelowHost();
-      }
-    };
-
-    e.preventDefault();
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    beginWidgetDrag({
+      controller,
+      event: e,
+      widgetIds: [widget.id],
+      ownUnitKey: widget.groupId ?? widget.id,
+      reorderGroupId: widget.groupId ?? null,
+      size,
+      grabOffset,
+      typeLabel: catalogLabel,
+      onTap: openMenuBelowHost
+    });
   }
 
   function moveByKey(e: KeyboardEvent) {
@@ -431,6 +210,19 @@
   // whether or not edit mode is on, since a floater has no bar to grab from.
   let hostEl = $state<HTMLElement | null>(null);
   const isFloating = $derived(widget.zone === 'floating');
+
+  // Display-only clamp while editing (see `resolveFloatingHeal`): entering
+  // Customize shrinks the stage, and that transition must never move or persist
+  // a stored position. Valid only for the stored x/y it was computed from.
+  let viewClamp = $state<{ x: number; y: number; fromX: number; fromY: number } | null>(null);
+  const displayRect = $derived.by(() => {
+    const rect = widget.floatingRect;
+    if (!rect) return null;
+    if (viewClamp && viewClamp.fromX === rect.x && viewClamp.fromY === rect.y) {
+      return { ...rect, x: viewClamp.x, y: viewClamp.y };
+    }
+    return rect;
+  });
 
   // Container = the floating zone element (inset:0 over the root); its client
   // box is the clamp viewport. Falls back to the widget's parent.
@@ -460,7 +252,8 @@
     e.stopPropagation();
     raiseFloating();
 
-    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    // Start from where the floater is SHOWN (a display clamp may be in effect).
+    const origin = displayRect ?? { x: 0, y: 0 };
     const startedAt = { x: e.clientX, y: e.clientY };
     let dragging = false;
     let pending: { x: number; y: number } = { x: origin.x, y: origin.y };
@@ -481,6 +274,7 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (!dragging) {
         // A tap on the grip (no reposition) opens the widget menu — floating
         // chips have no drag surface, so the grip is their menu affordance too.
@@ -496,18 +290,39 @@
       });
     };
 
+    // Same pointercancel guard as dragPointerDown: abort the gesture without
+    // persisting a position, so an interrupted drag doesn't leave the window
+    // listeners live for a later stray pointerup to act on. Also undo the
+    // imperative style write from onMove — since nothing is dispatched, the
+    // reactive `style` binding (keyed off unchanged widget.floatingRect) would
+    // otherwise never revert the node to its last persisted position.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (dragging && hostEl) {
+        hostEl.style.left = `${origin.x}px`;
+        hostEl.style.top = `${origin.y}px`;
+      }
+    };
+
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   // Self-heal: on mount and on viewport/zone resize, re-clamp a persisted
   // position so a floater saved offscreen (e.g. after the window shrank)
-  // reappears with a grabbable strip in view.
+  // reappears with a grabbable strip in view. While editing the clamp is
+  // display-only (never dispatched): the edit-mode transition itself (edit bar,
+  // preview frame) must not rewrite stored positions. Leaving edit mode re-heals
+  // against the full stage.
   function healFloatingIntoView() {
-    if (!isFloating || !widget.floatingRect || !hostEl) return;
-    const healed = healFloatingRect(widget.floatingRect, floatingSize(), floatingViewport());
-    if (!healed) return;
-    controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', floatingRect: healed });
+    const rect = widget.floatingRect;
+    if (!isFloating || !rect || !hostEl) return;
+    const { persist, view } = resolveFloatingHeal(rect, floatingSize(), floatingViewport(), controller.editMode);
+    viewClamp = view ? { ...view, fromX: rect.x, fromY: rect.y } : null;
+    if (persist) controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', floatingRect: persist });
   }
 
   // Keyboard reposition for the floating grip: arrows nudge by a step (Shift =
@@ -519,7 +334,7 @@
     const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
     if (!dx && !dy) return;
     e.preventDefault();
-    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    const origin = displayRect ?? { x: 0, y: 0 };
     const next = clampFloatingPosition({ x: origin.x + dx, y: origin.y + dy }, floatingSize(), floatingViewport());
     controller.dispatch({
       type: 'widget.move',
@@ -532,12 +347,23 @@
   // Origin LIFT (V14 follow-up): while this widget is being dragged, its origin
   // collapses out of the flow (design zone-unit `display:none` while dragging +
   // AxisGroup `draggingId`) — the widget visibly travels as the DragLayer ghost
-  // instead of staying put. Neighbours reflow into the freed space, which is
-  // also what makes the in-flow insertion slot read as the true post-drop
-  // layout. Floating chips reposition live and never set controller drag.
+  // instead of staying put. Neighbours reflow into the freed space, so the
+  // insert line sits between the units as they will be after the drop.
+  // Floating chips reposition live and never set controller drag.
   const lifted = $derived(
     !isFloating && $controller.drag?.kind === 'widget' && $controller.drag.widgetIds.includes(widget.id)
   );
+
+  // Entering / leaving edit mode re-runs the heal for the new stage: display-only
+  // while editing, and leaving drops the display clamp (the stored position is
+  // shown again; it is only persisted if it is out of view of the full stage).
+  const editing = $derived($controller.editMode);
+  $effect(() => {
+    void editing;
+    if (!untrack(() => isFloating)) return;
+    const raf = requestAnimationFrame(healFloatingIntoView);
+    return () => cancelAnimationFrame(raf);
+  });
 
   onMount(() => {
     if (!isFloating) return;
@@ -563,7 +389,7 @@
   data-widget-type={widget.type}
   data-size={size}
   role="group"
-  style={isFloating && widget.floatingRect ? `left:${widget.floatingRect.x}px; top:${widget.floatingRect.y}px; z-index:${50 + widget.order};` : ''}
+  style={isFloating && displayRect ? `left:${displayRect.x}px; top:${displayRect.y}px; z-index:${50 + widget.order};` : ''}
   onpointerdowncapture={isFloating ? () => raiseFloating() : undefined}
   oncontextmenu={openMenu}
 >
@@ -587,9 +413,10 @@
     <!-- The grab surface is present for standalone AND grouped widgets: grabbing
          a grouped member drags it out of (or reorders it against) the group. The
          whole-group grip lives on WidgetGroupHost. -->
-    <!-- Tap (no drag) opens the widget menu below the host; drag reorders/moves.
-         The single gesture is disambiguated by the 5px threshold in
-         `dragPointerDown` (R16b: the inset size/close/⋯ buttons are gone). -->
+    <!-- Tap (no drag) opens the widget menu below the host; drag inserts / moves
+         (rest on another widget to group). The single gesture is disambiguated
+         by the 5px threshold in `beginWidgetDrag` (R16b: the inset
+         size/close/⋯ buttons are gone). -->
     <div
       class="aw-widget-drag-surface"
       class:member={!!widget.groupId}
@@ -597,7 +424,7 @@
       tabindex="0"
       aria-haspopup="menu"
       aria-expanded={menuOpen}
-      aria-label={widget.groupId ? 'Widget actions (drag to move out of group)' : 'Widget actions (drag to move)'}
+      aria-label={placementLocked ? 'Widget actions' : widget.groupId ? 'Widget actions (drag to move out of group)' : 'Widget actions (drag to move)'}
       onpointerdown={dragPointerDown}
       onkeydown={surfaceKeydown}
     ></div>
@@ -614,8 +441,8 @@
     flex: none;
   }
   /* Origin lifted while dragging (design zone-unit + AxisGroup `display:none`):
-     the widget travels as the DragLayer ghost; the freed space closes so the
-     in-flow slot previews the true post-drop layout. */
+     the widget travels as the DragLayer ghost; the freed space closes, so the
+     insert line sits between the units as they will be after the drop. */
   .aw-widget-host.lifted {
     display: none;
   }

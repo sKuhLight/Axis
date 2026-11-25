@@ -43,7 +43,9 @@ Body:
 
 Footer (sticky):
 - **Common knobs** (Level / Mix) with ⚡ swipe-assign.
-- **Mute · Scene Ignore · Bypass · Remove** action chips.
+- **Mute · Scene Ignore · Bypass · Remove** action chips. *(Shipped as the Block Editor header's
+  Engaged | Bypass mode | Scene Ignore: the devices have no block mute, so "Mute" became the block's own
+  Bypass mode — AXIS-81.)*
 
 ## Mapping to ForgeFX API
 

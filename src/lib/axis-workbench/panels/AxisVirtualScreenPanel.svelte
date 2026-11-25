@@ -3,6 +3,7 @@
   // The panel's target slug (state.slug) is opened through the normal editor.openVirtual
   // path — the same widget-grid Control Surface the old shell mounts via VirtualScreen —
   // so Setup/Controllers are reachable in the Workbench instead of dead-ending (T09).
+  import { untrack } from 'svelte';
   import { editor } from '../../editor.svelte';
   import VirtualScreen from '../../VirtualScreen.svelte';
   import type { PanelInstance } from '../../workbench';
@@ -25,8 +26,21 @@
   }
 
   $effect(() => {
-    void slug;
-    ensureOpen();
+    const s = slug;
+    // `ensureOpen` reads/writes `editor.virtual` itself — read it untracked so THIS
+    // effect only depends on `slug` (mount/slug-change/destroy). Tracking it would
+    // make the effect re-run every time `openVirtual` sets it below, tearing itself
+    // down (nulling `editor.virtual` right back out) and reopening it — an infinite loop.
+    untrack(ensureOpen);
+    // Leaving this panel (page switch away from Setup/Controllers, or slug change)
+    // must give up the virtual effect it opened — otherwise `editor.selected` keeps
+    // synthesizing this panel's cell (editor.svelte.ts `get selected()`) after
+    // navigating back to the Grid, and the Block Editor keeps showing it as if it
+    // were still selected. Only clear if we're still the one holding it — a newer
+    // panel (e.g. Setup opening right after Controllers) may have already taken over.
+    return () => {
+      if (untrack(() => editor.virtual?.slug) === s) editor.virtual = null;
+    };
   });
 
   const showing = $derived(editor.virtual?.slug === slug);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyWorkbenchDocument } from '../../core';
 import { createWorkbenchController } from '../controller.svelte';
-import { createWorkbenchRenderRegistry } from '../renderRegistry';
+import { createWorkbenchRenderRegistry, shouldShowPageHints } from '../renderRegistry';
 
 const fallback = (() => null) as never;
 const specific = (() => null) as never;
@@ -19,6 +19,54 @@ describe('WorkbenchRenderRegistry', () => {
     expect(registry.panel('missing.panel')).toBe(fallback);
     expect(registry.widget('missing.widget')).toBe(fallback);
     expect(registry.navigation('missing.nav')).toBe(fallback);
+  });
+
+  it('serves the widget catalog and the Add palette slot (empty without providers)', () => {
+    const registry = createWorkbenchRenderRegistry();
+    expect(registry.canonicalWidgets()).toEqual([]);
+    expect(registry.widgetUnavailableReason('w.any')).toBeNull();
+    expect(registry.addPalette).toBeNull();
+    registry.registerWidgetCatalogProvider({
+      canonical: () => [{ type: 'w.a', label: 'A' }],
+      unavailableReason: (type) => (type === 'w.b' ? 'No B' : null)
+    });
+    registry.registerAddPalette(specific);
+    expect(registry.canonicalWidgets().map((spec) => spec.type)).toEqual(['w.a']);
+    expect(registry.widgetUnavailableReason('w.b')).toBe('No B');
+    expect(registry.widgetUnavailableReason('w.a')).toBeNull();
+    expect(registry.addPalette).toBe(specific);
+  });
+
+  it('serves the app panel catalog and page hints (empty without providers)', () => {
+    const registry = createWorkbenchRenderRegistry();
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const layout = controller.activeLayout;
+    const page = controller.activePage;
+    expect(registry.canonicalPanels()).toEqual([]);
+    expect(registry.panelCatalogHiddenTypes).toEqual([]);
+    expect(registry.pageHints(layout, page)).toEqual([]);
+
+    registry.registerPanelCatalogProvider({
+      canonical: () => [{ key: 'a', panel: { id: 'a', type: 'x.a', title: 'A' } }],
+      hiddenTypes: ['x.internal']
+    });
+    registry.registerPageHints((_layout, p) => [{ id: `hint.${p.id}`, text: 'T', actionLabel: 'Go', commands: () => [] }]);
+    expect(registry.canonicalPanels().map((spec) => spec.key)).toEqual(['a']);
+    expect(registry.panelCatalogHiddenTypes).toEqual(['x.internal']);
+    expect(registry.pageHints(layout, page).map((hint) => hint.id)).toEqual([`hint.${page!.id}`]);
+    expect(registry.pageHints(undefined, page)).toEqual([]);
+
+    expect(registry.pageProtection(page)).toBeNull();
+    registry.registerPageProtection((p) => (p.id === page!.id ? 'Used elsewhere' : null));
+    expect(registry.pageProtection(page)).toBe('Used elsewhere');
+    expect(registry.pageProtection(undefined)).toBeNull();
+  });
+
+  it('shows page hints always while editing, in view mode only on an empty main region', () => {
+    expect(shouldShowPageHints({ count: 0, editMode: true, mainEmpty: true })).toBe(false);
+    expect(shouldShowPageHints({ count: 1, editMode: true, mainEmpty: false })).toBe(true);
+    expect(shouldShowPageHints({ count: 1, editMode: false, mainEmpty: true })).toBe(true);
+    expect(shouldShowPageHints({ count: 1, editMode: false, mainEmpty: false })).toBe(false);
   });
 
   it('resolves the active navigation entry via the registered provider', () => {

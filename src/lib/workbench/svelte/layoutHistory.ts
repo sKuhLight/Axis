@@ -275,3 +275,28 @@ export class LayoutHistory {
     return cloneDoc(this.#entries[this.#cursor].doc);
   }
 }
+
+/** The keyboard-event fields {@link layoutHistoryShortcut} reads (a DOM KeyboardEvent fits). */
+export interface LayoutHistoryKeyLike {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  target?: { tagName?: string; isContentEditable?: boolean } | EventTarget | null;
+}
+
+/**
+ * Which layout-history action a keydown asks for while editing: Ctrl/Cmd+Z →
+ * `undo`; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y → `redo`; anything else — no modifier,
+ * another key, or focus inside a text field (INPUT / TEXTAREA / contentEditable,
+ * where the browser's own text undo wins) — → null.
+ */
+export function layoutHistoryShortcut(event: LayoutHistoryKeyLike): 'undo' | 'redo' | null {
+  if (!(event.metaKey || event.ctrlKey)) return null;
+  const key = event.key.toLowerCase();
+  const action = key === 'z' ? (event.shiftKey ? 'redo' : 'undo') : key === 'y' ? 'redo' : null;
+  if (!action) return null;
+  const target = event.target as { tagName?: string; isContentEditable?: boolean } | null | undefined;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return null;
+  return action;
+}

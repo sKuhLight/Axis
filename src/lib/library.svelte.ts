@@ -208,7 +208,16 @@ class LibraryStore {
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
       // legacy / other-decode-version caches are dropped here (and re-decoded by the deep scan), never served
-      loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+      loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => {
+        if (!p) return;
+        // Merge, don't replace: params hydrated before IndexedDB resolves must survive — in-memory is
+        // newer, so it wins over the persisted copy.
+        const hydratedEarly = Object.keys(this.#paramsCache).length > 0;
+        this.#paramsCache = { ...p, ...this.#paramsCache };
+        // Such an early hydration also persisted ITS cache over the stored blob, which then holds only the
+        // new entries — write the merged cache back so the older ones are not lost on disk either.
+        if (hydratedEarly) this.#persistParams();
+      });
       // read the raw-bytes blob (merging anything imported meanwhile); a failed read leaves the files pending
       void this.#bytes.load().then((ok) => (ok ? this.#redecodePending() : false));
     }
@@ -421,8 +430,9 @@ class LibraryStore {
     return { ok, failed };
   }
 
-  /** Open a directory picker and import every .syx within (one level). Returns count, or null if the
-   *  picker is unsupported / cancelled. Uses the directory <input> so it works in Electron + Chromium. */
+  /** Open a directory picker and import every .syx within (one level). Returns the import count — `{ ok: 0,
+   *  failed: 0 }` when the chosen folder held no files — or null if the picker was cancelled. Uses the
+   *  directory <input> so it works in Electron + Chromium. */
   async importFolder(): Promise<{ ok: number; failed: number } | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -432,11 +442,14 @@ class LibraryStore {
       input.multiple = true;
       input.onchange = async () => {
         const list = Array.from(input.files ?? []);
-        if (!list.length) return resolve(null);
+        if (!list.length) return resolve({ ok: 0, failed: 0 }); // an empty folder is a result, not a cancel
         // derive a short folder name from the common top directory of the selection
         const folder = (list[0].webkitRelativePath?.split('/')[0]) || 'Folder';
         resolve(await this.importFiles(list, folder));
       };
+      // Browsers fire `cancel`, not `change`, when the picker is dismissed — without this the promise
+      // never settles and the caller's await hangs forever. Harmless if `onchange` also resolves.
+      input.addEventListener('cancel', () => resolve(null));
       input.click();
     });
   }

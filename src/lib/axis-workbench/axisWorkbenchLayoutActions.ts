@@ -1,11 +1,24 @@
-import { createWorkbenchId, type WorkbenchCommandResult, type WorkbenchDocument, type WorkbenchProfile } from '../workbench/core';
-import { enqueueToast, type WorkbenchController } from '../workbench';
 import {
+  createWorkbenchId,
+  type ViewportClass,
+  type WorkbenchCommandResult,
+  type WorkbenchDocument,
+  type WorkbenchLayout,
+  type WorkbenchProfile
+} from '../workbench/core';
+import {
+  enqueueToast,
+  type WorkbenchController,
+  type WorkbenchEditBarProfileOption,
+  type WorkbenchMenuItem
+} from '../workbench';
+import {
+  AXIS_LAYOUT_PRESET_KINDS,
+  AXIS_LAYOUT_TAB_KINDS,
   AXIS_PROFILE_SEED_KINDS,
   axisLayoutPresetLabel,
   createAxisLayoutPreset,
-  type AxisLayoutPresetKind,
-  type AxisLayoutTabKind
+  type AxisLayoutPresetKind
 } from './axisWorkbenchLayoutPresets';
 
 /** Profile ids seeded from the tablet / mobile presets. */
@@ -79,6 +92,120 @@ export function resolveAxisProfileSwitcherState(
   return { chips, autoMode };
 }
 
+/** Viewport class each Axis profile previews as (drives the edit bar's glyphs). */
+export const AXIS_PROFILE_VIEWPORT_CLASS: Record<(typeof AXIS_PROFILE_IDS)[number], ViewportClass> = {
+  [AXIS_DESKTOP_PROFILE_ID]: 'desktop',
+  [AXIS_TABLET_PROFILE_ID]: 'tablet',
+  [AXIS_MOBILE_PROFILE_ID]: 'phone'
+};
+
+/**
+ * The edit bar's PROFILE options (Auto · Desktop · Tablet · Mobile) derived from
+ * the switcher state: the pinned choice is `active` (Auto when nothing is
+ * pinned); the profile Auto resolved to is `resolved`.
+ */
+export function buildAxisProfileOptions(state: AxisProfileSwitcherState): WorkbenchEditBarProfileOption[] {
+  const resolved = state.chips.find((chip) => chip.autoActive);
+  return [
+    {
+      id: null,
+      label: 'Auto',
+      active: state.autoMode,
+      resolved: false,
+      title: resolved ? `Auto — follow the viewport size (now ${resolved.label})` : 'Auto — follow the viewport size'
+    },
+    ...state.chips.map(
+      (chip): WorkbenchEditBarProfileOption => ({
+        id: chip.id,
+        label: chip.label,
+        viewportClass: AXIS_PROFILE_VIEWPORT_CLASS[chip.id as (typeof AXIS_PROFILE_IDS)[number]],
+        active: chip.pinned,
+        resolved: chip.autoActive,
+        title: chip.pinned
+          ? `${chip.label} — pinned`
+          : chip.autoActive
+            ? `${chip.label} — matched by viewport (pin to lock)`
+            : `Pin ${chip.label} profile`
+      })
+    )
+  ];
+}
+
+/** The collapsed PROFILE dropdown's value: "Auto · Desktop" or the pinned profile. */
+export function axisProfileSummaryLabel(state: AxisProfileSwitcherState): string {
+  if (!state.autoMode) return state.chips.find((chip) => chip.pinned)?.label ?? 'Pinned';
+  const resolved = state.chips.find((chip) => chip.autoActive);
+  return resolved ? `Auto · ${resolved.label}` : 'Auto';
+}
+
+const isPresetKind = (value: unknown): value is AxisLayoutPresetKind =>
+  typeof value === 'string' && (AXIS_LAYOUT_PRESET_KINDS as readonly string[]).includes(value);
+
+/**
+ * The preset (any of the six kinds) the active layout was built from. The real
+ * kind is `settings.presetKind`; `settings.activePreset` only records LAYOUT-tab
+ * kinds (it reads `default` for the tablet / mobile seeds), so it is the legacy
+ * fallback. `default` when neither names a known preset.
+ */
+export function axisActiveLayoutPresetKind(layout: WorkbenchLayout | undefined): AxisLayoutPresetKind {
+  const presetKind = layout?.settings?.presetKind;
+  if (isPresetKind(presetKind)) return presetKind;
+  const activePreset = layout?.settings?.activePreset;
+  if (isPresetKind(activePreset)) return activePreset;
+  return 'default';
+}
+
+/**
+ * Axis items for the edit bar's LAYOUT menu: the four LAYOUT-tab presets as
+ * radio rows (class `axis-preset-tab`) and "Reset layout", which re-applies the
+ * ACTIVE preset kind — including a tablet / mobile profile seed — after an
+ * inline confirm. A row is checked only when its tab kind IS the active preset,
+ * so none is checked on a tablet / mobile seed; the checked row is a no-op
+ * (re-applying it silently would replace the layout — Reset is the explicit way).
+ * Switching to a DIFFERENT preset replaces the whole layout (custom pages,
+ * custom and parked panels are not carried over), so it asks inline first,
+ * like Reset; Undo brings the old layout back.
+ */
+export function buildAxisLayoutMenuItems(controller: WorkbenchController): WorkbenchMenuItem[] {
+  const active = axisActiveLayoutPresetKind(controller.activeLayout);
+  const noop = (): void => {};
+  return [
+    { id: 'axis.preset.header', kind: 'header', label: 'Preset', run: noop },
+    ...AXIS_LAYOUT_TAB_KINDS.map(
+      (kind): WorkbenchMenuItem => ({
+        id: `axis.preset.${kind}`,
+        kind: 'radio',
+        label: axisLayoutPresetLabel(kind),
+        checked: kind === active,
+        className: 'axis-preset-tab',
+        ...(kind === active
+          ? { run: noop }
+          : {
+              confirm: {
+                prompt: `Switch to “${axisLayoutPresetLabel(kind)}”? This replaces your layout. Undo brings it back.`,
+                confirmLabel: 'Switch'
+              },
+              run: () => {
+                applyAxisLayoutPreset(controller, kind);
+              }
+            })
+      })
+    ),
+    {
+      id: 'axis.preset.reset',
+      label: 'Reset layout',
+      danger: true,
+      confirm: {
+        prompt: `Reset to the “${axisLayoutPresetLabel(active)}” preset? Undo brings it back.`,
+        confirmLabel: 'Reset'
+      },
+      run: () => {
+        applyAxisLayoutPreset(controller, active);
+      }
+    }
+  ];
+}
+
 /**
  * Manually pin the active Axis device profile (PROFILE switcher). Persists the
  * choice as the document override so it survives reloads and wins over the
@@ -118,19 +245,21 @@ export interface ApplyAxisLayoutPresetResult {
 }
 
 /**
- * Apply a LAYOUT-tab preset (default/stage/studio/compact) to the *active*
- * profile — the design's `onPreset(id)`: replace the active profile's layout with
- * `preset(id)` while **preserving the current `rightW`**, then set it active.
+ * Apply a preset (any of the six kinds — a LAYOUT-tab preset, or a tablet /
+ * mobile seed for Reset layout on those profiles) to the *active* profile — the
+ * design's `onPreset(id)`: replace the active profile's layout with `preset(id)`
+ * while **preserving the current `rightW`**, then set it active.
  *
  * The preset layout is minted with a fresh `layout-*` id (via `createWorkbenchId`,
  * never a hand-picked constant that could collide), saved into the document, and
- * pointed to by the active profile. The previous layout is left in place unless it
- * was itself a generated preset layout no other profile references (kept simple:
- * we do not garbage-collect here; `repairWorkbenchDocument` tolerates orphans).
+ * pointed to by the active profile. The REPLACED layout is deleted in the same
+ * batch when no other profile references it — no UI lists stored whole layouts,
+ * so it would only be dead weight in every persisted copy. One batch = one undo
+ * step, and undo restores both.
  */
 export function applyAxisLayoutPreset(
   controller: WorkbenchController,
-  kind: AxisLayoutTabKind
+  kind: AxisLayoutPresetKind
 ): ApplyAxisLayoutPresetResult {
   const doc = controller.document;
   const activeProfileId = doc.activeProfileId;
@@ -141,15 +270,20 @@ export function applyAxisLayoutPreset(
     layoutId: createWorkbenchId('layout'),
     rightW: activeRightW(doc)
   });
+  const previousId = doc.profiles[activeProfileId].layoutId;
+  const previousStillUsed = Object.entries(doc.profiles).some(
+    ([profileId, profile]) => profileId !== activeProfileId && profile.layoutId === previousId
+  );
 
   const batch = controller.dispatchMany([
     { type: 'layout.save', layout },
-    { type: 'profile.setLayout', profileId: activeProfileId, layoutId: layout.id }
+    { type: 'profile.setLayout', profileId: activeProfileId, layoutId: layout.id },
+    ...(doc.layouts[previousId] && !previousStillUsed ? [{ type: 'layout.delete' as const, layoutId: previousId }] : [])
   ]);
   if (!batch.success) return { success: false, error: batch.error };
   // Transient confirmation (design shows `Applied "<Kind>" layout`). Fired from
-  // the action layer so every caller (AxisLayoutPresetPicker, future PROFILE
-  // switcher) gets it for free — no per-call-site enqueue needed.
+  // the action layer so every caller (the edit bar's LAYOUT presets and Reset
+  // layout) gets it for free — no per-call-site enqueue needed.
   enqueueToast({ text: `Applied "${axisLayoutPresetLabel(kind)}" layout` });
   return { success: true, layoutId: layout.id };
 }

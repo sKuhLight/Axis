@@ -1,9 +1,11 @@
 <script lang="ts">
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
-  import { catFor, shade } from './catalog';
-  import ControlSurface from './ControlSurface.svelte';
-  import GridMap from './GridMap.svelte';
+  import { catFor, familyLabel, shade } from './catalog';
+  import BeSurface from './blockEditor/BeSurface.svelte';
+  import { trackDeviceClass } from './blockEditor/deviceClass.svelte';
+  import { blockStateView, type BeBlockChrome } from './blockEditor/headerModel';
+  import { eqStylesFromVisuals } from './blockEditor/eqStyles';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
   import type { CabState, CabSlot } from './types';
@@ -11,6 +13,12 @@
   const editor = getEditorSurface();
 
   let { embedded = false }: { embedded?: boolean } = $props();
+
+  // the editor's device class (workbench profile, else window width): the phone chrome follows it, the same
+  // value the board uses for its storage key
+  const dc = trackDeviceClass();
+  const isPhone = $derived(dc.current === 'phone');
+  const isTouch = $derived(dc.current !== 'desktop'); // phone and tablet: ≥ 40 px hit targets
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
@@ -69,10 +77,68 @@
     }
     return out;
   });
+  // The block's served EQ styles (Input EQ / Output EQ / PEQ): style views on the one eq tile. The PEQ and
+  // GEQ blocks draw their own bands through the plain `eq` view, so they keep it alone.
+  const eqStyles = $derived.by(() => (isEQ ? [] : eqStylesFromVisuals(editor.blockVisuals ?? [], editor.params, editor.enums)));
+  const eqTitleText = $derived(
+    isEQ ? editor.blockType?.name || (sel?.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ') : eqStyles[0]?.title ?? 'EQ'
+  );
   // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
   const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
 
-  const CHAN = ['A', 'B', 'C', 'D'];
+  // ── header: the type chip and block actions the surface's header shows ──
+  // Scene Ignore and Bypass mode come from the device (ForgeFX tags them on the block params, cap
+  // `blockState`) and write through the board's own enum write; unavailable = disabled with the reason.
+  const blockStateUi = $derived(
+    blockStateView({
+      live: !!editor.setBlockStateParam,
+      cap: editor.blockStateCap,
+      device: editor.detected?.name,
+      status: editor.sheetState,
+      state: editor.blockState,
+      stale: !!editor.blockStateStale,
+      channel: sel?.channel
+    })
+  );
+  const chrome = $derived.by((): BeBlockChrome | null => {
+    if (!sel || !cat) return null;
+    const bs = blockStateUi;
+    return {
+      glyph: cat.glyph,
+      glyphBg: `linear-gradient(180deg,${shade(cat.accent, 0.14)},${shade(cat.accent, -0.5)})`,
+      glyphBorder: shade(cat.accent, -0.25),
+      family: familyLabel(sel.pack, baseName(sel.display)),
+      typeName: editor.blockType?.name,
+      pack: sel.pack,
+      isCab,
+      cabSummary,
+      channel: sel.channel,
+      bypassed: !!sel.bypassed,
+      blockState: bs,
+      onType: () => (isCab ? editor.openCabPicker() : editor.openRetype()),
+      onChannel: (ch) => void editor.setChannel(ch),
+      onBypass: () => void editor.toggleBypass(),
+      onSceneIgnore: (on) => {
+        if (bs.scene.enabled && bs.scene.paramId != null) editor.setBlockStateParam?.(bs.scene.paramId, on ? 1 : 0);
+      },
+      onBypassMode: (value) => {
+        if (bs.bypassMode.enabled && bs.bypassMode.paramId != null) editor.setBlockStateParam?.(bs.bypassMode.paramId, value);
+      },
+      onRemove: () => void editor.removeSelected()
+    };
+  });
+  const message = $derived(
+    editor.sheetState === 'nopack'
+      ? `No parameter pack for ${sel ? familyLabel(sel.pack, baseName(sel.display)) : 'this block'} yet.`
+      : editor.sheetState === 'loading'
+        ? 'Reading parameters…'
+        : editor.sheetState === 'error'
+          ? "Couldn't read this block."
+          : ''
+  );
+  /** Identity of the block shown: another block (or effect) starts a fresh view of the surface; a reload
+   *  of the same block keeps its board. The surface itself stays mounted. */
+  const surfaceKey = $derived(sel ? `${sel.effectId}@${sel.row},${sel.col}` : '');
 
   // ── docked resize (desktop) ──
   let resizing = false;
@@ -98,11 +164,18 @@
   }
 </script>
 
+<!-- monolith: close at the end of the header row (the workbench pane has its own) -->
+{#snippet closeButton()}
+  <button class="close" type="button" aria-label="Close" title="Close" onclick={() => editor.closeEditor()}>✕</button>
+{/snippet}
+
 {#if (embedded || editor.editorOpen) && sel && cat}
   <div
     class="ed"
     class:mob={editor.isMobile && !embedded}
     class:embedded
+    class:phone={isPhone}
+    class:touch={isTouch}
     style="--c:{cat.accent}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
     data-screen="Block Editor"
   >
@@ -114,61 +187,23 @@
         </div>
       {/if}
 
-      <!-- header -->
-      <header class="head">
-        <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</div>
-        <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
-          <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-          <span class="t-wrap">
-            <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
-            <span class="t-type">{isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel.pack || '—')}</span>
-          </span>
-          {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
-        </button>
-
-        {#if sel.pack && sel.channel != null}
-          <div class="ch">
-            <span class="ch-lbl mono">CH</span>
-            {#each CHAN as id}
-              <button class="ch-btn" class:on={sel.channel === id} onclick={() => editor.setChannel(id)}>{id}</button>
-            {/each}
-          </div>
-        {/if}
-
-        {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
-      </header>
-
-      <!-- grid map navigator: hop between blocks / add / route without leaving the editor -->
-      <GridMap />
-
-      <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
-      {#if editor.sheetState === 'nopack'}
-        <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
-      {:else if editor.sheetState === 'loading'}
-        <div class="content scroll"><p class="hint">Reading parameters…</p></div>
-      {:else if editor.sheetState === 'error'}
-        <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
-      {:else}
-        <ControlSurface
-          slug={sel.pack ?? sel.display ?? 'block'}
-          accent={cat.accent}
-          eqBands={isEQ ? eqBands : []}
-          eqGainRange={sel.pack === 'Geq' ? 12 : 20}
-          eqTitle={editor.blockType?.name || (sel.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ')}
-          hideIds={isCab ? CAB_PICKER_IDS : []}
-        />
-      {/if}
-
-      <!-- footer -->
-      <footer class="foot">
-        <button class="act" onclick={() => editor.showToast('Mute — coming soon', '#35c9d6')}>Mute</button>
-        <button class="act" onclick={() => editor.showToast('Scene Ignore — coming soon', '#35c9d6')}>Scene Ignore</button>
-        <span class="spacer"></span>
-        <button class="act byp" class:on={sel.bypassed} disabled={!sel.pack} onclick={() => editor.toggleBypass()}>
-          {sel.bypassed ? 'Bypassed' : 'Engaged'}
-        </button>
-        <button class="act rem" onclick={() => editor.removeSelected()}>Remove</button>
-      </footer>
+      <!-- header (type chip · pages · search · Engaged | Bypass mode ▾ | Scene Ignore · ⋯), then the block's control
+           board (every page at once, always fitted; arrange mode). The no-pack / reading / error states show
+           in the board area while the header stays usable. -->
+      <BeSurface
+        slug={sel.pack ?? sel.display ?? 'block'}
+        accent={cat.accent}
+        eqBands={isEQ ? eqBands : []}
+        eqStyles={isEQ ? [] : eqStyles}
+        eqGainRange={sel.pack === 'Geq' ? 12 : 20}
+        eqTitle={eqTitleText}
+        hideIds={isCab ? CAB_PICKER_IDS : []}
+        block={chrome}
+        status={editor.sheetState}
+        {message}
+        headerEnd={embedded ? undefined : closeButton}
+        resetKey={surfaceKey}
+      />
     </div>
   </div>
 {/if}
@@ -191,6 +226,9 @@
     border-top: 0;
     box-shadow: none;
   }
+  /* In a workbench pane the editor keeps a stacking context of its own (z-index 0): its in-panel
+     z-indexes never meet the dock chrome. Its floating parts (⋯ menu, search popover, select, value
+     bubble, modifier flyout, pin chip) live in layers on the workbench shell root (overlayLayer.ts). */
   .ed.embedded {
     flex: 1;
     min-width: 0;
@@ -242,177 +280,29 @@
     background: var(--border3);
   }
 
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--surface2);
-    flex: none;
-  }
-  .icon {
-    width: 40px;
-    height: 40px;
-    flex: none;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 19px;
-    color: var(--text);
-    border: 1px solid;
-  }
-  /* the type button doubles as the model search — grows to fill the header so the full name shows */
-  .typebtn {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    flex: 1;
-    min-width: 0;
-    height: 46px;
-    padding: 0 12px 0 13px;
-    background: linear-gradient(180deg, var(--bg2), var(--bg));
-    border: 1px solid var(--border2);
-    border-radius: 11px;
-    cursor: pointer;
-    color: var(--accent);
-  }
-  .typebtn:hover:not(:disabled) {
-    border-color: var(--accent);
-    background: var(--surface);
-  }
-  .typebtn:disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-  .t-mag {
-    flex: none;
-    color: var(--accent);
-  }
-  .t-wrap {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    text-align: left;
-  }
-  .t-title {
-    font: 700 9px/1 var(--font-mono);
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--text-mut);
-  }
-  .t-type {
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .t-go {
-    flex: none;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent);
-    padding: 6px 10px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    white-space: nowrap;
-  }
-  .ch {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  }
-  .ch-lbl {
-    font: 600 8px/1 var(--font-mono);
-    color: var(--text-mut);
-    letter-spacing: 0.08em;
-    margin-right: 2px;
-  }
-  .ch-btn {
-    width: 34px;
-    height: 34px;
-    flex: none;
-    border-radius: 9px;
-    background: var(--bg2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-faint);
-    font-weight: 700;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .ch-btn.on {
-    background: var(--accent-tint);
-    border-color: var(--accent);
-    color: var(--amber);
-  }
-  .spacer {
-    flex: 1;
-    min-width: 6px;
-  }
+  /* monolith: close at the end of the header row */
   .close {
-    width: 38px;
-    height: 38px;
+    width: 30px;
+    height: 30px;
     flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-2);
-    border: 1px solid var(--border-2);
-    border-radius: 10px;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 16px;
-    color: var(--text-dim);
+    font-size: 13px;
+    color: var(--textdim);
   }
   .close:hover {
-    border-color: var(--border-strong);
+    border-color: var(--border3);
     color: var(--text);
   }
-
-  .hint {
-    color: var(--text-dim);
-  }
-
-  .foot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--surface2);
-    background: var(--bg2);
-    flex: none;
-  }
-  .act {
-    height: 44px;
-    padding: 0 16px;
-    border: 1px solid var(--border-2);
-    background: var(--surface);
-    color: var(--text-dim);
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .act:hover {
-    border-color: var(--border-strong);
-  }
-  .act.byp {
-    background: var(--ok-tint);
-    border-color: var(--ok-border);
-    color: var(--ok);
-  }
-  .act.byp.on {
-    background: var(--surface2);
-    border-color: var(--danger-border);
-    color: var(--danger);
-  }
-  .act.rem {
-    background: var(--surface);
-    border-color: var(--danger-tint);
-    color: var(--danger);
+  /* phone and tablet: ≥ 40 px hit target */
+  .ed.touch .close {
+    width: 40px;
+    height: 40px;
   }
 </style>

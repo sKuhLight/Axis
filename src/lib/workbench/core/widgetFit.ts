@@ -35,24 +35,30 @@ export interface WidgetFitDescriptor {
  * `_fit(ids, avail, gapPx)` — verbatim. Returns the largest of
  * `default | compact | mini` whose summed estimate fits `avail`.
  *
- *   need(f) = Σ max(40, round(estW * f)) + gap * max(0, n - 1)
+ *   need(f) = Σ max(40, round(estW * f)) + gap * max(0, n - 1) + reserve
  *   default when need(1)   <= avail
  *   compact when need(0.62) <= avail
  *   else mini
+ *
+ * `reservePx` is fixed chrome the zone shows besides its units (slice 4b: the
+ * edit-mode "+" buttons and empty-zone "+ Widget" placeholders), so the units
+ * step down early enough to leave room for it. 0 = the design's plain `_fit`.
  */
 export function fitZoneSize(
   descriptors: readonly WidgetFitDescriptor[],
   avail: number,
-  gapPx: number
+  gapPx: number,
+  reservePx = 0
 ): WidgetSize {
   if (!descriptors.length) return 'default';
+  const budget = avail - Math.max(0, reservePx);
   const need = (factor: number): number =>
     descriptors.reduce(
       (total, d) => total + Math.max(WIDGET_FIT_FLOOR, Math.round(d.estW * factor)),
       0
     ) + gapPx * Math.max(0, descriptors.length - 1);
-  if (need(1) <= avail) return 'default';
-  if (need(WIDGET_FIT_COMPACT_FACTOR) <= avail) return 'compact';
+  if (need(1) <= budget) return 'default';
+  if (need(WIDGET_FIT_COMPACT_FACTOR) <= budget) return 'compact';
   return 'mini';
 }
 
@@ -72,19 +78,23 @@ export interface ZoneFitResult {
  * estimate `max(36, round(estW * 0.42)) + 10` against `avail - 44` (the 44px
  * reserves room for the chip); once the running total passes the budget every
  * further non-keep unit is shed. The final size is re-fit over the survivors.
+ * `reservePx` (fixed zone chrome, see {@link fitZoneSize}) comes off the
+ * available width first, for the size tiers and the shedding budget alike.
  */
 export function fitZone(
   descriptors: readonly WidgetFitDescriptor[],
   avail: number,
-  gapPx: number
+  gapPx: number,
+  reservePx = 0
 ): ZoneFitResult {
   const overflow = new Set<string>();
-  let size = fitZoneSize(descriptors, avail, gapPx);
+  const usable = avail - Math.max(0, reservePx);
+  let size = fitZoneSize(descriptors, usable, gapPx);
   if (size !== 'mini' || descriptors.length === 0) return { size, overflow };
 
   const miniW = (d: WidgetFitDescriptor): number =>
     Math.max(WIDGET_FIT_MINI_FLOOR, Math.round(d.estW * WIDGET_FIT_MINI_FACTOR));
-  const budget = avail - WIDGET_FIT_OVERFLOW_CHIP_RESERVE;
+  const budget = usable - WIDGET_FIT_OVERFLOW_CHIP_RESERVE;
 
   let used = 0;
   // Keep-set units are laid out first and are never shed.

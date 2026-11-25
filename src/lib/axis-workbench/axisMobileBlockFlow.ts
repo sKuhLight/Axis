@@ -4,8 +4,8 @@ import type {
   WorkbenchDocument,
   WorkbenchLayout
 } from '../workbench/core';
-import { activeWorkbenchPage, selectActiveLayout } from '../workbench/core';
-import { AXIS_MOBILE_BLOCK_EXPAND_RATIO } from './axisMobileBlockFlowConstants';
+import { activeWorkbenchPage, panelIdsInPageDock, selectActiveLayout } from '../workbench/core';
+import { AXIS_MOBILE_BLOCK_EXPAND_RATIO, AXIS_MOBILE_MAIN_MIN_PX } from './axisMobileBlockFlowConstants';
 
 /**
  * Phone-profile "block-open" flow (operator T31 / R9d).
@@ -82,6 +82,12 @@ export interface AxisMobileBlockFlowInput {
   blockOpen: boolean;
   /** Workbench-height (px) available to size the expanded editor against. */
   workbenchHeightPx: number;
+  /**
+   * Height (px) of the dock workspace itself — the workbench without its bars. The main
+   * region keeps its minimum there, so a bigger editor would reach under the bottom bar.
+   * Absent / 0 = not known.
+   */
+  workspaceHeightPx?: number;
   /** Current document (read-only) — the flow inspects the active layout, never mutates it. */
   doc: WorkbenchDocument;
 }
@@ -111,9 +117,15 @@ function findGridModeWidget(layout: WorkbenchLayout): GridModeWidgetRef | null {
   return { id: widget.id, zone: widget.zone, mode: readGridMode(widget.state?.mode) };
 }
 
-/** True when the active layout docks a block editor panel (so expanding is meaningful). */
+/**
+ * True when the ACTIVE page docks a block editor panel (so expanding is
+ * meaningful). A parked editor (removed from the page, or its page deleted)
+ * is in `layout.panels` but on no page — it must not count.
+ */
 function hasBlockEditorPanel(layout: WorkbenchLayout): boolean {
-  return Object.values(layout.panels ?? {}).some((p) => p?.type === AXIS_BLOCK_EDITOR_PANEL_TYPE);
+  const page = activeWorkbenchPage(layout);
+  if (!page) return false;
+  return panelIdsInPageDock(page).some((id) => layout.panels?.[id]?.type === AXIS_BLOCK_EDITOR_PANEL_TYPE);
 }
 
 function currentBottomSizePx(layout: WorkbenchLayout): number | null {
@@ -123,10 +135,21 @@ function currentBottomSizePx(layout: WorkbenchLayout): number | null {
   return typeof size === 'number' ? size : null;
 }
 
-/** Target expanded bottom size: ~75% of the workbench height, clamped sanely. */
-export function computeExpandedBottomPx(workbenchHeightPx: number): number {
+/** The smallest size a bottom region can be resized to (`DockRegion.svelte`). */
+const MIN_BOTTOM_PX = 120;
+const availableBottomPx = (workspaceHeightPx: number): number =>
+  Math.max(MIN_BOTTOM_PX, Math.floor(workspaceHeightPx) - AXIS_MOBILE_MAIN_MIN_PX);
+
+/**
+ * Target expanded bottom size: ~75% of the workbench height, clamped sanely — and, where
+ * the workspace is known, never more than it has left beside the main region's minimum
+ * (the bars above and below take more than the other 25% of a short phone).
+ */
+export function computeExpandedBottomPx(workbenchHeightPx: number, workspaceHeightPx = 0): number {
   const h = workbenchHeightPx > 0 ? workbenchHeightPx : 0;
-  return Math.max(240, Math.round(h * AXIS_MOBILE_BLOCK_EXPAND_RATIO));
+  const target = Math.max(240, Math.round(h * AXIS_MOBILE_BLOCK_EXPAND_RATIO));
+  if (!(workspaceHeightPx > 0)) return target;
+  return Math.min(target, availableBottomPx(workspaceHeightPx));
 }
 
 /**
@@ -164,14 +187,24 @@ export function decideAxisMobileBlockFlow(
 
   if (input.blockOpen) {
     if (memory.expanded) {
-      // Idempotent hold. Do NOT re-apply the size (respect a manual user resize).
+      // Keep an in-bounds manual size. If the workspace shrank, keep the editor above the bottom bar.
+      const workspace = input.workspaceHeightPx ?? 0;
+      const current = currentBottomSizePx(layout);
+      const limit = availableBottomPx(workspace);
+      if (workspace > 0 && current != null && current > limit) {
+        const manuallyResized = current !== memory.appliedBottomSizePx;
+        return {
+          commands: [{ type: 'region.resize', region: AXIS_BLOCK_EDITOR_REGION, sizePx: limit }],
+          memory: { ...memory, appliedBottomSizePx: limit, prevBottomSizePx: manuallyResized ? limit : memory.prevBottomSizePx }
+        };
+      }
       return { commands: [], memory };
     }
     if (!hasBlockEditorPanel(layout)) {
       // No block editor docked to expand — nothing to do.
       return { commands: [], memory };
     }
-    return expand(layout, grid, input.workbenchHeightPx, memory);
+    return expand(layout, grid, input, memory);
   }
 
   // blockOpen === false
@@ -182,11 +215,11 @@ export function decideAxisMobileBlockFlow(
 function expand(
   layout: WorkbenchLayout,
   grid: GridModeWidgetRef | null,
-  workbenchHeightPx: number,
+  input: AxisMobileBlockFlowInput,
   memory: AxisMobileBlockFlowMemory
 ): AxisMobileBlockFlowDecision {
   const commands: WorkbenchCommand[] = [];
-  const target = computeExpandedBottomPx(workbenchHeightPx);
+  const target = computeExpandedBottomPx(input.workbenchHeightPx, input.workspaceHeightPx);
   const prevBottom = currentBottomSizePx(layout);
 
   commands.push({ type: 'region.resize', region: AXIS_BLOCK_EDITOR_REGION, sizePx: target });

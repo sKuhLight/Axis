@@ -242,4 +242,41 @@ describe('Workbench library helpers', () => {
     expect(layout.widgets['widget.tempo'].groupId).toBe('group.tools');
     expect(layout.widgetGroups['group.tools'].widgetIds).toEqual(['widget.tuner', 'widget.tempo']);
   });
+
+  it('places the first template panel at an exact drag-out target (later panels tab onto it)', () => {
+    let doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    doc = reduceWorkbenchDocument(doc, { type: 'panel.add', panel: { id: 'panel.grid', type: 'test.grid', title: 'Grid' }, region: 'main' }).next;
+    const commands = instantiatePanelTemplateCommands(
+      doc,
+      {
+        id: 'template.pair',
+        title: 'Pair',
+        panels: {
+          'panel.a': { id: 'panel.a', type: 'test.a', title: 'A' },
+          'panel.b': { id: 'panel.b', type: 'test.b', title: 'B' }
+        }
+      },
+      { region: 'main', target: { kind: 'split', targetPanelId: 'panel.grid', axis: 'horizontal', position: 'after' } }
+    );
+    expect(commands[0]).toMatchObject({ type: 'panel.add', target: { kind: 'split', targetPanelId: 'panel.grid', position: 'after' } });
+    expect(commands[1]).toMatchObject({ type: 'panel.add', target: { kind: 'tab', targetPanelId: 'panel.a' } });
+    let next = doc;
+    for (const command of commands) next = reduceWorkbenchDocument(next, command).next;
+    const layout = selectActiveLayout(next)!;
+    const main = layout.pages[layout.activePageId].dock.root.main;
+    expect(main).toMatchObject({ kind: 'split', axis: 'horizontal' });
+    expect(JSON.stringify(main)).toContain('"panelIds":["panel.a","panel.b"]');
+  });
+
+  it('instantiates template panels expanded (a template saved from a collapsed strip)', () => {
+    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    const commands = instantiatePanelTemplateCommands(doc, {
+      id: 'template.strip',
+      title: 'Strip',
+      panels: { 'panel.s': { id: 'panel.s', type: 'test.s', title: 'S', collapsed: true } }
+    });
+    const add = commands.find((command) => command.type === 'panel.add');
+    expect(add?.type === 'panel.add' && add.panel.collapsed).toBeFalsy();
+    expect(add?.type === 'panel.add' && 'collapsed' in add.panel).toBe(false);
+  });
 });

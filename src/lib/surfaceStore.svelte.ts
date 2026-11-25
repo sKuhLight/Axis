@@ -11,16 +11,17 @@
 // - Remote: the cache is empty; `surfInit()` (awaited in hydrateRemoteConfig, after the relay is live) pulls
 //   `config/surface` from the host over the relay so the remote shows the EXACT same boards/quick-actions.
 //
-// The public surfGet/surfSet/surfRemove keep the string key/value shape the ControlSurface already used, so
-// migrating it is a mechanical getItem→surfGet swap.
+// The public surfGet/surfSet/surfRemove keep the string key/value shape the previous editor used (the Block
+// Editor's boardPersistence reads and writes through them too).
 import { forgefx, isRemote } from './forgefx';
 import { isRemoteBuild } from './cloudBrowser';
 import { notifyMutation } from './syncBus';
 
 const DOC = 'surface'; // config/surface — the single doc holding the whole control-surface state
 const CACHE = 'axs.surface.doc'; // localStorage cache of that doc (offline / instant host load)
-// keys this module owns (everything the ControlSurface scattered): the global grid + per-slug meta + boards
-const OWNED = /^(axs\.surface2\.grid|axs\.surface3meta\.|axs\.surface3\.)/;
+// keys this module owns: the previous editor's global grid + per-slug meta + boards (read for migration only),
+// plus the Block Editor's `axs.be1.*` boards, `axs.be1meta.*` meta and `axs.be1seed.*` family seeds
+const OWNED = /^(axs\.surface2\.grid|axs\.surface3meta\.|axs\.surface3\.|axs\.be1(?:\.|meta\.|seed\.))/;
 
 function cacheLoad(): Record<string, string> {
   if (typeof localStorage === 'undefined') return {};
@@ -67,6 +68,18 @@ export function surfRemove(key: string): void {
   delete m[key];
   mem = m;
   persist();
+}
+
+/** Remove every key a prefix owns (a bulk reset, e.g. every block board + its meta). Returns how many went. */
+export function surfRemovePrefix(prefix: string): number {
+  const keys = Object.keys(mem).filter((k) => k.startsWith(prefix));
+  if (!keys.length) return 0;
+  const m = { ...mem };
+  for (const k of keys) delete m[k];
+  mem = m;
+  persist();
+  rev++; // an open board reloads from what is left (nothing: it re-seeds)
+  return keys.length;
 }
 
 /** Apply the whole surface doc pushed live by another UI (host↔remote), WITHOUT re-publishing it (that would

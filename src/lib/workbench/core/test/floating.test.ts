@@ -4,6 +4,7 @@ import {
   healFloatingRect,
   orderedFloatingWidgets,
   raiseFloatingOrder,
+  resolveFloatingHeal,
   FLOATING_MIN_VISIBLE
 } from '../floating';
 import type { WidgetInstance } from '../schema';
@@ -102,5 +103,28 @@ describe('orderedFloatingWidgets', () => {
   it('excludes non-floating widgets', () => {
     const widgets = [floater('a', 0), floater('x', 1, 'bottom')];
     expect(orderedFloatingWidgets(widgets).map((w) => w.id)).toEqual(['a']);
+  });
+});
+
+describe('resolveFloatingHeal', () => {
+  const size = { width: 150, height: 40 };
+  // Parked near the bottom of a 900px stage; entering edit mode shrinks it to 864.
+  const parked = { x: 300, y: 860 };
+
+  it('does nothing for a floater already in view', () => {
+    expect(resolveFloatingHeal(parked, size, { width: 1440, height: 900 }, false)).toEqual({ persist: null, view: null });
+    expect(resolveFloatingHeal(parked, size, { width: 1440, height: 900 }, true)).toEqual({ persist: null, view: null });
+  });
+
+  it('while editing: clamps for display only — nothing to persist', () => {
+    const result = resolveFloatingHeal(parked, size, { width: 1440, height: 864 }, true);
+    expect(result.persist).toBeNull();
+    expect(result.view).toEqual({ x: 300, y: 864 - 24 });
+  });
+
+  it('outside edit mode: heals and persists an out-of-view floater', () => {
+    const result = resolveFloatingHeal(parked, size, { width: 1440, height: 600 }, false);
+    expect(result.view).toBeNull();
+    expect(result.persist).toEqual({ x: 300, y: 600 - 24 });
   });
 });

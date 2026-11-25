@@ -8,6 +8,7 @@ import { cloud } from './cloud.svelte';
 import { deviceDefs } from './deviceDefs.svelte';
 import { diagnostics } from './diagnostics.svelte';
 import { ReloadScheduler } from './reloadScheduler';
+import { pollIntervalsFor } from './pollIntervals';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
@@ -17,13 +18,27 @@ import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, 
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
+import { compatibleLibraryEntry, libraryParameters, planLibraryWrites, type BlockLibraryEntry, type BlockLibraryMode, type BlockLibraryTarget } from './blockLibrary';
+import { liveBlockState, withBypassModeLabels } from './blockState';
+import { isLayoutPageSelector } from './deviceLayoutBoard';
 import { resolveCurrentSlot, checkSaveTarget, guardedStore, isSlotConfirmed, saveBlockedText, withTimeout, canProbePreset, saveProbeMs } from './saveTarget';
-import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, BlockState, BlockVisual, MonitorParams } from './types';
 import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 type CloudScopes = { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
+/** A block read the device dropped on a busy link comes back zeroed (blockState.readError, no enums): read again
+ *  before the board takes it. Two short retries; the last answer is kept either way. */
+async function readBlockParams(eid: number, am4: boolean, observe = true): Promise<Awaited<ReturnType<typeof forgefx.blockParams>>> {
+  const read = () => (am4 ? forgefx.am4BlockParams(eid) : forgefx.blockParams(eid, { observe }));
+  let r = await read();
+  for (let i = 0; i < 2 && r.blockState?.readError; i++) {
+    await new Promise((done) => setTimeout(done, 400));
+    r = await read();
+  }
+  return r;
+}
 const SCOPES_KEY = 'axs.cloud.scopes';
 function loadScopes(): CloudScopes {
   try { return { presets: true, scenes: true, fc: true, settings: true, ...(JSON.parse(localStorage.getItem(SCOPES_KEY) || '{}')) }; }
@@ -108,6 +123,12 @@ class EditorStore {
   get paramsWithoutPack(): boolean { return this.isV2 ? !!this.caps?.paramsWithoutPack : this.isAm4; }
   /** Presets can be renamed (working buffer + stored slots). */
   get canRenamePresets(): boolean { return this.isV2 ? !!this.caps?.presets?.canRename : !this.isAm4; }
+  /** caps.blockState: the block params carry Scene Ignore + Bypass Mode (true / false); undefined when the
+   *  server does not say (a pre-v2 or older ForgeFX) — the header then names a newer server as the fix. */
+  get blockStateCap(): boolean | undefined { return this.isV2 ? this.caps?.blockState : undefined; }
+  /** caps.blockVisuals: the block params carry read-only graph displays (`visuals`) and the served layout's
+   *  graph slots their key. Absent (older server) or false → no graph tiles. */
+  get hasBlockVisuals(): boolean { return this.isV2 && this.caps?.blockVisuals === true; }
   /** Scene names are writable on this device. */
   get canRenameScenes(): boolean { return this.isV2 ? !!this.caps?.sceneNamesWritable : !this.isAm4; }
   /** Device supports full preset dumps → the library's deep param index (summary/params reads). */
@@ -141,12 +162,46 @@ class EditorStore {
   params = $state<NamedParam[]>([]);
   enums = $state<EnumParam[]>([]);
   blockType = $state<{ value: number; name: string } | null>(null);
-  blockSlug = $state<string | null>(null); // catalog slug of the open block (from blockParams) — gates the looper poll
-  /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
-  looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
+  #looperEid = $state<number | null>(null);
+  #looperReading = $state<{ eid: number; data: { wave: number[]; position: number | null; level: number | null } } | null>(null);
+  /** A Looper tile is available before the first live sample, even with Meter switched off. */
+  get hasLooperWaveform(): boolean {
+    // Older gen-3 servers exposed this route alongside live monitors.
+    return !this.virtual && this.#looperEid != null && this.#looperEid === this.selected?.effectId &&
+      (this.caps?.looperTelemetry ?? this.hasLiveMonitors);
+  }
+  get looperWave() {
+    const reading = this.#looperReading;
+    return this.hasLooperWaveform && reading?.eid === this.#looperEid ? reading.data : null;
+  }
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
-  /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
+  /** Scene Ignore + Bypass Mode tag of the open block as the server served it, keyed by the block's effect id
+   *  and the channel it was read on (a reload of the same block keeps it until the read lands; another block
+   *  never shows it). */
+  #blockStateTag = $state<{ eid: number; channel: string | null; state: BlockState } | null>(null);
+  /** Scene Ignore + Bypass Mode of the open block, values read from its live enums (the board edits the same
+   *  params), so header and board stay in step; null when the server served none for this block. */
+  get blockState(): BlockState | null {
+    const t = this.#blockStateTag;
+    const c = this.selected;
+    if (!t || !c || this.virtual || c.effectId !== t.eid) return null;
+    return liveBlockState(t.state, this.enums);
+  }
+  /** The open block's channel changed since its block state was read (a channel switch or a scene change,
+   *  the re-read still pending): both params are per channel, so the values shown are the old channel's and
+   *  nothing may be written until the read lands. */
+  get blockStateStale(): boolean {
+    const t = this.#blockStateTag;
+    const c = this.selected;
+    return !!t && !!c && c.effectId === t.eid && (c.channel ?? null) !== t.channel;
+  }
+  /** Device-authentic editor pages for the open block/virtual effect (seeds the Block Editor's Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
+  /** Read-only displays the server serves for the open block (`visuals`), kept as served. */
+  #servedVisuals = $state<BlockVisual[]>([]);
+  /** The open block's graph displays: what the server served, and only where it says it serves them
+   *  (caps.blockVisuals); otherwise none (an older server, another device). */
+  get blockVisuals(): BlockVisual[] { return this.hasBlockVisuals ? this.#servedVisuals : []; }
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
   /** True when the full Preset Browser rail screen is open (replaces the grid/editor view). */
@@ -355,7 +410,7 @@ class EditorStore {
   get selected(): Cell | null {
     if (this.virtual) {
       // virtual effects (Setup/Controllers/Modifier/FC) aren't on the grid — synthesize a cell so the
-      // same param/load/write machinery (and the ControlSurface) work unchanged.
+      // same param/load/write machinery (and the Block Editor board) work unchanged.
       const v = this.virtual;
       return { row: -1, col: -1, kind: 'block', effectId: v.eid, display: v.name, pack: v.slug, color: '#35c9d6', fromRows: [] };
     }
@@ -422,6 +477,10 @@ class EditorStore {
   // ── swipe controls ──
   swipeFor = (slug: string): SwipeCtrl[] => this.swipeControls[slug] ?? [];
   isSwipeControl = (paramId: number) => this.swipeFor(this.familyKey).some((c) => c.id === paramId);
+  /** toggleSwipeControl needs a block family to keep the assignment under. */
+  get canSwipeControl(): boolean {
+    return !!this.familyKey;
+  }
   toggleSwipeControl = (p: NamedParam) => {
     if (p.id == null) return;
     const fam = this.familyKey;
@@ -543,10 +602,10 @@ class EditorStore {
       if (eid === this.selected?.effectId) continue; // open block is already live via editor.params
       if (!placed.has(eid) || this.pinnedParams[eid]) continue; // not in this preset, or already hydrated
       try {
-        const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(eid) : await forgefx.blockParams(eid);
+        const r = await readBlockParams(eid, !this.isV2 && this.isAm4, false); // background: keep the edit watch on the open block
         this.pinnedParams = {
           ...this.pinnedParams,
-          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: r.enums ?? [] }
+          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: withBypassModeLabels(r.enums ?? [], r.blockState) }
         };
       } catch {
         /* best-effort — the control falls back to a read-only preview */
@@ -588,45 +647,99 @@ class EditorStore {
   };
 
   // ── live audio meters (per-block monitor level, normalized→dB) ──
-  // GENTLE poll: reads ONLY the currently-selected block's monitor (one serial round-trip per tick),
-  // and ONLY while metering is actually enabled + the block editor is open. Polling every placed
-  // block flooded the FM3's serial link and caused audio dropouts — never do a full-preset sweep here.
-  meteringOn = $state(false); // opt-in; off by default so it can't disturb the device unnoticed
+  // Scope live reads to the selected block while its editor is visible. Full-preset sweeps compete
+  // with editing on the same link.
+  meteringOn = $state(true);
   /** Per-block metering is only offered when the device supports live monitors, over a fast link
    *  (never a slow 5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is separate. */
   get canMeterBlocks(): boolean {
-    return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink && !isRemote();
+    return this.#canReadBlockTelemetry() && this.hasLiveMonitors;
   }
+  #canReadBlockTelemetry = () => this.status === 'ready' && !this.slowLink && !isRemote();
+  #telemetryObservers = new Map<object, { effectId: number; waveform: boolean; monitors: boolean }>();
+  observeBlockTelemetry = (effectId: number, needs: { waveform: boolean; monitors: boolean }) => {
+    const observer = {};
+    this.#telemetryObservers.set(observer, { effectId, ...needs });
+    this.startLiveMeters();
+    return () => {
+      this.#telemetryObservers.delete(observer);
+      if (!this.#telemetryObservers.size && this.#liveMeterTimer) {
+        clearTimeout(this.#liveMeterTimer);
+        this.#liveMeterTimer = null;
+        this.#liveMeterLoop = null;
+      }
+    };
+  };
+  #telemetryDemand = (eid: number) => {
+    if (!this.#canReadBlockTelemetry() || this.#walkActive() || library.scanning || this.inLibrary || this.virtual ||
+        this.sheetState !== 'ready' || this.selected?.effectId !== eid) return null;
+    const observers = [...this.#telemetryObservers.values()].filter((o) => o.effectId === eid);
+    if (!observers.length) return null;
+    return {
+      monitors: this.hasLiveMonitors && this.meteringOn && observers.some((o) => o.monitors),
+      waveform: this.hasLooperWaveform && observers.some((o) => o.waveform)
+    };
+  };
   #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
+  // Token of the loop that is currently allowed to run (null = stopped). Kept separate from
+  // #liveMeterTimer: tick() clears the timer handle at the top of every iteration and only re-sets it
+  // after the awaited device read returns, so the handle alone is null for the WHOLE duration of every
+  // in-flight read — a guard on it would let a second start() stack a concurrent loop mid-read (every
+  // grid load restarts the meters), and would make stop() during a read a no-op. A token, unlike a
+  // plain flag, also retires a loop that was stopped and restarted while its read was still in flight.
+  #liveMeterLoop: object | null = null;
+  /** Period of the live block read while it is in use: the telemetry mode's own rate, so a slow mode does not
+   *  keep the serial link busy with back-to-back monitor reads (the late replies queue behind them). */
+  #meterPeriod = (): number => pollIntervalsFor(this.pollingMode, isRemote()).meterMs;
   startLiveMeters = () => {
-    if (this.#liveMeterTimer) return; // already running
+    if (this.#liveMeterLoop || !this.#telemetryObservers.size) return;
+    const loop = {};
+    this.#liveMeterLoop = loop;
     const tick = async () => {
       this.#liveMeterTimer = null;
-      const eid = this.selected?.effectId;
-      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
-      if (ok) {
-        try {
-          const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
-          const next = { ...this.liveMeters };
-          next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
-          this.liveMeters = next;
-        } catch {
-          /* best-effort */
+      let ok = false;
+      try {
+        const eid = this.selected?.effectId;
+        if (eid == null) return;
+        const demand = this.#telemetryDemand(eid);
+        ok = !!(demand?.monitors || demand?.waveform);
+        if (demand?.monitors) {
+          try {
+            const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
+            if (this.#liveMeterLoop === loop && this.#telemetryDemand(eid)?.monitors)
+              this.liveMeters = { ...this.liveMeters, [eid]: rows.filter((r) => r.effectId === eid) };
+          } catch {
+            /* best-effort */
+          }
         }
-        // Looper: also fetch the live waveform + playhead + level for the open Looper block.
-        if (this.blockSlug === 'looper') {
-          try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
+        // A graph is separate from the Meter toggle. Recheck selection after the awaited meter read.
+        if (this.#liveMeterLoop === loop && this.#telemetryDemand(eid)?.waveform) {
+          try {
+            const data = await forgefx.looper(eid);
+            if (this.#liveMeterLoop === loop && this.#telemetryDemand(eid)?.waveform)
+              this.#looperReading = { eid, data };
+          } catch {
+            /* keep the last sample for this block */
+          }
+        }
+      } finally {
+        // Re-arm unless stopped (or superseded) mid-tick. In a finally so a throw from outside the inner
+        // try/catch blocks can't leave the token set with no timer pending — that would make every later
+        // startLiveMeters a no-op and kill the meters until reload.
+        if (this.#liveMeterLoop === loop) {
+          if (this.#telemetryObservers.size) this.#liveMeterTimer = setTimeout(tick, ok ? this.#meterPeriod() : 2000);
+          else this.#liveMeterLoop = null;
         }
       }
-      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
-      this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
     };
     tick();
   };
   stopLiveMeters = () => {
+    this.#liveMeterLoop = null;
     if (this.#liveMeterTimer) clearTimeout(this.#liveMeterTimer);
     this.#liveMeterTimer = null;
     this.liveMeters = {};
+    this.#looperReading = null;
   };
 
   // ── lifecycle ──
@@ -933,7 +1046,13 @@ class EditorStore {
    *  NOT a user action, so it never persists (the local mirror is already the source of the value). */
   #reapplyPollingMode = () => {
     if (!this.hasTelemetryControl) return;
-    forgefx.setTelemetryMode(this.pollingMode).catch(() => { /* unsupported / not ready — leave as-is */ });
+    forgefx.setTelemetryMode(this.pollingMode).catch(() => { /* unsupported / not ready - leave as-is */ });
+    forgefx.setTelemetryMeters(this.meteringOn).catch(() => { /* unsupported / not ready - leave as-is */ });
+  };
+  /** METER toggle: also tells the server whether its meter round-robin should run. */
+  setMeteringOn = (on: boolean) => {
+    this.meteringOn = on;
+    if (this.hasTelemetryControl) forgefx.setTelemetryMeters(on).catch(() => { /* unsupported / not ready */ });
   };
 
   // ── Axis hub + profile (contact / synced prefs) ──
@@ -1297,6 +1416,16 @@ class EditorStore {
     }
   };
   #adoptedDeviceKey: string | null = null;
+  #monitorCatalogDevice: string | null = null;
+  #monitorParams = $state.raw<MonitorParams>({});
+  get blockMonitorRole(): string | undefined {
+    const family = this.blockLayout?.family;
+    return family && this.hasLiveMonitors ? Object.values(this.#monitorParams).find((def) => def.family === family)?.role : undefined;
+  }
+  hasBlockMonitor = (paramName: string) => {
+    const def = this.#monitorParams[paramName];
+    return !!def && def.family === this.blockLayout?.family;
+  };
   /** Forget everything we believe about "the loaded preset". It belonged to a previous port / profile /
    *  device; keeping it would let Save propose (or the nav step from) a slot of the wrong unit. A live-query
    *  device repopulates it on the next poll; one without a live query stays unknown until a preset is selected. */
@@ -1317,7 +1446,11 @@ class EditorStore {
     // payload carries no key and is ignored, so a plain reconnect to the same unit keeps its context.)
     const key = dev.model ? `${dev.model}@${dev.port ?? ''}` : null;
     if (key) {
-      if (this.#adoptedDeviceKey && this.#adoptedDeviceKey !== key) this.#resetPresetContext();
+      if (this.#adoptedDeviceKey && this.#adoptedDeviceKey !== key) {
+        this.#resetPresetContext();
+        this.#monitorCatalogDevice = null;
+        this.#monitorParams = {};
+      }
       this.#adoptedDeviceKey = key;
     }
     if (dev.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
@@ -1325,6 +1458,18 @@ class EditorStore {
     if (dev.apiVersion) this.apiVersion = dev.apiVersion;
     const count = dev.capabilities?.presets?.count;
     if (count) this.presetCount = count;
+    if (key && key !== this.#monitorCatalogDevice && this.hasLiveMonitors && !isRemote()) {
+      this.#monitorCatalogDevice = key;
+      // Catalog metadata is served without touching the device. A meter can be offered before its first sample.
+      void forgefx.monitors().then((defs) => {
+        if (this.#adoptedDeviceKey === key) this.#monitorParams = defs;
+      }).catch((error: unknown) => {
+        // Retry transient failures on the next normal /device refresh.
+        if (this.#adoptedDeviceKey === key && error instanceof ForgeError && (error.status === 0 || error.status >= 500)) {
+          this.#monitorCatalogDevice = null;
+        }
+      });
+    }
   };
 
   #polling = false;
@@ -1416,7 +1561,6 @@ class EditorStore {
       void library.retryStaleFiles(); // (re)connected: spends the one-per-session retry only if a pass is due
       this.fetchMeters(); // background: fill every block's level meter
       this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
-      this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
     } catch (e) {
       if (!this.everLoaded) this.status = 'offline';
       // We were connected and a (re)load failed — a real device-comm error worth a debug report. Debounced
@@ -1489,6 +1633,8 @@ class EditorStore {
       this.sheetState = 'nopack';
       this.params = [];
       this.enums = [];
+      this.#blockStateTag = null;
+      this.#servedVisuals = [];
       return;
     }
     await this.#loadParams();
@@ -1526,21 +1672,30 @@ class EditorStore {
   // default tab when opening a block: Ideal in Basic view, Advanced in Advanced view
   #defaultPage = () => (this.globalMode === 'basic' ? '__ideal' : '__advanced');
 
+  #paramRead = 0;
   #loadParams = async () => {
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
     this.sheetState = 'loading';
+    const readChannel = c.channel ?? null; // the channel this read reflects (Scene Ignore / Bypass Mode are per channel)
+    const read = ++this.#paramRead;
+    const stillSelected = () => read === this.#paramRead && this.selected?.effectId === c.effectId && (this.selected?.channel ?? null) === readChannel;
     try {
       // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
       // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
       // way, so the rest of this method is model-agnostic.
-      const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
+      const r = await readBlockParams(c.effectId, !this.isV2 && this.isAm4);
+      if (!stillSelected()) return;
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
-      this.enums = r.enums ?? [];
+      // the tagged Bypass Mode's labels read like the header's ("Mute FX Out") on the board's select too
+      this.enums = withBypassModeLabels(r.enums ?? [], r.blockState);
       this.blockType = r.type ?? null;
-      this.blockSlug = r.slug ?? null;
-      if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
-      this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
+      this.#looperEid = r.slug === 'looper' ? c.effectId : null;
+      if (this.#looperReading?.eid !== this.#looperEid) this.#looperReading = null;
+      this.blockLayout = r.layout ?? null; // device-authentic pages seed the Block Editor's Default layout
+      this.#servedVisuals = r.visuals ?? []; // read-only graph displays (forgefx.blockParams parsed them)
+      // Scene Ignore + Bypass Mode (header); forgefx.blockParams already dropped a missing / malformed tag
+      this.#blockStateTag = !this.virtual && r.blockState ? { eid: c.effectId, channel: readChannel, state: r.blockState } : null;
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
         const fallback = this.params[0];
@@ -1560,7 +1715,10 @@ class EditorStore {
       }
       this.sheetState = 'ready';
     } catch (e) {
+      if (!stillSelected()) return;
       this.sheetState = 'error';
+      this.#blockStateTag = null;
+      this.#servedVisuals = [];
       if (e instanceof ForgeError) console.warn(e.message);
     }
   };
@@ -1601,12 +1759,40 @@ class EditorStore {
     e.value = value; // optimistic
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return;
-    if (from !== value) history.record({
+    const step = from !== value ? history.record({
       kind: 'param', eid: c.effectId, paramId: e.id, continuous: false, from, to: value,
       block: c.display, param: e.name,
       fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
-    });
-    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
+    }) : null;
+    // A write the device did not take — the request failed, or a grid device (gen-3) refused it (`ok:false`;
+    // on the AM4's linear chain `ok:false` only means "no acknowledgement in time", so it is left alone): put
+    // the value back if nothing changed it since, drop the undo step that never happened, say so once.
+    const failed = () => {
+      if (e.value === value) e.value = from;
+      if (step) history.discard(step);
+      this.showToast(`${e.name}: the device did not take the change`, '#d6543f');
+    };
+    const refusalMeansNo = this.caps?.slotModel === 'grid';
+    const changesPages = from !== value && isLayoutPageSelector(this.blockLayout, e.id, c.effectId);
+    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).then(
+      (r) => {
+        if (r?.ok === false && refusalMeansNo) failed();
+        else if (changesPages && this.selected?.effectId === c.effectId && e.value === value) void this.#loadParams();
+      },
+      failed
+    );
+  };
+  /** Write the open block's Scene Ignore / Bypass Mode (the header). The param is one of the block's own
+   *  enums, so this IS the board's enum write (optimistic + history + revert), and the board's control
+   *  follows. Nothing is written while the block state is another channel's (`blockStateStale`) or for a
+   *  param the block does not list (no such control). */
+  setBlockStateParam = (paramId: number, value: number) => {
+    const c = this.selected;
+    const t = this.#blockStateTag;
+    if (!c || !t || t.eid !== c.effectId || this.blockStateStale) return;
+    if (t.state.sceneIgnore?.paramId !== paramId && t.state.bypassMode?.paramId !== paramId) return;
+    const e = this.enums.find((x) => x.id === paramId);
+    if (e) this.setEnum(e, value);
   };
   toggleBypass = async (cell?: Cell) => {
     const c = cell ?? this.selected;
@@ -1640,7 +1826,12 @@ class EditorStore {
     const from = this.blockType; // capture before the device swaps the model (params reset on retype)
     // value is the device-true model ordinal = the discrete-SET value
     try {
-      await forgefx.setType(c.effectId, value);
+      const result = await forgefx.setType(c.effectId, value);
+      if (!result.ok) throw new Error('Type change rejected');
+      if (this.selected?.effectId !== c.effectId) {
+        await this.load();
+        return;
+      }
       await this.#loadParams();
       if (from && from.value !== value) history.record({
         kind: 'retype', eid: c.effectId, block: c.display, from: from.value, to: value,
@@ -1672,6 +1863,124 @@ class EditorStore {
   };
 
   // ── palette openers ──
+  blockLibraryMode = $state<BlockLibraryMode | null>(null);
+  blockLibraryBusy = $state(false);
+
+  get blockLibraryTarget(): BlockLibraryTarget | null {
+    const c = this.selected;
+    const preset = this.preset?.number;
+    const model = this.detected?.connected ? this.detected.modelId : null;
+    const firmware = this.conn.fw;
+    const family = c ? this.slugOf(c) : '';
+    // Cab IRs and Looper transport are managed separately from channel parameter values.
+    if (!c?.pack || !this.selKey || this.virtual || family === 'cab' || family === 'looper' ||
+        !this.isV2 || this.caps?.slotModel !== 'grid' || !this.presetLiveQuery || model == null ||
+        !firmware || this.conn.state !== 'online' || preset == null || preset < 0 || this.#walkActive()) return null;
+    const channel = c.channel ?? null;
+    return {
+      key: JSON.stringify([this.#adoptedDeviceKey, firmware, preset, c.effectId, channel, this.selKey]),
+      model, firmware, family, channel, preset, effectId: c.effectId, display: c.display
+    };
+  }
+
+  openBlockLibrary = (mode: BlockLibraryMode) => {
+    if (!this.blockLibraryTarget || this.blockLibraryBusy) return;
+    this.blockLibraryMode = mode;
+    this.paletteMode = 'retype';
+    this.paletteOpen = true;
+  };
+
+  #assertLibraryTarget(target: BlockLibraryTarget) {
+    if (this.blockLibraryTarget?.key !== target.key) throw new Error('The device, preset, block or channel changed.');
+  }
+
+  async #confirmLibraryTarget(target: BlockLibraryTarget) {
+    this.#assertLibraryTarget(target);
+    if ((await forgefx.currentPreset()).number !== target.preset) throw new Error('The active preset changed.');
+    const scene = await forgefx.sceneState();
+    const block = scene.find((item) => item.effectId === target.effectId);
+    if (!block || (block.channel ?? null) !== target.channel) throw new Error('The active block or channel changed.');
+    this.#assertLibraryTarget(target);
+  }
+
+  async #readLibraryBlock(target: BlockLibraryTarget) {
+    const block = await forgefx.blockParams(target.effectId);
+    if (block.blockState?.readError) throw new Error('The current block parameters could not be read.');
+    this.#assertLibraryTarget(target);
+    return block;
+  }
+
+  captureBlockLibrary = async (name: string, target: BlockLibraryTarget): Promise<BlockLibraryEntry> => {
+    if (this.blockLibraryBusy) throw new Error('Another library operation is running.');
+    this.blockLibraryBusy = true;
+    try {
+      await this.#confirmLibraryTarget(target);
+      const block = await this.#readLibraryBlock(target);
+      await this.#confirmLibraryTarget(target);
+      const parameters = libraryParameters(block, target.effectId);
+      if (!parameters.length) throw new Error('There are no editable block values to save.');
+      return {
+        id: Array.from(crypto.getRandomValues(new Uint32Array(4)), (word) => word.toString(16).padStart(8, '0')).join(''),
+        name, model: target.model, firmware: target.firmware,
+        family: target.family, type: block.type ?? null, parameters
+      };
+    } finally {
+      this.blockLibraryBusy = false;
+    }
+  };
+
+  applyBlockLibrary = async (entry: BlockLibraryEntry, target: BlockLibraryTarget): Promise<void> => {
+    if (this.blockLibraryBusy) throw new Error('Another library operation is running.');
+    if (!compatibleLibraryEntry(entry, target)) throw new Error('This entry needs the same block family and device firmware.');
+    this.blockLibraryBusy = true;
+    let edited = false;
+    try {
+      await this.#confirmLibraryTarget(target);
+      let block = await this.#readLibraryBlock(target);
+      if (!entry.type && block.type) throw new Error('This entry does not identify its saved block type.');
+      if (entry.type && (entry.type.value !== block.type?.value || entry.type.name !== block.type.name)) {
+        const types = await forgefx.blockTypes(target.family);
+        if (!types.some((option) => option.value === entry.type?.value && option.name === entry.type.name)) {
+          throw new Error('The saved type is unavailable on this device.');
+        }
+        await this.#confirmLibraryTarget(target);
+        edited = true;
+        if (!(await forgefx.setType(target.effectId, entry.type.value)).ok) throw new Error('The device did not accept the saved type.');
+        block = await this.#readLibraryBlock(target);
+        if (block.type?.value !== entry.type.value || block.type.name !== entry.type.name) {
+          throw new Error('The device did not report the saved type.');
+        }
+      }
+      const writes = planLibraryWrites(entry, block, target.effectId);
+      if (!writes.length) return;
+      await this.#confirmLibraryTarget(target);
+      for (const parameter of writes) {
+        this.#assertLibraryTarget(target);
+        edited = true;
+        const result = await forgefx.setParam(target.effectId, parameter.id, parameter.value, parameter.continuous);
+        if (!result.ok) throw new Error(`The device did not accept "${parameter.name}".`);
+      }
+      await this.#confirmLibraryTarget(target);
+      const readback = await this.#readLibraryBlock(target);
+      if (readback.type?.value !== block.type?.value || readback.type?.name !== block.type?.name) {
+        throw new Error('The block type changed while loading the entry.');
+      }
+      if (planLibraryWrites(entry, readback, target.effectId).length) throw new Error('The device did not report all saved values.');
+    } catch (error) {
+      if (!edited) throw error;
+      throw new Error(`${error instanceof Error ? error.message : 'Could not load the entry.'} Some settings may have changed.`);
+    } finally {
+      try {
+        if (edited && this.blockLibraryTarget?.key === target.key) {
+          history.checkpoint(`Load block library: ${entry.name}`, false);
+          await this.#loadParams();
+        }
+      } finally {
+        this.blockLibraryBusy = false;
+      }
+    }
+  };
+
   openPaletteAt = (row: number, col: number) => {
     this.placeTarget = { row, col };
     this.paletteMode = 'place';
@@ -1679,6 +1988,7 @@ class EditorStore {
   };
   openRetype = () => {
     if (!this.selected?.pack) return;
+    this.blockLibraryMode = null;
     this.paletteMode = 'retype';
     this.paletteOpen = true;
   };
@@ -1800,9 +2110,9 @@ class EditorStore {
     }
   };
 
-  // ── tap-to-connect link mode (shared by the SignalGrid and the GridMap) ──
+  // ── tap-to-connect link mode (SignalGrid) ──
   // Arming lives here (not in a component) so it survives mobile page swipes and works across surfaces:
-  // arm on the grid, complete on the map — or vice versa. `connect()` below spans ANY later column
+  // arm on one grid view, complete on another. `connect()` below spans ANY later column
   // (shunts through the gaps), so a completed link is never restricted to the adjacent column.
   linkFrom = $state<Cell | null>(null);
   /** Arm link mode from a cell's output; arming the same cell again cancels (tap the port twice). */
@@ -2234,7 +2544,7 @@ export const editor = new EditorStore();
 export { baseName, packFor };
 
 // Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
-// editor-backed grid components (SignalGrid / GridMap / BlockEditor / ControlSurface / EQGraph /
+// editor-backed grid components (SignalGrid / BlockEditor / BeSurface / EQGraph /
 // CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
 // (the interface is a subset the singleton satisfies) — never the reverse.
 export const _editorSatisfiesSurface: EditorSurface = editor;

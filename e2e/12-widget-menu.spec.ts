@@ -6,7 +6,8 @@ import { bootCleanWorkbench, enterEditMode, WORKBENCH_DOC_KEY } from './support/
  * cluster are gone. In customize mode a plain tap on a widget (or the group
  * grip) opens the widget/group menu anchored BELOW the unit. These specs cover
  * that click-to-open flow, a size change through the menu, dismissal, and the
- * group variant with its Save Group item.
+ * group variant with its Save Group item. Slice 4b adds "Group with ▸" to both
+ * menus (its behaviour is covered in 22-add-and-group).
  */
 test.describe('Widget customize menu', () => {
   test('tapping a widget in edit mode opens the below-widget menu; a size item resizes it', async ({ page }) => {
@@ -25,8 +26,11 @@ test.describe('Widget customize menu', () => {
     const menu = page.locator('.aw-context-menu[role="menu"]');
     await expect(menu).toBeVisible();
 
-    // The menu is the widget's settings surface: sizes + move-to + save + remove.
+    // The menu is the widget's settings surface: sizes + group with (slice 4b)
+    // + move-to + save + remove.
     await expect(menu.getByRole('menuitem', { name: 'Compact Size' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /Group with/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /Group with/ })).toHaveAttribute('aria-haspopup', 'menu');
     await expect(menu.getByRole('menuitem', { name: 'Remove Widget' })).toBeVisible();
 
     // Picking a size dispatches widget.resize; the host's data-size reflects it.
@@ -75,6 +79,8 @@ test.describe('Widget customize menu', () => {
     await expect(menu.getByRole('menuitem', { name: /Save Group/ })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Ungroup Widgets' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Remove Group' })).toBeVisible();
+    // Slice 4b: the group merges with a neighbour through "Group with ▸".
+    await expect(menu.getByRole('menuitem', { name: /Group with/ })).toBeVisible();
   });
 });
 

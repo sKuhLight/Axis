@@ -58,6 +58,26 @@ export function previewFrameForClass(cls: ViewportClass): PreviewFrameSize | nul
 }
 
 /**
+ * The preview backdrop's label: the profile name and the frame size. When the
+ * stage is too small for the device frame (it is capped to the space below the
+ * edit bar) the label shows the size actually rendered, marked "(fitted)".
+ * `rendered` is the frame's measured size; omit it before the first measure.
+ */
+export function previewFrameLabel(
+  profileName: string,
+  frame: Pick<PreviewFrameSize, 'width' | 'height'>,
+  rendered?: { width: number; height: number } | null
+): string {
+  const width = rendered ? Math.round(rendered.width) : frame.width;
+  const height = rendered ? Math.round(rendered.height) : frame.height;
+  // Sub-pixel rounding is not a fit.
+  const fitted = Math.abs(width - frame.width) > 1 || Math.abs(height - frame.height) > 1;
+  return fitted
+    ? `${profileName} · ${width} × ${height} (fitted)`
+    : `${profileName} · ${frame.width} × ${frame.height}`;
+}
+
+/**
  * A profile's declared breakpoint, defaulting to 'desktop' when unset (matches the
  * schema's documented default: `WorkbenchProfile.breakpoint` is
  * `'desktop' | 'tablet' | 'phone'` and desktop is the implicit baseline).

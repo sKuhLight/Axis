@@ -74,11 +74,12 @@ export async function startCrossConvert(e: LibEntry): Promise<boolean> {
 async function openConverterSurface(): Promise<void> {
   if (isAxisWorkbenchFeatureEnabled(import.meta.env)) {
     if (!convertScratch.seed()) return;
-    const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
+    const [{ axisWorkbenchController }, { openAxisConvertPage }] = await Promise.all([
       import('./axis-workbench/axisWorkbenchStore.svelte'),
       import('./axis-workbench/axisWorkbenchPages')
     ]);
-    axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
+    // Recreates the convert page first when this session's layout lacks it.
+    openAxisConvertPage(axisWorkbenchController);
   } else {
     convertScratch.openView();
   }

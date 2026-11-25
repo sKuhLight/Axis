@@ -1,5 +1,6 @@
 import { createEmptyWorkbenchDocument, createDefaultWidgetZoneLayout, createEmptyDockLayout } from '../workbench/core/defaults';
 import type {
+  DockLayout,
   DockNode,
   PanelInstance,
   PanelTemplate,
@@ -98,6 +99,21 @@ const tabs = (id: string, panelIds: string[], activePanelId = panelIds[0]): Dock
   activePanelId
 });
 
+/**
+ * The default document's Grid page dock: the minimal first-contact layout —
+ * Signal Grid main + Block Editor bottom (360px). Node ids default to the
+ * document's stable ones; restore / reset pass freshly minted ids.
+ */
+export function createAxisDefaultGridDock(
+  ids: { main: string; bottom: string } = { main: 'axis.tabs.grid.main', bottom: 'axis.tabs.grid.bottom' }
+): DockLayout {
+  const gridDock = createEmptyDockLayout();
+  gridDock.root.main = tabs(ids.main, ['axis.signalGrid']);
+  gridDock.root.bottom = tabs(ids.bottom, ['axis.blockEditor']);
+  gridDock.regions.bottom.sizePx = 360;
+  return gridDock;
+}
+
 export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   const doc = createEmptyWorkbenchDocument({
     profileId: 'axis.profile.desktop',
@@ -126,11 +142,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // Setup, Controllers, Scenes, and Live each get their own seed page (full-size
   // panel in main); Theme + Axis Cloud stay ACTION nav entries. Pages are identical
   // across profiles (operator: "same seeds").
-  const gridDock = createEmptyDockLayout();
-  gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.signalGrid']);
-  gridDock.root.bottom = tabs('axis.tabs.grid.bottom', ['axis.blockEditor']);
-  gridDock.regions.bottom.sizePx = 360;
-  const seeded = buildAxisSeedPages(gridDock);
+  const seeded = buildAxisSeedPages(createAxisDefaultGridDock());
   layout.pages = seeded.pages;
   layout.pageOrder = seeded.pageOrder;
   layout.activePageId = seeded.activePageId;

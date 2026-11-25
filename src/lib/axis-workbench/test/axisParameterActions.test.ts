@@ -44,10 +44,22 @@ describe('Axis parameter Workbench actions', () => {
     const panel = Object.values(layout.panels).find((item) => item.type === 'axis.customPanel');
     const widgets = Object.values(layout.widgets);
 
-    expect(panel?.title).toBe('Controls');
+    expect(panel?.title).toBe('Quick Controls');
     expect(panel ? layout.zones[`panel:${panel.id}`] : undefined).toBeDefined();
     expect(widgets.map((widget) => widget.type)).toEqual(['axis.paramControl', 'axis.paramControl']);
     expect(widgets.map((widget) => widget.binding?.target.paramId)).toEqual([1, 2]);
+  });
+
+  it('collects a second pin into the existing panel — never a panel per knob', async () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const action = createAxisPinSelectedParametersAction(() => [source('4', 'Drive')]);
+
+    await action.run({ controller, source: 'menu' });
+    await action.run({ controller, source: 'menu' });
+
+    const layout = selectActiveLayout(controller.document)!;
+    expect(Object.values(layout.panels).filter((item) => item.type === AXIS_CUSTOM_PANEL_TYPE)).toHaveLength(1);
+    expect(Object.values(layout.widgets).map((widget) => widget.binding?.target.paramId)).toEqual([4, 4]);
   });
 
   it('supports action args for title and source limit', async () => {
@@ -112,7 +124,7 @@ describe('Axis parameter Workbench actions', () => {
 
     expect(layout.pages[layout.activePageId].dock.root.left?.kind).toBe('tabs');
     // No tab-per-param: a fresh collect panel gets the generic "Controls" name.
-    expect(panel?.title).toBe('Controls');
+    expect(panel?.title).toBe('Quick Controls');
     expect(widgets).toHaveLength(1);
     expect(widgets[0]?.binding?.target.paramId).toBe(7);
   });

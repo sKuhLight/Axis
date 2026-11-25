@@ -1,42 +1,49 @@
 <script lang="ts">
   /**
-   * Purpose-built Customize browser. The Edit ribbon opens this in one of two
-   * views (R16 / AXIS-24 — reworked from the V13a panels/widgets split into a
-   * searchable, sectioned drawer that matches the design's library pattern):
+   * Purpose-built Customize browser. The edit bar opens this in one of two
+   * views (PAGE › Manage pages and templates…, the Add palette's footer "Manage:
+   * Pages & panels / Widgets" — or, for a host without an Add palette, Add › Add
+   * panel… / Add widget… / Open library; R16 / AXIS-24 — reworked from the V13a panels/widgets split
+   * into a searchable, sectioned drawer that matches the design's library pattern):
    *
-   *   - `view="pages"`   → PAGES manager: create / rename / delete / reorder /
+   *   - `view="pages"`   → PAGES manager: create / rename / delete (inline
+   *     confirm — a deleted page's panels are parked, never lost) / reorder /
    *     jump-to the layout's pages (each page is its own dock arrangement), plus
-   *     an "add panel to this page" section (saved panel templates + a new
-   *     custom panel + hidden nav restore). Panels live on pages, so the old
-   *     standalone panel browser folds in here.
+   *     the "add panel to this page" CATALOG (core `buildPanelCatalog`): every
+   *     panel with where it lives now (on this page / on another page / not
+   *     placed) — tap or drag it here; custom panels can be deleted everywhere —
+   *     then the saved panel templates and hidden nav restores.
    *   - `view="widgets"` → WIDGET browser: saved widget templates, the
    *     hidden-widget shelf, and the on-layout widgets you can hide.
    *
    * Both views carry a search field that filters every section at once. Saved
    * page LAYOUTS, backups and import/export live in WorkbenchLayoutDrawer (the
-   * "Layouts" ribbon button). Placement stays contextual — click-to-add drops
+   * edit bar’s LAYOUT › Saved layouts › Manage layouts…). Placement stays contextual — click-to-add drops
    * into a sane default zone/region; the drag layer covers exact placement.
    */
   import {
+    buildPanelCatalog,
+    catalogAddCommands,
     createCustomPanelCommands,
     exportPanelPackage,
     layoutPackageFilename,
     selectActiveLayout,
+    selectEmptyParkedCustomPanels,
     selectHiddenWidgets,
     type DockRegionId,
+    type DockTarget,
     type NavigationEntryState,
+    type PanelCatalogEntry,
     type WidgetInstance,
     type WidgetZoneId,
     type WorkbenchPage
   } from '../core';
+  import { deletePagePrompt } from './editBarMenus';
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
-  import {
-    instantiatePanelTemplateCommands,
-    instantiateWidgetTemplateCommands,
-    labelFromWorkbenchType
-  } from './library';
+  import { instantiateWidgetTemplateCommands, labelFromWorkbenchType } from './library';
+  import { downloadWorkbenchJson } from './layoutActions';
   import { startPanelDragOut, startWidgetDragOut } from './libraryDrag';
   import { startListReorder } from './listReorderDrag';
 
@@ -65,7 +72,7 @@
     return () => mq.removeEventListener('change', sync);
   });
 
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   const layout = $derived(selectActiveLayout($controller.document));
 
   // ── Search (filters every section of the active view) ────────────────────
@@ -79,6 +86,39 @@
   const filteredPages = $derived(pages.filter((page) => matches(page.label)));
 
   // ── Panels (add to the active page) ──────────────────────────────────────
+  // The full catalog: every instance (docked / parked), every canonical panel
+  // the app offers that has no instance yet, the app's "new" specs, templates.
+  const catalog = $derived.by<PanelCatalogEntry[]>(() => {
+    void $controller;
+    return buildPanelCatalog(layout, {
+      canonical: registry.canonicalPanels(),
+      templates: $controller.document.panelLibrary,
+      hiddenTypes: registry.panelCatalogHiddenTypes
+    });
+  });
+  const panelEntries = $derived(catalog.filter((entry) => entry.source !== 'template' && matches(entry.title)));
+  // Empty parked custom panels (no widgets, default title + state) are not
+  // listed one by one: one row offers to delete them all — they hold nothing.
+  const emptyCustomPanels = $derived.by(() => {
+    void $controller;
+    return selectEmptyParkedCustomPanels(layout, registry.canonicalPanels());
+  });
+  const EMPTY_CUSTOM_LABEL = 'Empty custom panels';
+  const catalogEntryByKey = (key: string): PanelCatalogEntry | undefined => catalog.find((entry) => entry.key === key);
+
+  /** Where an entry lives, relative to the page this drawer adds to. */
+  function catalogStatus(entry: PanelCatalogEntry): string {
+    if (entry.multiple) return 'new';
+    if (entry.placement === 'docked') {
+      return entry.onActivePage ? 'on this page' : `on ${entry.pageLabel}`;
+    }
+    return 'not placed';
+  }
+  /** Tap / drag puts it here — except a panel already here (locked panels move like any other). */
+  const catalogActionable = (entry: PanelCatalogEntry): boolean => !(entry.placement === 'docked' && entry.onActivePage);
+  const catalogGlyph = (entry: PanelCatalogEntry): string =>
+    entry.multiple ? '＋' : entry.placement === 'docked' ? (entry.onActivePage ? '◉' : '◎') : '○';
+
   const panelTemplates = $derived(
     Object.values($controller.document.panelLibrary)
       .filter((template) => matches(template.title))
@@ -109,6 +149,11 @@
   // rename in place through the same little input, keyed by kind + id.
   let renaming = $state<{ kind: 'page' | 'panel' | 'widget'; id: string } | null>(null);
   let renameDraft = $state('');
+  // Two-step inline confirms (the Layouts drawer's backup-restore pattern):
+  // deleting a page, and deleting a custom panel everywhere.
+  let confirmDeletePageId = $state<string | null>(null);
+  let confirmDeletePanelId = $state<string | null>(null);
+  let confirmDeleteEmpties = $state(false);
 
   // Inline status line (a parallel agent owns the toast surface — do NOT import
   // toasts.ts here; each `setStatus` call marks where a toast could later
@@ -124,22 +169,12 @@
     void view;
     renaming = null;
     renameDraft = '';
+    confirmDeletePageId = null;
+    confirmDeletePanelId = null;
+    confirmDeleteEmpties = false;
     status = null;
     query = '';
   });
-
-  function downloadJson(stem: string, data: unknown) {
-    if (typeof window === 'undefined') return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${stem}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
 
   function exportPanelTemplate(templateId: string, title: string) {
     const pkg = exportPanelPackage($controller.document, templateId);
@@ -147,7 +182,7 @@
       setStatus('error', `Could not export "${title}".`); // toast candidate
       return;
     }
-    downloadJson(layoutPackageFilename(title, 'panel'), pkg);
+    downloadWorkbenchJson({ stem: layoutPackageFilename(title, 'panel'), data: pkg });
     setStatus('ok', `Exported "${title}".`); // toast candidate
   }
 
@@ -202,14 +237,49 @@
     onClose();
   }
 
+  // Deleting a page parks its panels (they stay in the catalog below); Undo
+  // brings the page back. Asked inline first.
   function deletePage(page: WorkbenchPage) {
+    confirmDeletePageId = null;
     if (pages.length <= 1) return;
-    controller.removePage(page.id);
+    if (controller.removePage(page.id).success) setStatus('ok', `Deleted “${page.label}” — its panels stay available below.`);
   }
 
   function addCustomPanel() {
     controller.dispatchMany(createCustomPanelCommands($controller.document, { region: DEFAULT_PANEL_REGION }));
     setStatus('ok', 'Custom panel added to this page.'); // toast candidate
+  }
+
+  // ── Catalog actions ───────────────────────────────────────────────────────
+  // Tap: add or move the entry onto this page (one batch). A single-instance
+  // panel is MOVED, never copied, so nothing can be refused as a duplicate.
+  function addCatalogEntry(entry: PanelCatalogEntry, target: DockTarget = { kind: 'region', region: DEFAULT_PANEL_REGION }) {
+    const commands = catalogAddCommands($controller.document, entry, target);
+    if (!commands.length) return;
+    const result = controller.dispatchMany(commands);
+    if (!result.success) {
+      setStatus('error', result.error?.message ?? `Could not add “${entry.title}”.`);
+      return;
+    }
+    const moved = entry.source === 'instance' && entry.placement === 'docked' && !entry.onActivePage;
+    setStatus('ok', moved ? `Moved “${entry.title}” here.` : `Added “${entry.title}” to this page.`); // toast candidate
+  }
+
+  // Hard-delete every empty parked custom panel in ONE batch (one undo step).
+  function deleteEmptyCustomPanels() {
+    confirmDeleteEmpties = false;
+    const ids = emptyCustomPanels.map((panel) => panel.id);
+    if (!ids.length) return;
+    const result = controller.dispatchMany(ids.map((panelId) => ({ type: 'panel.close' as const, panelId })));
+    if (result.success) setStatus('ok', `Deleted ${ids.length} empty custom ${ids.length === 1 ? 'panel' : 'panels'}.`);
+  }
+
+  // The one hard delete: a custom panel instance, everywhere (`panel.close`).
+  function deletePanelEverywhere(entry: PanelCatalogEntry) {
+    confirmDeletePanelId = null;
+    if (!entry.instanceId) return;
+    const result = controller.dispatch({ type: 'panel.close', panelId: entry.instanceId });
+    if (result.success) setStatus('ok', `Deleted “${entry.title}” everywhere.`);
   }
 
   // ── Page reorder by drag (R18 / AXIS-29 — the shared list-reorder drag) ────
@@ -267,15 +337,28 @@
   // it exactly where wanted. Tap stays as the add-to-default fallback (the row's
   // onclick). The drawer auto-collapses the instant the drag activates.
   function panelTemplateDragOut(template: { id: string; title: string }, event: PointerEvent) {
+    catalogDragOut(`template:${template.id}`, template.title, event);
+  }
+  // Drag a catalog entry (template, canonical, parked or elsewhere-docked
+  // panel) onto the exact dock target; the drop commits its catalog commands.
+  function catalogDragOut(key: string, label: string, event: PointerEvent) {
     startPanelDragOut({
       controller,
       event,
+      label,
       onActivate: onClose,
-      commit: ({ region }) => {
-        const found = $controller.document.panelLibrary[template.id];
-        return found ? instantiatePanelTemplateCommands($controller.document, found, { region }) : null;
+      commit: ({ target }) => {
+        const entry = catalogEntryByKey(key);
+        if (!entry) return null;
+        // A drop is an exact placement: a panel already on this page moves there.
+        const commands = catalogAddCommands($controller.document, entry, target, { exact: true });
+        return commands.length ? commands : null;
       }
     });
+  }
+  function addTemplate(templateId: string) {
+    const entry = catalogEntryByKey(`template:${templateId}`);
+    if (entry) addCatalogEntry(entry);
   }
   function widgetTemplateDragOut(template: { id: string }, event: PointerEvent) {
     startWidgetDragOut({
@@ -381,12 +464,19 @@
                 class="aw-lib-row page"
                 class:active={page.id === activePageId}
                 class:aw-lifted={reorderingPageId === page.id}
+                class:confirming={confirmDeletePageId === page.id}
                 title={page.label}
               >
                 {#if renaming?.kind === 'page' && renaming.id === page.id}
                   <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Page name" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
+                {:else if confirmDeletePageId === page.id}
+                  <p class="aw-lib-confirm" data-lib-confirm>{deletePagePrompt(page.label)}</p>
+                  <span class="aw-lib-confirm-actions">
+                    <button class="aw-lib-save danger" type="button" onclick={() => deletePage(page)}>Delete</button>
+                    <button type="button" onclick={() => (confirmDeletePageId = null)}>Cancel</button>
+                  </span>
                 {:else}
                   <button
                     class="aw-lib-drag-grip"
@@ -401,15 +491,20 @@
                     <span class="aw-lib-page-label">{page.label}</span>
                   </button>
                   <i>{page.id === activePageId ? 'active' : 'open'}</i>
+                  {@const protectedReason = registry.pageProtection(page)}
                   <span class="aw-lib-actions">
                     <button class="aw-lib-icon-btn" type="button" title={`Rename ${page.label}`} aria-label={`Rename ${page.label}`} onclick={() => startRename('page', page.id, page.label)}>{@render iconPencil()}</button>
                     <button
                       class="aw-lib-icon-btn danger"
                       type="button"
-                      disabled={pages.length <= 1}
-                      title={pages.length <= 1 ? 'The last page cannot be deleted' : `Delete ${page.label}`}
+                      disabled={pages.length <= 1 || !!protectedReason}
+                      title={protectedReason
+                        ? `${page.label} cannot be deleted: ${protectedReason}`
+                        : pages.length <= 1
+                          ? 'The last page cannot be deleted'
+                          : `Delete ${page.label}`}
                       aria-label={`Delete ${page.label}`}
-                      onclick={() => deletePage(page)}
+                      onclick={() => (confirmDeletePageId = page.id)}
                     >{@render iconTrash()}</button>
                   </span>
                 {/if}
@@ -428,6 +523,86 @@
             <h2>Add Panel · To This Page</h2>
             <button class="aw-lib-add-page" type="button" onclick={addCustomPanel}>＋ Custom Panel</button>
           </div>
+          <div class="aw-lib-list" data-panel-catalog>
+            {#each panelEntries as entry (entry.key)}
+              {@const actionable = catalogActionable(entry)}
+              {@const entryStatus = catalogStatus(entry)}
+              {@const confirmingDelete = !!entry.instanceId && confirmDeletePanelId === entry.instanceId}
+              <div
+                class="aw-lib-row catalog"
+                class:here={entry.onActivePage}
+                class:confirming={confirmingDelete}
+                data-catalog-entry={entry.key}
+                data-catalog-status={entryStatus}
+                title={entry.title}
+              >
+                {#if confirmingDelete}
+                  <p class="aw-lib-confirm" data-lib-confirm>Delete “{entry.title}” everywhere? Its widgets go to Hidden.</p>
+                  <span class="aw-lib-confirm-actions">
+                    <button class="aw-lib-save danger" type="button" onclick={() => deletePanelEverywhere(entry)}>Delete</button>
+                    <button type="button" onclick={() => (confirmDeletePanelId = null)}>Cancel</button>
+                  </span>
+                {:else}
+                  <button
+                    class="aw-lib-grab"
+                    type="button"
+                    disabled={!actionable}
+                    title={actionable
+                      ? `Drag ${entry.title} onto the layout · tap to put it on this page`
+                      : `${entry.title} is on this page`}
+                    onpointerdown={(e) => {
+                      if (actionable) catalogDragOut(entry.key, entry.title, e);
+                    }}
+                    onclick={() => {
+                      if (actionable) addCatalogEntry(entry);
+                    }}
+                  >
+                    <span class="aw-lib-ico">{catalogGlyph(entry)}</span>
+                    <span class="aw-lib-label">{entry.title}</span>
+                    <i
+                      class="aw-lib-status"
+                      class:here={entry.onActivePage}
+                      class:unplaced={entry.placement !== 'docked' && !entry.multiple}
+                    >{entryStatus}</i>
+                  </button>
+                  {#if entry.deletable && entry.instanceId}
+                    <span class="aw-lib-actions">
+                      <button
+                        class="aw-lib-icon-btn danger"
+                        type="button"
+                        title={`Delete ${entry.title} everywhere`}
+                        aria-label={`Delete ${entry.title} everywhere`}
+                        onclick={() => (confirmDeletePanelId = entry.instanceId ?? null)}
+                      >{@render iconTrash()}</button>
+                    </span>
+                  {/if}
+                {/if}
+              </div>
+            {:else}
+              <p class="aw-lib-empty">{q ? 'No panels match.' : 'No panels.'}</p>
+            {/each}
+            {#if emptyCustomPanels.length && matches(EMPTY_CUSTOM_LABEL)}
+              <div class="aw-lib-row catalog empties" class:confirming={confirmDeleteEmpties} data-catalog-empties>
+                {#if confirmDeleteEmpties}
+                  <p class="aw-lib-confirm" data-lib-confirm>
+                    Delete {emptyCustomPanels.length} empty custom {emptyCustomPanels.length === 1 ? 'panel' : 'panels'}? They hold no widgets.
+                  </p>
+                  <span class="aw-lib-confirm-actions">
+                    <button class="aw-lib-save danger" type="button" onclick={deleteEmptyCustomPanels}>Delete</button>
+                    <button type="button" onclick={() => (confirmDeleteEmpties = false)}>Cancel</button>
+                  </span>
+                {:else}
+                  <span class="aw-lib-ico">○</span>
+                  <span class="aw-lib-label">{EMPTY_CUSTOM_LABEL} ({emptyCustomPanels.length})</span>
+                  <button type="button" title="Delete the empty, unplaced custom panels" onclick={() => (confirmDeleteEmpties = true)}>Delete all</button>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </section>
+
+        <section class="aw-lib-section">
+          <h2>Saved Panels · Templates</h2>
           <div class="aw-lib-list">
             {#each panelTemplates as template (template.id)}
               <div class="aw-lib-row saved" title={template.title}>
@@ -442,7 +617,7 @@
                     type="button"
                     title={`Drag ${template.title} onto the layout · tap to add to this page`}
                     onpointerdown={(e) => panelTemplateDragOut(template, e)}
-                    onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: DEFAULT_PANEL_REGION }))}
+                    onclick={() => addTemplate(template.id)}
                   >
                     <span class="aw-lib-ico">▤</span>
                     <span class="aw-lib-label">{template.title}</span>
@@ -559,7 +734,10 @@
   .aw-lib-scrim {
     position: fixed;
     inset: 0;
-    z-index: 130;
+    /* Shell-overlay band: the drawers open from the edit bar and must sit above
+       app chrome (nav sheet 230, dock drawer 180); edit-bar menus 239/240,
+       toasts 300 and the drag layer 1000 stay above. */
+    z-index: 237;
     border: 0;
     background: rgba(0, 0, 0, 0.4);
     animation: awLibIn 0.16s ease;
@@ -569,7 +747,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 131;
+    z-index: 238;
     width: 348px;
     max-width: 90vw;
     /* T21: right-edge drawer clears the landscape right + vertical insets. */
@@ -904,6 +1082,52 @@
   .aw-lib-row button.aw-lib-icon-btn.danger:hover:not(:disabled) {
     color: var(--aw-danger);
     border-color: var(--aw-danger);
+  }
+  /* Panel catalog rows: name + where it lives (on this page / on <page> / not placed / new). */
+  .aw-lib-row.catalog.here {
+    background: color-mix(in srgb, var(--aw-accent) 6%, var(--aw-surface));
+  }
+  .aw-lib-row.catalog .aw-lib-actions {
+    width: auto;
+  }
+  .aw-lib-row button.aw-lib-grab:disabled {
+    cursor: default;
+  }
+  .aw-lib-status {
+    flex: none;
+    max-width: 46%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .aw-lib-row i.aw-lib-status.here {
+    color: var(--aw-accent);
+  }
+  .aw-lib-row i.aw-lib-status.unplaced {
+    color: var(--aw-text-muted);
+  }
+  /* Inline two-step confirm inside a row (page delete, delete everywhere). */
+  .aw-lib-row.confirming {
+    flex-wrap: wrap;
+    cursor: default;
+    border-color: color-mix(in srgb, var(--aw-danger) 45%, var(--aw-border));
+  }
+  .aw-lib-confirm {
+    flex: 1 1 100%;
+    min-width: 0;
+    margin: 0;
+    color: var(--aw-text-2);
+    font: 600 12px/1.4 var(--aw-font-ui);
+  }
+  .aw-lib-confirm-actions {
+    display: inline-flex;
+    gap: 7px;
+    margin-left: auto;
+  }
+  .aw-lib-row button.aw-lib-save.danger {
+    border-color: var(--aw-danger);
+    background: color-mix(in srgb, var(--aw-danger) 14%, transparent);
+    color: var(--aw-danger);
   }
   .aw-lib-row button.aw-lib-icon-btn:disabled {
     opacity: 0.4;

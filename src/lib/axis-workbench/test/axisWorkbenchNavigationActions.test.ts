@@ -45,4 +45,23 @@ describe('Axis navigation panel actions', () => {
     const scenePanels = Object.values(layout.panels).filter((panel) => panel.id === 'axis.scenes');
     expect(scenePanels).toHaveLength(1);
   });
+
+  it('mints the panel WITH its singleton key and re-docks a parked one', async () => {
+    const controller = newController();
+    const action = createAxisNavigationPanelAction({
+      actionId: 'axis.openPresetBrowser',
+      panelId: 'axis.presetBrowser',
+      panelType: 'axis.presetBrowser',
+      title: 'Preset Browser',
+      region: 'left'
+    });
+    await action.run({ controller, source: 'navigation' });
+    expect(selectActiveLayout(controller.document)!.panels['axis.presetBrowser'].singletonKey).toBe('axis.presetBrowser');
+
+    controller.dispatch({ type: 'panel.remove', panelId: 'axis.presetBrowser' });
+    await action.run({ controller, source: 'navigation' });
+    const layout = selectActiveLayout(controller.document)!;
+    expect(Object.keys(layout.panels).filter((id) => id.startsWith('axis.presetBrowser'))).toEqual(['axis.presetBrowser']);
+    expect(layout.pages[layout.activePageId].dock.root.left).not.toBeNull();
+  });
 });

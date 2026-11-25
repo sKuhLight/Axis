@@ -29,6 +29,9 @@ design/screenshots/
 /test-results
 /playwright-report
 
+# Vite's transient config bundles (left behind when a dev server is killed)
+vite.config.*.timestamp-*
+
 # Claude Code local config (private: Plane MCP, personal settings)
 .mcp.json
 CLAUDE.local.md

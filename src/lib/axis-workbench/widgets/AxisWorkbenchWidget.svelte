@@ -52,6 +52,10 @@
   const expanded = $derived(size === 'default');
   const notMini = $derived(size !== 'mini');
   const kind = $derived(widget.type.replace(/^axis\./, ''));
+  const dividerLabel = $derived(typeof widget.state?.label === 'string' ? widget.state.label : 'Section');
+  const dividerRows = $derived(typeof (widget.state?.grid as { rowSpan?: unknown } | undefined)?.rowSpan === 'number' ? (widget.state!.grid as { rowSpan: number }).rowSpan : 2);
+  function setDividerLabel(value: string) { dispatch({ type: 'widget.state', widgetId: widget.id, state: { ...widget.state, label: value.slice(0, 100) } }); }
+  function setDividerRows(value: number) { dispatch({ type: 'widget.state', widgetId: widget.id, state: { ...widget.state, grid: { rowSpan: Math.max(1, Math.min(12, Math.round(value) || 2)) } } }); }
   const pnumRaw = $derived(editor.preset && editor.preset.number >= 0 ? editor.preset.number : -1);
   const pnum = $derived(pnumRaw >= 0 ? String(pnumRaw).padStart(3, '0') : '---');
   const pname = $derived(axisPresetDisplayName(editor.preset?.name, editor.conn.state));
@@ -222,7 +226,9 @@
     prevTrafficAt = now;
   });
 
-  function openWidget() {
+  let scnOpen = $state(false);
+
+function openWidget() {
     if (kind === 'preset') editor.presetOpen = true;
     else if (kind === 'addBlock') {
       editor.paletteMode = 'place';
@@ -314,9 +320,14 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
+    // pointercancel (e.g. a touch scroll takeover) fires no pointerup — without this the listeners above
+    // stay live and every stray pointermove keeps writing values to the connected device. There is no
+    // final write on release, so cancelling is the same teardown.
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   }
 
   function paramWheel(event: WheelEvent) {
@@ -340,6 +351,18 @@
     if (paramLive && paramEnum) nudgeParam(1);
   }
 </script>
+
+<svelte:window
+  onpointerdown={(e) => {
+    if (!scnOpen) return;
+    const t = e.target as HTMLElement | null;
+    if (!t?.closest('.scn-inline') && !t?.closest('[data-scn-toggle]')) scnOpen = false;
+  }}
+  onkeydown={(e) => {
+    // the channel selector folds on Escape
+    if (scnOpen && e.key === 'Escape') scnOpen = false;
+  }}
+/>
 
 {#if kind === 'preset'}
   <div class="axis-widget axis-preset" data-size={size}>
@@ -375,24 +398,44 @@
 {:else if kind === 'scenes'}
   <!-- Capability-gated like the legacy TopBar: no scene chips on a device without scenes (or before caps load). -->
   {#if editor.sceneCount > 0}
-    <div class="axis-widget chips" data-size={size}>
-      {#if expanded}<span class="mono token">SCN</span>{/if}
-      <div class="chip-row">
-        {#each Array(sceneCount) as _, i}
-          {@const s = i + 1}
-          {#if !mini || activeScene === s}
+    <div class="axis-widget preset scn" class:open={scnOpen} data-size={size}>
+      {#if scnOpen}
+        <!-- the channel selector's pattern: the widget itself unfolds to the right - SCN, every scene number,
+             then the active scene's name; a pick or a click-away folds it back -->
+        <div class="scn-inline" role="group" aria-label="Scene" tabindex="-1">
+          <span class="mono token">SCN</span>
+          {#each Array(editor.sceneCount) as _, i (i)}
+            {@const n = i + 1}
             <button
-              class="num-chip"
-              class:on={activeScene === s}
+              class="scn-chip"
+              class:on={editor.scene === n}
               type="button"
-              title={`Scene ${s}`}
-              onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : s)}
+              aria-pressed={editor.scene === n}
+              title="Scene {n}"
+              onclick={() => {
+                editor.selectScene(n);
+                scnOpen = false;
+              }}>{n}</button
             >
-              {s}
-            </button>
-          {/if}
-        {/each}
-      </div>
+          {/each}
+          <span class="scn-name">{editor.sceneName(editor.scene)}</span>
+        </div>
+      {:else}
+        <button
+          class="preset-main"
+          type="button"
+          data-scn-toggle
+          title="Scene {editor.scene} - {editor.sceneName(editor.scene)}"
+          aria-haspopup="listbox"
+          aria-expanded={scnOpen}
+          onclick={() => (scnOpen = true)}
+        >
+          <span class="mono token">SCN</span>
+          <span class="mono preset-num">{editor.scene}</span>
+          {#if expanded}<span class="preset-name">{editor.sceneName(editor.scene)}</span>{/if}
+          {#if !mini}<span class="chev">▾</span>{/if}
+        </button>
+      {/if}
     </div>
   {/if}
 {:else if kind === 'view'}
@@ -461,6 +504,20 @@
         onpointerleave={sizeMoreHold.stop}
       >+</button>
     {/if}
+  </div>
+{:else if kind === 'horizontalDivider' || kind === 'verticalDivider'}
+  <div class="axis-divider" class:vertical={kind === 'verticalDivider'} data-axis-divider={kind}>
+    {#if editMode && !widget.locked}
+      <div class="divider-settings">
+        <input aria-label="Divider label" value={dividerLabel} maxlength="100" placeholder="Label" onchange={(e) => setDividerLabel(e.currentTarget.value)} onkeydown={(e) => e.stopPropagation()} />
+        {#if kind === 'verticalDivider'}
+          <label>Rows <input type="number" aria-label="Divider height in rows" value={dividerRows} min="1" max="12" onchange={(e) => setDividerRows(e.currentTarget.valueAsNumber)} onkeydown={(e) => e.stopPropagation()} /></label>
+        {/if}
+      </div>
+    {/if}
+    <div class="divider-rule" role="separator" aria-orientation={kind === 'verticalDivider' ? 'vertical' : 'horizontal'} aria-label={dividerLabel || undefined}>
+      {#if dividerLabel}<span>{dividerLabel}</span>{/if}<i></i>
+    </div>
   </div>
 {:else if kind === 'paramControl'}
   <button
@@ -585,7 +642,7 @@
     class="axis-widget map"
     data-size={size}
     type="button"
-    title="Grid map · show the Block Editor navigator"
+    title="Show the Block Editor"
     onclick={() => dispatch({ type: 'panel.activate', panelId: 'axis.blockEditor' })}
   >
     <span class="map-dots">
@@ -676,9 +733,9 @@
     type="button"
     disabled={!editor.canMeterBlocks}
     title={editor.canMeterBlocks
-      ? "Per-block audio meters — polls the open block's level once per ~0.5s"
+      ? 'Show live readings on visible meter and gain-reduction tiles'
       : 'Per-block metering needs a ready device with live monitors on a fast link'}
-    onclick={() => (editor.meteringOn = !editor.meteringOn)}
+    onclick={() => editor.setMeteringOn(!editor.meteringOn)}
   >
     <span class="meter-glyph">▊</span>
     {#if expanded}<span class="mono token">METER</span>{/if}
@@ -736,6 +793,19 @@
 {/if}
 
 <style>
+  .axis-divider { display: flex; flex-direction: column; align-self: stretch; width: 100%; min-width: 0; min-height: 36px; }
+  .axis-divider.vertical { min-height: 88px; height: 100%; }
+  .divider-rule { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 6px; color: var(--textmuted); }
+  .divider-rule span { font: 600 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .divider-rule i { flex: 1; height: 1px; min-width: 12px; background: var(--border2); }
+  .vertical .divider-rule { flex-direction: column; }
+  .vertical .divider-rule span { writing-mode: vertical-rl; }
+  .vertical .divider-rule i { width: 1px; min-width: 1px; min-height: 20px; }
+  .divider-settings { position: relative; z-index: 6; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
+  .divider-settings input { min-width: 0; width: 100%; background: var(--input); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px; font: 11px var(--font-ui); }
+  .divider-settings label { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--textmuted); }
+  .divider-settings label input { width: 44px; }
+
   .axis-widget,
   .axis-widget button {
     font-family: var(--font-ui);
@@ -822,6 +892,52 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  /* scenes: the preset shape without arrows; opening it unfolds the stage in place (channel-selector pattern) */
+  .axis-widget.scn {
+    position: relative;
+    overflow: visible;
+  }
+  .axis-widget.scn.open {
+    /* the unfolded row (SCN · 1..8 · name) is wider than the closed widget: let it grow instead of clipping */
+    max-width: none;
+    flex: none;
+  }
+  .scn-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 2px;
+  }
+  .scn-chip {
+    flex: none;
+    min-width: 26px;
+    height: 30px;
+    padding: 0 5px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--amber);
+    font: 800 14px/1 var(--font-mono);
+    cursor: pointer;
+  }
+  .scn-chip:hover {
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
+  }
+  .scn-chip.on {
+    background: color-mix(in srgb, var(--amber) 16%, transparent);
+    border-color: var(--amber-border, var(--amber));
+    color: var(--amber);
+  }
+  .scn-name {
+    max-width: 150px;
+    margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--text);
     font-size: 13px;
     font-weight: 600;

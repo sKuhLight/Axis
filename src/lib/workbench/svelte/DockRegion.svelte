@@ -1,6 +1,7 @@
 <script lang="ts">
   import DockNodeView from './DockNode.svelte';
   import { getWorkbenchContext } from './context';
+  import { collapsedNodeExtent, isDockNodeCollapsed, stackCollapsedIn } from './dockLayout';
   import type { DockRegionId } from '../core';
 
   let {
@@ -12,23 +13,50 @@
     mobileInlineHidden?: boolean;
     overlay?: boolean;
   } = $props();
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   // Pages: the dock rendered here is the ACTIVE page's — switching pages swaps
-  // the whole region tree.
-  const page = $derived($controller.activePage);
+  // the whole region tree. During a panel drag it is the LIFTED page (the
+  // dragged panel taken out), so its slot collapses and the rest fills in.
+  const page = $derived($controller.renderedPage);
   const node = $derived(page?.dock.root[region] ?? null);
   const state = $derived(page?.dock.regions[region]);
   const empty = $derived(!node);
   const hidden = $derived(empty && !$controller.editMode && region !== 'main');
   const horizontalRegion = $derived(region === 'top' || region === 'bottom');
+  const sideRegion = $derived(region === 'left' || region === 'right');
+  // Edit mode: an empty side region is a slim labelled strip (a drop target),
+  // not a full-size block; main keeps its placeholder.
+  const emptyStrip = $derived(empty && region !== 'main' && !overlay);
+  // Every stack in the region is a collapsed strip: a side region shrinks to
+  // the strips (its neighbours take the space); main pins them to its top edge.
+  const collapsedExtent = $derived.by(() => {
+    if (!node || overlay) return null;
+    const isCollapsed = stackCollapsedIn($controller.activeLayout?.panels ?? {});
+    if (!isDockNodeCollapsed(node, isCollapsed)) return null;
+    return collapsedNodeExtent(node, sideRegion ? 'horizontal' : 'vertical', isCollapsed);
+  });
 
   const regionStyle = $derived.by(() => {
     if (overlay) return '';
     if (region === 'main') return '';
+    if (emptyStrip) return '';
+    if (collapsedExtent != null && !state?.collapsed) return horizontalRegion ? `height:${collapsedExtent}px;` : `width:${collapsedExtent}px;`;
     const px = state?.sizePx;
     if (!px || state?.collapsed) return '';
     return horizontalRegion ? `height:${px}px;` : `width:${px}px;`;
   });
+  const bodyStyle = $derived(region === 'main' && collapsedExtent != null ? `bottom:auto; height:${collapsedExtent}px;` : '');
+
+  // Edit mode with a host Add palette: an empty region offers "+ Panel" — the
+  // palette on Panels with this region as its fixed target.
+  const canAdd = $derived($controller.editMode && !overlay && !!registry.addPalette);
+  const regionName = $derived(region === 'main' ? 'main region' : `${region} region`);
+  function openAdd() {
+    controller.openAddPalette({
+      filter: 'panels',
+      target: { kind: 'panel', to: { kind: 'region', region }, label: `Into the ${regionName}` }
+    });
+  }
 
   function toggleCollapse() {
     controller.dispatch({ type: 'region.collapse', region, collapsed: !state?.collapsed });
@@ -47,11 +75,15 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       document.body.style.cursor = '';
     };
     document.body.style.cursor = horizontalRegion ? 'ns-resize' : 'ew-resize';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    // pointercancel fires no pointerup — without it the resize stays "live" and the cursor stuck.
+    // Nothing is committed on release (every move already resized), so cancelling is the same teardown.
+    window.addEventListener('pointercancel', onUp);
   }
 </script>
 
@@ -60,6 +92,8 @@
     class="aw-region aw-region-{region}"
     class:collapsed={state?.collapsed}
     class:empty
+    class:empty-strip={emptyStrip}
+    class:all-collapsed={collapsedExtent != null}
     class:mobile-inline-hidden={mobileInlineHidden}
     class:overlay
     data-region={region}
@@ -68,13 +102,30 @@
     {#if state?.collapsed}
       <button class="aw-region-strip" type="button" onclick={toggleCollapse}>{region}</button>
     {:else if node}
-      <DockNodeView {node} {region} />
-      {#if region !== 'main' && !overlay}
+      <div class="aw-region-body" style={bodyStyle}>
+        <DockNodeView {node} {region} stripVertical={sideRegion} {overlay} />
+      </div>
+      {#if region !== 'main' && !overlay && collapsedExtent == null}
         <button class="aw-region-collapse" type="button" title="Collapse {region}" onclick={toggleCollapse}>−</button>
         <div class="aw-region-resize" role="separator" onpointerdown={resizeDown}></div>
       {/if}
+    {:else if emptyStrip}
+      <div class="aw-region-empty-strip" class:vertical={sideRegion} data-empty-region={region}>
+        {#if canAdd && !$controller.drag}
+          <button class="aw-region-add" type="button" data-region-add={region} title={`Add a panel to the ${regionName}`} aria-label={`Add a panel to the ${regionName}`} onclick={openAdd}>
+            <span>+ Panel · {region}</span>
+          </button>
+        {:else}
+          <span>{region}</span>
+        {/if}
+      </div>
     {:else}
-      <div class="aw-region-empty">Drop panels in {region}</div>
+      <div class="aw-region-empty" data-empty-region={region}>
+        <span>Drop panels in {region}</span>
+        {#if canAdd && !$controller.drag}
+          <button class="aw-region-add main" type="button" data-region-add={region} title={`Add a panel to the ${regionName}`} aria-label={`Add a panel to the ${regionName}`} onclick={openAdd}>+ Panel</button>
+        {/if}
+      </div>
     {/if}
   </section>
 {/if}
@@ -187,11 +238,50 @@
   .aw-region-bottom .aw-region-resize {
     top: -4px;
   }
+  /* Region body: fills the region (the dock tree lays out inside it). A fully
+     collapsed main pins it to the top edge at the strips' height. */
+  .aw-region-body {
+    position: absolute;
+    inset: 0;
+    min-width: 0;
+    min-height: 0;
+  }
+  /* Edit mode: an empty side region is a slim labelled strip, not a 320/240px
+     block — still a drop target (dock to that edge). */
+  .aw-region.empty-strip.aw-region-left,
+  .aw-region.empty-strip.aw-region-right {
+    width: 44px;
+  }
+  .aw-region.empty-strip.aw-region-top,
+  .aw-region.empty-strip.aw-region-bottom {
+    height: 48px;
+  }
+  .aw-region-empty-strip {
+    position: absolute;
+    inset: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 32%, var(--aw-border-2));
+    border-radius: 9px;
+    color: var(--aw-text-faint);
+    font: 600 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .aw-region-empty-strip.vertical span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
   .aw-region-empty {
     position: absolute;
     inset: 8px;
     display: grid;
     place-items: center;
+    align-content: center;
+    gap: 12px;
     border: 1px dashed var(--aw-border-2);
     border-radius: 10px;
     color: var(--aw-text-faint);
@@ -200,21 +290,49 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-  :global(.aw-root.aw-dragging-panel) .aw-region:not(.collapsed)::after {
-    content: attr(data-region);
-    position: absolute;
-    inset: 8px;
-    z-index: 3;
-    display: grid;
-    place-items: center;
-    border: 1px dashed color-mix(in srgb, var(--aw-accent) 44%, transparent);
-    border-radius: 12px;
-    color: color-mix(in srgb, var(--aw-accent) 78%, white);
-    background: color-mix(in srgb, var(--aw-accent) 7%, transparent);
-    pointer-events: none;
-    font: 800 10px/1 var(--aw-font-mono);
-    letter-spacing: 0.14em;
+  /* "+ Panel" in an empty region (edit mode): fills a strip, a button in main. */
+  .aw-region-add {
+    border: 0;
+    background: transparent;
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 700 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .aw-region-empty-strip .aw-region-add {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+  }
+  .aw-region-empty-strip.vertical .aw-region-add span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+  .aw-region-add:hover,
+  .aw-region-add:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
+    outline: none;
+  }
+  .aw-region-add.main {
+    height: 32px;
+    padding: 0 16px;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 60%, transparent);
+    border-radius: 9px;
+    font: 700 12px/1 var(--aw-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+  /* Panel drags: the dock-drop overlay (zones, edge bars, landing shape) is the
+     only target chrome; empty placeholders just brighten so they read as targets. */
+  :global(.aw-root.aw-dragging-panel) .aw-region-empty-strip,
+  :global(.aw-root.aw-dragging-panel) .aw-region-empty {
+    border-color: color-mix(in srgb, var(--aw-accent) 55%, transparent);
+    color: color-mix(in srgb, var(--aw-accent) 70%, var(--aw-text-muted));
   }
   @media (max-width: 760px) {
     .aw-region.mobile-inline-hidden {

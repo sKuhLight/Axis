@@ -104,10 +104,15 @@ class HistoryStore {
 
   bindHost(h: HistoryHost) { this.#host = h; }
 
-  /** Switch the history context to another device+slot: flush the old doc, load the new one. */
+  /** Switch the history context to another device+slot: flush the old doc, load the new one. When this is
+   *  an in-session change of slot on the same device, the device replaced its edit buffer with the other
+   *  preset, so whatever the loaded changelog holds no longer describes the buffer: it is kept (readable in
+   *  the panel) behind a BARRIER, so undo can't replay it onto the freshly loaded preset. The first context
+   *  after launch gets no barrier — the changelog survives a restart and stays undoable. */
   switchTo = async (deviceShort: string, preset: number) => {
     const key = `${KEY_PREFIX}${deviceShort}:${preset}`;
     if (key === this.key) return;
+    const prev = this.key;
     this.endGesture();
     this.#flushPersist();
     this.key = key;
@@ -120,13 +125,30 @@ class HistoryStore {
       this.entries = doc.entries;
       this.cursor = Math.max(0, Math.min(doc.cursor ?? doc.entries.length, doc.entries.length));
     }
+    // Same device only: at startup the context can flip from a placeholder device name to the detected one
+    // for the SAME slot, which is not a buffer replacement.
+    const sameDevice = prev.startsWith(`${KEY_PREFIX}${deviceShort}:`);
+    if (sameDevice && this.entries.length && !this.entries[this.entries.length - 1].barrier) {
+      this.#push({ id: uid(), t: Date.now(), label: `Loaded preset ${String(preset).padStart(3, '0')}`, ops: [], undoable: false, barrier: true });
+    }
   };
 
-  /** Record a discrete/structural op — always its own step. */
-  record = (op: HistoryOp) => {
-    if (this.applying) return;
+  /** Record a discrete/structural op — always its own step. Returns the step's id (null while replaying),
+   *  so a write the device then refuses can `discard` it. */
+  record = (op: HistoryOp): string | null => {
+    if (this.applying) return null;
     this.endGesture();
-    this.#push({ id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true });
+    return this.#push({ id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true }).id;
+  };
+  /** Drop a recorded step whose write never took effect (the device refused it / the request failed): it is
+   *  not something to undo. No-op when the step is gone already (cleared, trimmed, switched preset). */
+  discard = (id: string) => {
+    const i = this.entries.findIndex((e) => e.id === id);
+    if (i < 0) return;
+    this.entries.splice(i, 1);
+    if (i < this.cursor) this.cursor--;
+    this.cursor = Math.min(this.cursor, this.entries.length);
+    this.#schedulePersist();
   };
   /** Record a composite step (move/connect): primitive ops in execution order, undone in reverse. */
   recordComposite = (label: string, ops: HistoryOp[]) => {
@@ -158,8 +180,11 @@ class HistoryStore {
     }
     this.endGesture();
     const entry: HistoryEntry = { id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true };
-    this.#push(entry, /*persist*/ false); // panel updates live; persisted when the gesture closes
-    this.#gesture = { key: gkey, entry, timer: setTimeout(() => this.endGesture(), GESTURE_MS) };
+    // Hold the LIVE entry `#push` returns, never the local `entry` — see `#push`. The coalescing branch
+    // above writes through it, so the panel updates live and the final `to` is what gets replayed and
+    // persisted; persisted when the gesture closes.
+    const live = this.#push(entry, /*persist*/ false);
+    this.#gesture = { key: gkey, entry: live, timer: setTimeout(() => this.endGesture(), GESTURE_MS) };
   };
   /** Close any open param gesture now (no-op drags are dropped). */
   endGesture = () => {
@@ -171,17 +196,22 @@ class HistoryStore {
     if (op.from === op.to) {
       const i = this.entries.indexOf(g.entry);
       if (i >= 0) { this.entries.splice(i, 1); this.cursor = Math.min(this.cursor, this.entries.length); }
-      return;
     }
+    // Also after a dropped no-op: the gesture's push already truncated the redo tail, unpersisted.
     this.#schedulePersist();
   };
 
-  #push = (entry: HistoryEntry, persist = true) => {
+  /** Append an entry and return the LIVE one — `entries` is `$state`, so what lands in the array is a deep
+   *  proxy of `entry`, not `entry` itself. Anything that keeps hold of an entry past this call (only
+   *  `recordGesture`, for coalescing) must keep the returned proxy: mutating the raw object is invisible
+   *  to `entries` readers, and `entries.indexOf(rawEntry)` is always -1. */
+  #push = (entry: HistoryEntry, persist = true): HistoryEntry => {
     if (this.cursor < this.entries.length) this.entries.splice(this.cursor); // truncate the redo tail
     this.entries.push(entry);
     if (this.entries.length > MAX_ENTRIES) this.entries.splice(0, this.entries.length - MAX_ENTRIES);
     this.cursor = this.entries.length;
     if (persist) this.#schedulePersist();
+    return this.entries[this.entries.length - 1];
   };
 
   undo = async (): Promise<boolean> => {

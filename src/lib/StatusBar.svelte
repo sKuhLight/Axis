@@ -1,15 +1,27 @@
 <script lang="ts">
-  // Persistent bottom bar. Left: the hover-hint for the block/parameter under the cursor (falls back to
-  // the current selection / connection state) — scrolls like a news ticker when it overflows. Right:
-  // Ko-fi support link · copyright · imprint.
+  // Persistent bottom bar, the same three areas as the top bar: LEFT the hover hint for the block /
+  // parameter under the cursor (a ticker when it overflows), CENTER the device + preset / scene state,
+  // RIGHT the support link - copyright - imprint.
   import { editor } from './editor.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
   const left = $derived(
     editor.hint ??
-      (editor.selected ? editor.selected.display : editor.conn.state === 'online' ? 'Ready' : editor.conn.state === 'offline' ? 'Device offline' : 'Connecting…')
+      (editor.selected ? editor.selected.display : editor.conn.state === 'online' ? 'Ready' : editor.conn.state === 'offline' ? 'Offline' : 'Connecting…')
   );
+
+  /** Center: what the unit is showing (device, preset, scene) - omitted where the device has none. */
+  const center = $derived.by(() => {
+    const bits: string[] = [];
+    if (editor.conn.state === 'online') {
+      const name = editor.detected?.name ?? '';
+      if (name) bits.push(name);
+      if (editor.preset) bits.push(`${editor.preset.number}: ${editor.preset.name || '(unnamed)'}`);
+      if (editor.sceneCount > 0) bits.push(`SCN ${editor.scene}`);
+    }
+    return bits.join(' · ');
+  });
 
   // ── ticker: scroll the text horizontally when it's wider than its slot ──
   let box = $state<HTMLElement | null>(null);
@@ -35,10 +47,12 @@
       class="tick"
       class:run={shift > 0}
       bind:this={text}
-      style="--shift:{shift}px; --dur:{dur}s">{left}</span>
+      style="--shift:{shift}px; --dur:{dur}s">{left}</span
+    >
   </div>
+  <div class="center" data-tour="statusstate" title={center}>{center}</div>
   <div class="right">
-    <button class="kofi" onclick={() => openExternal(KOFI_URL)} title="Support Axis development on Ko-fi">☕ Support on Ko-fi</button>
+    <button class="kofi" onclick={() => openExternal(KOFI_URL)} title="Support Axis development on Ko-fi">♥ Support on Ko-fi</button>
     <span class="sep"></span>
     <span class="cr">{COPYRIGHT}</span>
     <span class="sep"></span>
@@ -51,9 +65,10 @@
     flex: none;
     /* Extend down into the iOS home-indicator safe area; bg fills it, content stays above. 0 off native. */
     height: calc(26px + var(--axis-safe-bottom));
-    display: flex;
+    /* the top bar's three areas: left / center / right, each with its own alignment */
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     padding: 0 12px var(--axis-safe-bottom);
     background: var(--bg-rail, var(--bg2));
@@ -63,11 +78,20 @@
     user-select: none;
   }
   .left {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     color: var(--textdim);
+  }
+  .center {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    color: var(--text2);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-variant-numeric: tabular-nums;
   }
   .tick {
     display: inline-block;
@@ -88,7 +112,13 @@
       transform: translateX(calc(-1 * var(--shift)));
     }
   }
-  .right { flex: none; display: flex; align-items: center; gap: 10px; }
+  .right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+  }
   .kofi { background: none; border: none; color: #13c3ff; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
   .kofi:hover { filter: brightness(1.12); }
   .lnk { background: none; border: none; color: var(--text-mut, var(--textdim)); font-size: 11px; cursor: pointer; padding: 0; }
@@ -96,6 +126,9 @@
   .cr { color: var(--textmuted); }
   .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); }
   @media (max-width: 640px) {
-    .cr { display: none; }
+    .cr,
+    .center {
+      display: none;
+    }
   }
 </style>

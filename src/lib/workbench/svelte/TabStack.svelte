@@ -2,7 +2,7 @@
   import PanelHost from './PanelHost.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import { getWorkbenchContext } from './context';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import {
     WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -12,23 +12,159 @@
   } from '../core';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { createPanelTemplateFromPanel } from './library';
-  import { PANEL_REGION_MOVE_OPTIONS } from './moveAlternatives';
-  import { dockTargetLabel, panelDropCommand, pointerDistance, splitIntentFromRect, widgetDropIndex, type PanelDropIntent, type WorkbenchRect } from './drag';
+  import { widgetDropIndex, type WorkbenchRect } from './drag';
+  import { startPanelTabDrag } from './panelDrag';
+  import {
+    MAXIMIZE_ESCAPE_OVERLAYS,
+    PANEL_REMOVE_LABEL,
+    buildPanelMenuItems,
+    collapsedStripLabel,
+    shouldReleaseMaximize,
+    shouldRestoreMaximizedOnEscape
+  } from './panelChrome';
   import { enqueueToast } from './toasts';
 
   let {
     stack,
-    region
+    region,
+    stripVertical = false,
+    overlay = false
   }: {
     stack: TabStackDockNode;
     region: DockRegionId;
+    /** When collapsed, this stack is a vertical strip (rotated label) — it sits in a horizontal split / side region. */
+    stripVertical?: boolean;
+    /** Rendered inside a mobile dock drawer (never maximized from there). */
+    overlay?: boolean;
   } = $props();
 
   const { controller, registry } = getWorkbenchContext();
   const layout = $derived($controller.activeLayout);
-  const activePanelId = $derived(stack.panelIds.includes(stack.activePanelId) ? stack.activePanelId : stack.panelIds[0]);
+  // Held: a drag lifted this stack's ACTIVE tab (the lifted dock keeps the stale
+  // activePanelId). The remaining tabs stay in the header, but none is mounted
+  // for the duration of the drag — no neighbour panel spins up (device reads).
+  const held = $derived(!!$controller.liftedPanelId && stack.activePanelId === $controller.liftedPanelId);
+  const activePanelId = $derived(
+    held ? undefined : stack.panelIds.includes(stack.activePanelId) ? stack.activePanelId : stack.panelIds[0]
+  );
   const activePanel = $derived(activePanelId ? layout?.panels[activePanelId] : undefined);
   const single = $derived(stack.panelIds.length <= 1);
+  const titleOf = (panel: PanelInstance | undefined, fallback: string) => panel?.title ?? panel?.type ?? fallback;
+  const activeTitle = $derived(titleOf(activePanel, activePanelId ?? ''));
+
+  let sectionEl = $state<HTMLElement | null>(null);
+
+  // ── Maximize (transient controller state) ────────────────────────────────
+  // The maximized stack is NOT re-parented (its panel components keep their DOM
+  // and state): it is lifted visually — `position: fixed` over the measured
+  // workspace rect, above the regions, below menus / drawers / the drag layer.
+  // Only the INLINE instance owns it; when that owner goes away (unmounted, or
+  // not laid out — a phone-hidden region) the maximize is released, so it can
+  // never linger invisibly.
+  const maximized = $derived(!overlay && !!$controller.maximizedPanelId && stack.panelIds.includes($controller.maximizedPanelId));
+  let maxRect = $state<WorkbenchRect | null>(null);
+  $effect(() => {
+    if (!maximized || typeof document === 'undefined') {
+      maxRect = null;
+      return;
+    }
+    const workspace = document.querySelector<HTMLElement>('.aw-workspace');
+    if (!workspace) return;
+    // Fixed px inside an ancestor CSS zoom are LAYOUT px; gBCR is visual.
+    const measure = () => {
+      const rendered = !!sectionEl && sectionEl.getClientRects().length > 0;
+      if (shouldReleaseMaximize({ maximizedPanelId: controller.maximizedPanelId, stackPanelIds: ownedPanelIds, overlay, rendered })) {
+        controller.setMaximizedPanel(null);
+        return;
+      }
+      const r = workspace.getBoundingClientRect();
+      const zoom = workspace.offsetWidth > 0 && r.width > 0 ? r.width / workspace.offsetWidth : 1;
+      maxRect = { left: r.left / zoom, top: r.top / zoom, width: r.width / zoom, height: r.height / zoom };
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(workspace);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  });
+  const maxStyle = $derived(
+    maximized && maxRect ? `left:${maxRect.left}px; top:${maxRect.top}px; width:${maxRect.width}px; height:${maxRect.height}px;` : ''
+  );
+  // The panels this instance last showed: during teardown the `stack` prop may
+  // already read null (its region emptied), so remember them while mounted.
+  let ownedPanelIds: string[] = [];
+  $effect.pre(() => {
+    if (stack) ownedPanelIds = stack.panelIds;
+  });
+  onDestroy(() => {
+    if (shouldReleaseMaximize({ maximizedPanelId: controller.maximizedPanelId, stackPanelIds: ownedPanelIds, overlay, rendered: false })) {
+      controller.setMaximizedPanel(null);
+    }
+  });
+
+  // Escape restores — but only an Escape nothing else consumed. A window
+  // CAPTURE listener (no stopPropagation — it only records) snapshots, before
+  // any element handler runs, whether a menu / drawer / dialog was open and
+  // whether a text field had focus: a dialog that closes itself on Escape
+  // without preventDefault is gone by the time a later check could see it. The
+  // decision is deferred to a macrotask, after the whole dispatch, so the app's
+  // Escape chain and element handlers can mark the key with preventDefault (a
+  // microtask would run right after this listener, before the others).
+  $effect(() => {
+    if (!maximized) return;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const target = event.target as HTMLElement | null;
+      const editableTarget = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const overlayOpenAtCapture = !!document.querySelector(MAXIMIZE_ESCAPE_OVERLAYS);
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(() => {
+        pending = null;
+        const restore = shouldRestoreMaximizedOnEscape({
+          key: event.key,
+          maximized: controller.maximizedPanelId != null && ownedPanelIds.includes(controller.maximizedPanelId),
+          defaultPrevented: event.defaultPrevented,
+          dragging: !!controller.drag,
+          overlayOpenAtCapture,
+          editableTarget
+        });
+        if (restore) controller.setMaximizedPanel(null);
+      }, 0);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (pending) clearTimeout(pending);
+    };
+  });
+
+  // ── Collapse ─────────────────────────────────────────────────────────────
+  // A stack whose active panel is collapsed renders as a slim labelled strip
+  // (DockNode gives it a fixed extent; its siblings take the freed space).
+  // Maximize and collapse are exclusive (panelChrome / the controller).
+  // A held stack follows the tab that becomes active after the drop (its first
+  // remaining tab): when that one is collapsed it is a strip — still mounting nothing.
+  const stripPanel = $derived(held ? layout?.panels[stack.panelIds[0]] : activePanel);
+  const collapsedStrip = $derived(!!stripPanel?.collapsed && !maximized);
+  const stripLabel = $derived(collapsedStripLabel(stack.panelIds.map((id) => titleOf(layout?.panels[id], id))));
+  let stripEl = $state<HTMLElement | null>(null);
+
+  /**
+   * Collapse / expand the active panel. Focus follows (keyboard users keep their
+   * place): collapsing lands on the strip, expanding on the active tab.
+   */
+  async function toggleCollapse(panel: PanelInstance, moveFocus = true) {
+    const collapsing = !panel.collapsed;
+    controller.dispatch({ type: 'panel.collapse', panelId: panel.id, collapsed: collapsing });
+    if (!moveFocus) return;
+    await tick();
+    if (collapsing) stripEl?.focus();
+    else (headEl?.querySelector<HTMLElement>('.aw-pane-tab.active') ?? headEl)?.focus();
+  }
 
   let headEl = $state<HTMLElement | null>(null);
   // A parameter control dragged over this stack's tab bar (HTML5 drag): dropping
@@ -43,37 +179,65 @@
   const menuItems = $derived.by<WorkbenchMenuItem[]>(() => {
     const panel = menuPanel;
     if (!panel) return [];
-    return [
-      {
-        id: 'collapse',
-        label: panel.collapsed ? 'Expand Panel' : 'Collapse Panel',
-        disabled: panel.collapsible === false,
-        run: () => controller.dispatch({ type: 'panel.collapse', panelId: panel.id, collapsed: !panel.collapsed })
-      },
-      ...PANEL_REGION_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
-        id: `move-${option.id}`,
-        label: option.label,
-        separatorBefore: index === 0,
-        disabled: !$controller.editMode || panel.locked,
-        run: () => controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: option.id } })
-      })),
-      {
-        id: 'save',
-        label: 'Save To Library',
-        separatorBefore: true,
-        disabled: !$controller.editMode || panel.locked,
-        run: () => savePanelTemplate(panel)
-      },
-      {
-        id: 'close',
-        label: 'Close Panel',
-        danger: true,
-        separatorBefore: true,
-        disabled: !$controller.editMode || panel.locked || panel.closable === false,
-        run: () => controller.dispatch({ type: 'panel.close', panelId: panel.id })
+    return buildPanelMenuItems({
+      panel,
+      editMode: $controller.editMode,
+      maximized: $controller.maximizedPanelId === panel.id,
+      canMaximize: !overlay,
+      pages: $controller.pages.map((page) => ({ id: page.id, label: page.label })),
+      activePageId: layout?.activePageId,
+      actions: {
+        ...(registry.addPalette
+          ? {
+              splitRight: () => openSplitPalette(panel, 'horizontal'),
+              splitBelow: () => openSplitPalette(panel, 'vertical')
+            }
+          : {}),
+        moveToRegion: (target) => controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: target } }),
+        moveToPage: (pageId) => movePanelToPage(panel, pageId),
+        toggleMaximize: () => controller.toggleMaximizedPanel(panel.id),
+        toggleCollapse: () => toggleCollapse(panel),
+        save: () => savePanelTemplate(panel),
+        remove: () => removeFromPage(panel)
       }
-    ];
+    });
   });
+
+  // Split right / below: the Add palette on Panels, its fixed target the split
+  // beside this panel — a card click inserts there directly.
+  function openSplitPalette(panel: PanelInstance, axis: 'horizontal' | 'vertical') {
+    const title = titleOf(panel, panel.id);
+    controller.openAddPalette({
+      filter: 'panels',
+      target: {
+        kind: 'panel',
+        to: { kind: 'split', targetPanelId: panel.id, axis, position: 'after' },
+        label: axis === 'horizontal' ? `Split right of ${title}` : `Split below ${title}`
+      }
+    });
+  }
+
+  // "+" tab (edit mode): the Add palette on Panels, adding a tab to this stack.
+  function openTabPalette() {
+    controller.openAddPalette({
+      filter: 'panels',
+      target: { kind: 'panel', to: { kind: 'tab', tabStackId: stack.id }, label: `New tab beside ${activeTitle}` }
+    });
+  }
+
+  // Remove from page PARKS the panel (`panel.remove`): it keeps its state and
+  // owned widgets and stays listed in the Library's panel catalog. Undo covers
+  // it, so there is no confirm.
+  function removeFromPage(panel: PanelInstance) {
+    controller.dispatch({ type: 'panel.remove', panelId: panel.id });
+  }
+
+  function movePanelToPage(panel: PanelInstance, pageId: string) {
+    const result = controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: 'main' }, pageId });
+    if (!result.success) return;
+    const pageLabel = $controller.activeLayout?.pages[pageId]?.label ?? pageId;
+    enqueueToast({ text: `Moved ${titleOf(panel, panel.id)} to ${pageLabel}` });
+  }
 
   function savePanelTemplate(panel: PanelInstance) {
     const template = createPanelTemplateFromPanel($controller.document, panel.id);
@@ -108,132 +272,26 @@
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }
 
-  // Insertion index for a tab drop (T21 directive #2: "insert a new tab at that
-  // spot"): hit-test the pointer's x against the rendered tab pills' midpoints.
-  // Dropping past the last pill (e.g. anywhere in the panel body) appends.
+  // Insertion index for a parameter-control tab drop (T21 directive #2: "insert
+  // a new tab at that spot"): hit-test the pointer's x against the rendered tab
+  // pills' midpoints. Dropping past the last pill appends. (Panel drags resolve
+  // their tab index in dockDropTarget.ts from the same pill rects.)
   function tabInsertIndexAt(x: number, tabStackEl: HTMLElement): number {
     const tabRects = Array.from(tabStackEl.querySelectorAll<HTMLElement>('.aw-pane-tab')).map((el) => plainRect(rectOf(el)));
     return widgetDropIndex({ x, y: 0 }, tabRects, 'horizontal');
   }
 
-  // The tab bar (header) rect — the drop-highlight surface for a tab drop, so a
-  // panel dropped onto a stack's tabs lights the BAR (not the whole body).
-  function tabBarRect(tabStackEl: HTMLElement): WorkbenchRect {
-    const head = tabStackEl.querySelector<HTMLElement>('.aw-pane-head');
-    return plainRect(rectOf(head ?? tabStackEl));
-  }
-
-  function panelPreviewAt(x: number, y: number, draggedPanelId: string): { intent: PanelDropIntent; rect: WorkbenchRect; kind: 'region' | 'tab' | 'split' } | null {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (!el) return null;
-
-    const panelEl = el.closest<HTMLElement>('[data-panel]');
-    if (panelEl && panelEl.dataset.panel && panelEl.dataset.panel !== draggedPanelId) {
-      const regionEl = panelEl.closest<HTMLElement>('[data-region]');
-      const panelRect = rectOf(panelEl);
-      const split = splitIntentFromRect(
-        { x, y },
-        panelRect,
-        panelEl.dataset.panel,
-        regionEl?.dataset.region as DockRegionId | undefined
-      );
-      if (split) {
-        const edge = split.axis === 'horizontal' ? panelRect.width * 0.34 : panelRect.height * 0.34;
-        const rect =
-          split.axis === 'horizontal'
-            ? {
-                left: split.position === 'before' ? panelRect.left : panelRect.right - edge,
-                top: panelRect.top,
-                width: edge,
-                height: panelRect.height
-              }
-            : {
-                left: panelRect.left,
-                top: split.position === 'before' ? panelRect.top : panelRect.bottom - edge,
-                width: panelRect.width,
-                height: edge
-              };
-        return { intent: split, rect, kind: 'split' };
-      }
-    }
-
-    const tabStack = el.closest<HTMLElement>('[data-tabstack]');
-    if (tabStack?.dataset.tabstack) {
-      return {
-        intent: { kind: 'tab', tabStackId: tabStack.dataset.tabstack, index: tabInsertIndexAt(x, tabStack) },
-        rect: tabBarRect(tabStack),
-        kind: 'tab'
-      };
-    }
-
-    const regionEl = el.closest<HTMLElement>('[data-region]');
-    const region = regionEl?.dataset.region as DockRegionId | undefined;
-    return region && regionEl ? { intent: { kind: 'region', region }, rect: plainRect(rectOf(regionEl)), kind: 'region' } : null;
-  }
-
-  function panelDropIntentAt(x: number, y: number, draggedPanelId: string): PanelDropIntent | null {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (!el) return null;
-
-    const tabStack = el.closest<HTMLElement>('[data-tabstack]');
-    const panelEl = el.closest<HTMLElement>('[data-panel]');
-    if (panelEl && panelEl.dataset.panel && panelEl.dataset.panel !== draggedPanelId) {
-      const regionEl = panelEl.closest<HTMLElement>('[data-region]');
-      const split = splitIntentFromRect(
-        { x, y },
-        rectOf(panelEl),
-        panelEl.dataset.panel,
-        regionEl?.dataset.region as DockRegionId | undefined
-      );
-      if (split) return split;
-    }
-
-    if (tabStack?.dataset.tabstack) return { kind: 'tab', tabStackId: tabStack.dataset.tabstack, index: tabInsertIndexAt(x, tabStack) };
-
-    const regionEl = el.closest<HTMLElement>('[data-region]');
-    const region = regionEl?.dataset.region as DockRegionId | undefined;
-    return region ? { kind: 'region', region } : null;
-  }
-
+  // Panel drag from a tab (edit mode): lifts the panel out of the dock, shows
+  // the zones / edges / page targets, one `panel.move` on drop (panelDrag.ts).
+  // A press that never moves activates the tab.
   function tabPointerDown(panelId: string, e: PointerEvent) {
     if (!$controller.editMode || e.button !== 0) return;
-    const startedAt = { x: e.clientX, y: e.clientY };
-    let dragging = false;
-    let moved = false;
-
-    const onMove = (ev: PointerEvent) => {
-      const pointer = { x: ev.clientX, y: ev.clientY };
-      if (!dragging && pointerDistance(startedAt, pointer) < 5) return;
-      dragging = true;
-      moved = true;
-      const intent = panelDropIntentAt(pointer.x, pointer.y, panelId);
-      const preview = panelPreviewAt(pointer.x, pointer.y, panelId);
-      controller.setDrag({
-        kind: 'panel',
-        panelId,
-        startedAt,
-        pointer,
-        targetLabel: intent ? dockTargetLabel(intent) : undefined,
-        previewRect: preview?.rect,
-        previewKind: preview?.kind
-      });
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (dragging) {
-        const intent = panelDropIntentAt(ev.clientX, ev.clientY, panelId);
-        if (intent) controller.dispatch(panelDropCommand(panelId, intent));
-        controller.setDrag(null);
-      } else if (!moved) {
-        controller.dispatch({ type: 'panel.activate', panelId });
-      }
-    };
-
-    e.preventDefault();
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    startPanelTabDrag({
+      controller,
+      event: e,
+      panelId,
+      onTap: () => controller.dispatch({ type: 'panel.activate', panelId })
+    });
   }
 
   // ── Spring-loaded tabs (T21 directive #3) ───────────────────────────────
@@ -265,6 +323,20 @@
     springPanelId = null;
   }
 
+  // A collapsed strip springs too: a dwell during any drag expands it, so the
+  // drag can continue into the revealed panel (pointer drags + parameter drags).
+  const EXPAND_SPRING = '__aw-expand__';
+  function armExpandSpring(): void {
+    if (springPanelId === EXPAND_SPRING && springTimer != null) return;
+    cancelSpring();
+    springPanelId = EXPAND_SPRING;
+    springTimer = setTimeout(() => {
+      springTimer = null;
+      springPanelId = null;
+      if (stripPanel?.collapsed) void toggleCollapse(stripPanel, false);
+    }, SPRING_DWELL_MS);
+  }
+
   onDestroy(cancelSpring);
 
   // Which tab pill sits under an x coordinate (spring target).
@@ -282,6 +354,13 @@
   $effect(() => {
     const drag = $controller.drag;
     const pointer = drag?.pointer;
+    if (drag && pointer && collapsedStrip && stripEl) {
+      const sr = stripEl.getBoundingClientRect();
+      const overStrip = pointer.x >= sr.left && pointer.x <= sr.right && pointer.y >= sr.top && pointer.y <= sr.bottom;
+      if (overStrip) armExpandSpring();
+      else cancelSpring();
+      return;
+    }
     if (!drag || single || !pointer || !headEl) { cancelSpring(); return; }
     const hr = headEl.getBoundingClientRect();
     const overHead = pointer.x >= hr.left && pointer.x <= hr.right && pointer.y >= hr.top && pointer.y <= hr.bottom;
@@ -304,9 +383,13 @@
     event.stopPropagation();
     paramTabHover = true;
     // Spring the hovered tab too, so dropping into a revealed panel's BODY still
-    // collects into that panel (the header handles the tab-bar case).
-    const springTarget = tabAtPointerX(event.clientX);
-    if (springTarget) armSpring(springTarget);
+    // collects into that panel (the header handles the tab-bar case). Over a
+    // collapsed strip the dwell expands the stack instead.
+    if (collapsedStrip) armExpandSpring();
+    else {
+      const springTarget = tabAtPointerX(event.clientX);
+      if (springTarget) armSpring(springTarget);
+    }
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   }
 
@@ -336,7 +419,38 @@
   }
 </script>
 
-<section class="aw-tabstack" data-tabstack={stack.id} data-region={region}>
+<section
+  bind:this={sectionEl}
+  class="aw-tabstack"
+  class:maximized={maximized && !!maxRect}
+  class:collapsed-strip={collapsedStrip}
+  data-tabstack={stack.id}
+  data-region={region}
+  data-collapsed={collapsedStrip ? 'true' : undefined}
+  data-maximized={maximized ? 'true' : undefined}
+  style={maxStyle}
+>
+  {#if collapsedStrip && stripPanel}
+    <!-- Collapsed: the whole stack is one slim strip labelled with its tabs;
+         clicking it expands the active panel again. -->
+    <button
+      class="aw-pane-strip"
+      class:vertical={stripVertical}
+      class:param-tab-hover={paramTabHover}
+      type="button"
+      data-pane-strip
+      bind:this={stripEl}
+      title={`Expand ${stripLabel}`}
+      aria-label={`Expand ${stripLabel}`}
+      onclick={() => toggleCollapse(stripPanel)}
+      oncontextmenu={(e) => openHeaderMenu(stripPanel.id, e)}
+      ondragover={onHeaderParameterDragOver}
+      ondragleave={onHeaderParameterDragLeave}
+      ondrop={onHeaderParameterDrop}
+    >
+      <span class="aw-pane-strip-text"><span class="aw-pane-strip-icon" aria-hidden="true">+</span> {stripLabel}</span>
+    </button>
+  {:else}
   <header
     class="aw-pane-head"
     class:single
@@ -359,13 +473,25 @@
             class:active={panelId === activePanelId}
             type="button"
             data-panel-tab={panelId}
+            title={$controller.editMode ? 'Drag to move · double-click to maximize' : 'Double-click to maximize'}
             onpointerdown={(e) => tabPointerDown(panelId, e)}
             onclick={() => !$controller.editMode && controller.dispatch({ type: 'panel.activate', panelId })}
+            ondblclick={() => !overlay && controller.toggleMaximizedPanel(panelId)}
           >
             <span>{panel.title ?? panel.type}</span>
           </button>
         {/if}
       {/each}
+      {#if $controller.editMode && registry.addPalette && !$controller.drag}
+        <button
+          class="aw-pane-add-tab"
+          type="button"
+          data-tab-add={stack.id}
+          title="Add a panel as a tab here"
+          aria-label={`Add a panel as a tab beside ${activeTitle}`}
+          onclick={openTabPalette}
+        >+</button>
+      {/if}
     </div>
     <span class="aw-pane-spacer"></span>
     {#if activePanel}
@@ -386,20 +512,35 @@
             onclick={() => savePanelTemplate(activePanel)}
           >▤</button>
         {/if}
-        {#if activePanel.collapsible !== false}
+        {#if !overlay}
+        <button
+          class="aw-pane-btn"
+          class:on={maximized}
+          type="button"
+          title={maximized ? `Restore ${activeTitle}` : `Maximize ${activeTitle}`}
+          aria-label={maximized ? `Restore ${activeTitle}` : `Maximize ${activeTitle}`}
+          aria-pressed={maximized}
+          data-pane-maximize
+          onclick={() => controller.toggleMaximizedPanel(activePanel.id)}
+        >{maximized ? '⤡' : '⤢'}</button>
+        {/if}
+        {#if activePanel.collapsible !== false && !maximized}
           <button
             class="aw-pane-btn"
             type="button"
             title={activePanel.collapsed ? 'Expand panel' : 'Collapse panel'}
-            onclick={() => controller.dispatch({ type: 'panel.collapse', panelId: activePanel.id, collapsed: !activePanel.collapsed })}
+            aria-label={activePanel.collapsed ? `Expand ${activeTitle}` : `Collapse ${activeTitle}`}
+            onclick={() => toggleCollapse(activePanel)}
           >{activePanel.collapsed ? '+' : '−'}</button>
         {/if}
         {#if $controller.editMode && activePanel.closable !== false && !activePanel.locked}
           <button
             class="aw-pane-btn danger"
             type="button"
-            title="Close panel"
-            onclick={() => controller.dispatch({ type: 'panel.close', panelId: activePanel.id })}
+            title={PANEL_REMOVE_LABEL}
+            aria-label={PANEL_REMOVE_LABEL}
+            data-pane-remove
+            onclick={() => removeFromPage(activePanel)}
           >×</button>
         {/if}
       </div>
@@ -409,8 +550,12 @@
   <div class="aw-tabbody">
     {#if activePanel}
       <PanelHost panel={activePanel} />
+    {:else if held}
+      <!-- The active tab is being dragged: keep the body quiet (no other tab mounts). -->
+      <div class="aw-tabbody-held" data-tabbody-held aria-hidden="true"></div>
     {/if}
   </div>
+  {/if}
 </section>
 
 <ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Panel actions" onClose={() => (menuOpen = false)} />
@@ -492,6 +637,28 @@
     color: var(--aw-text-2);
     background: color-mix(in srgb, var(--aw-surface) 80%, transparent);
   }
+  /* Edit mode: the "+" tab ending every tab bar (opens the Add palette). Not
+     an `.aw-pane-tab`: the drop geometry measures only the real tab pills. */
+  .aw-pane-add-tab {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 60%, transparent);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 600 14px/1 var(--aw-font-ui);
+  }
+  .aw-pane-add-tab:hover,
+  .aw-pane-add-tab:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    outline: none;
+  }
   .aw-pane-spacer {
     flex: 1;
     min-width: 8px;
@@ -535,5 +702,75 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+  }
+  /* Maximized: the stack's own DOM is lifted over the measured workspace rect
+     (inline left/top/width/height) — above the regions (z ≤ 5) and the rail
+     overlay's resting layer, below the expanded rail (60), menus (120), dock
+     drawers (180), the Customize drawers (237+), toasts and the drag layer. */
+  .aw-tabstack.maximized {
+    position: fixed;
+    right: auto;
+    bottom: auto;
+    z-index: 50;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--aw-accent) 30%, transparent),
+      0 18px 60px rgba(0, 0, 0, 0.45);
+  }
+  .aw-pane-btn.on {
+    color: var(--aw-accent);
+  }
+  /* Collapsed stack: one slim labelled strip (DockNode sizes it to 36px along
+     its split axis); a vertical strip rotates its label. */
+  .aw-pane-strip {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: var(--aw-bg-2);
+    color: var(--aw-text-2);
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    font: 600 11px/1 var(--aw-font-mono);
+    letter-spacing: 0.08em;
+  }
+  .aw-pane-strip:hover {
+    background: color-mix(in srgb, var(--aw-surface) 60%, var(--aw-bg-2));
+    color: var(--aw-text);
+  }
+  .aw-pane-strip:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: -2px;
+  }
+  .aw-pane-strip-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .aw-pane-strip.vertical .aw-pane-strip-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+  .aw-pane-strip-icon {
+    color: var(--aw-accent);
+  }
+  /* A parameter control over a collapsed strip: the strip is the drop target. */
+  .aw-pane-strip.param-tab-hover {
+    background: color-mix(in srgb, var(--aw-accent) 16%, var(--aw-bg-2));
+    box-shadow: inset 0 0 0 2px var(--aw-accent);
+  }
+  .aw-tabbody-held {
+    position: absolute;
+    inset: 0;
+    background: var(--aw-bg);
   }
 </style>

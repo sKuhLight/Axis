@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyWorkbenchDocument } from '../defaults';
-import { canDeleteProfile, createProfileSnapshot, isLastProfile, isProfileReferenced } from '../profiles';
+import {
+  canDeleteProfile,
+  createProfileSnapshot,
+  isLastProfile,
+  isProfileReferenced,
+  previewFrameForClass,
+  previewFrameLabel
+} from '../profiles';
 
 describe('workbench profile helpers', () => {
   it('reports active and last profile delete policy', () => {
@@ -35,5 +42,23 @@ describe('workbench profile helpers', () => {
     expect(snapshot?.breakpoint).toBe('tablet');
     expect(snapshot?.state).toEqual({ density: 'compact' });
     expect(snapshot?.state).not.toBe(doc.profiles['profile.default'].state);
+  });
+});
+
+describe('previewFrameLabel', () => {
+  const tablet = previewFrameForClass('tablet')!;
+
+  it('names the profile and the device frame size', () => {
+    expect(previewFrameLabel('Tablet', tablet)).toBe('Tablet · 1024 × 760');
+    expect(previewFrameLabel('Tablet', tablet, { width: 1024, height: 760 })).toBe('Tablet · 1024 × 760');
+    // Sub-pixel rounding is not a fit.
+    expect(previewFrameLabel('Tablet', tablet, { width: 1024.4, height: 759.2 })).toBe('Tablet · 1024 × 760');
+  });
+
+  it('shows the rendered size, marked fitted, when the stage caps the frame', () => {
+    expect(previewFrameLabel('Tablet', tablet, { width: 1024, height: 724 })).toBe('Tablet · 1024 × 724 (fitted)');
+    expect(previewFrameLabel('Mobile', previewFrameForClass('phone')!, { width: 400, height: 700.6 })).toBe(
+      'Mobile · 400 × 701 (fitted)'
+    );
   });
 });

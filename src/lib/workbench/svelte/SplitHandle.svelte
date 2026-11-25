@@ -4,15 +4,22 @@
 
   let {
     split,
-    index
+    index,
+    inert = false
   }: {
     split: SplitDockNode;
     index: number;
+    /**
+     * A neighbour is a collapsed strip (fixed size): resizing would only change
+     * ratios invisibly (and add undo steps), so the handle takes no input.
+     */
+    inert?: boolean;
   } = $props();
 
   const { controller } = getWorkbenchContext();
 
   function down(e: PointerEvent) {
+    if (inert) return;
     e.preventDefault();
     const parent = (e.currentTarget as HTMLElement).parentElement;
     const rect = parent?.getBoundingClientRect();
@@ -32,11 +39,15 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       document.body.style.cursor = '';
     };
     document.body.style.cursor = split.axis === 'horizontal' ? 'ew-resize' : 'ns-resize';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    // pointercancel fires no pointerup — tear down and restore the cursor. Nothing is committed on
+    // release (every move already resized), so cancelling is the same teardown.
+    window.addEventListener('pointercancel', onUp);
   }
 </script>
 
@@ -44,6 +55,8 @@
   class="aw-split-handle"
   class:vertical={split.axis === 'horizontal'}
   class:horizontal={split.axis === 'vertical'}
+  class:inert
+  data-split-handle-inert={inert ? 'true' : undefined}
   role="separator"
   aria-orientation={split.axis === 'horizontal' ? 'vertical' : 'horizontal'}
   onpointerdown={down}
@@ -66,5 +79,9 @@
   }
   .aw-split-handle:hover {
     background: var(--aw-accent);
+  }
+  .aw-split-handle.inert {
+    pointer-events: none;
+    cursor: default;
   }
 </style>

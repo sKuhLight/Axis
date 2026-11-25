@@ -110,6 +110,8 @@ export function startListReorder(options: ListReorderOptions): void {
       // to the same slot only when `to === from` AND nothing before it moved —
       // for a filter-then-splice reorder, `to === from` is the identity move.
       if (from < 0 || to !== from) options.commit(to);
-    }
+    },
+    // An interrupted gesture (pointercancel) must not leave the drag ghost stuck, nor commit a reorder.
+    onCancel: () => controller.setDrag(null)
   });
 }

@@ -1,4 +1,5 @@
-import type { DockAxis, DockRegionId, DockTarget, FloatingRect, WorkbenchCommand, WidgetZoneId } from '../core';
+import type { DockRegionId, FloatingRect, WorkbenchCommand, WidgetZoneId } from '../core';
+import type { DockDropOverlayModel } from './dockDropOverlay';
 
 export interface WorkbenchPointer {
   x: number;
@@ -12,6 +13,15 @@ export interface WorkbenchRect {
   height: number;
 }
 
+/** The flow an insert line sits in (the line itself runs across it). */
+export type InsertFlow = 'horizontal' | 'vertical';
+
+/** Where a widget drop inserts: a thin line between units (visual px; `widgetDrop.ts` `insertLineRect`). */
+export interface InsertLine {
+  rect: WorkbenchRect;
+  flow: InsertFlow;
+}
+
 export type WorkbenchDragState =
   | {
       kind: 'panel';
@@ -19,8 +29,16 @@ export type WorkbenchDragState =
       pointer: WorkbenchPointer;
       startedAt: WorkbenchPointer;
       targetLabel?: string;
-      previewRect?: WorkbenchRect;
-      previewKind?: 'region' | 'tab' | 'split';
+      /** Display name of the dragged panel (or library template). */
+      panelLabel?: string;
+      /**
+       * The dock-drop overlay for this pointer position (zones, landing shape,
+       * edge bars, page highlight, pointer card) — rendered by DragLayer via
+       * DockDropOverlay. Absent until the session has measured the dock.
+       */
+      dock?: DockDropOverlayModel;
+      /** Click-to-place from the Add palette (no button held): the click is the drop. */
+      placement?: boolean;
     }
   | {
       kind: 'widget';
@@ -29,10 +47,9 @@ export type WorkbenchDragState =
       startedAt: WorkbenchPointer;
       targetLabel?: string;
       previewRect?: WorkbenchRect;
-      // Overlay previews (DragLayer rects): `group` = whole-target highlight for
-      // group CREATE; `zone` = workspace-edge new-panel region. Positional
-      // inserts do NOT use overlay rects — they render IN-FLOW via
-      // `zoneInsert`/`groupInsert` below so neighbours actually reflow.
+      // Overlay previews (DragLayer rects): `group` = the "Group" frame around
+      // the unit a dwell armed (slice 4b); `zone` = workspace-edge new-panel
+      // region. Positional inserts use `insertLine` instead.
       previewKind?: 'zone' | 'insert' | 'group';
       previewOrientation?: 'horizontal' | 'vertical';
       // Origin rect size + pointer grab offset, captured at drag start (design
@@ -40,14 +57,18 @@ export type WorkbenchDragState =
       // full-size drag ghost under the pointer. Visual (client-rect) px.
       size?: { width: number; height: number };
       grabOffset?: { x: number; y: number };
-      // IN-FLOW insertion targets (design `overZone/overIndex` and
-      // `overGroup/overGroupIndex`): the hovered zone splices a real dashed
-      // spacer element at `index` (UNIT index among visible units, dragged unit
-      // excluded); the hovered group splices the slot between members at
-      // `index`. Mutually exclusive — a group hover suppresses the zone gap
-      // (design `!drag.overGroup && !drag.overUnit`).
+      // Insertion targets (design `overZone/overIndex` and
+      // `overGroup/overGroupIndex`): the hovered zone (`index` = UNIT index
+      // among visible units, dragged unit excluded) or the dragged member's own
+      // group (`index` among its other members). Mutually exclusive. Slice 4b:
+      // nothing is spliced into the flow any more — the zone gets a drop wash,
+      // the group an accent border, and `insertLine` marks the spot.
       zoneInsert?: { zone: string; index: number };
       groupInsert?: { groupId: string; index: number };
+      /** The insert line (DragLayer) for `zoneInsert` / `groupInsert`. */
+      insertLine?: InsertLine;
+      /** Click-to-place from the Add palette (no button held): the click is the drop. */
+      placement?: boolean;
     }
   | {
       // Generic LIST-REORDER drag (design nav-reorder treatment, generalised):
@@ -86,11 +107,6 @@ export type WorkbenchDragState =
 /** Shared pointer-move activation threshold (px) for every workbench drag. */
 export const DRAG_THRESHOLD = 5;
 
-export type PanelDropIntent =
-  | { kind: 'region'; region: DockRegionId; index?: number }
-  | { kind: 'tab'; tabStackId: string; index?: number }
-  | { kind: 'split'; region?: DockRegionId; targetPanelId?: string; axis: DockAxis; position: 'before' | 'after' };
-
 export interface WidgetDropIntent {
   zone: WidgetZoneId;
   index?: number;
@@ -99,41 +115,6 @@ export interface WidgetDropIntent {
 
 export function pointerDistance(a: WorkbenchPointer, b: WorkbenchPointer): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-export function splitIntentFromRect(
-  pointer: WorkbenchPointer,
-  rect: WorkbenchRect,
-  targetPanelId: string,
-  region?: DockRegionId
-): Extract<PanelDropIntent, { kind: 'split' }> | null {
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const x = (pointer.x - rect.left) / rect.width;
-  const y = (pointer.y - rect.top) / rect.height;
-  const edge = 0.24;
-  if (x < edge) return { kind: 'split', region, targetPanelId, axis: 'horizontal', position: 'before' };
-  if (x > 1 - edge) return { kind: 'split', region, targetPanelId, axis: 'horizontal', position: 'after' };
-  if (y < edge) return { kind: 'split', region, targetPanelId, axis: 'vertical', position: 'before' };
-  if (y > 1 - edge) return { kind: 'split', region, targetPanelId, axis: 'vertical', position: 'after' };
-  return null;
-}
-
-export function panelDropCommand(panelId: string, intent: PanelDropIntent): WorkbenchCommand {
-  if (intent.kind === 'tab') return { type: 'panel.move', panelId, to: { kind: 'tab', tabStackId: intent.tabStackId, index: intent.index } };
-  if (intent.kind === 'split') {
-    return {
-      type: 'panel.move',
-      panelId,
-      to: {
-        kind: 'split',
-        region: intent.region,
-        targetPanelId: intent.targetPanelId,
-        axis: intent.axis,
-        position: intent.position
-      }
-    };
-  }
-  return { type: 'panel.move', panelId, to: { kind: 'region', region: intent.region, index: intent.index } };
 }
 
 export function widgetDropCommand(widgetIds: string[], intent: WidgetDropIntent): WorkbenchCommand {
@@ -219,6 +200,64 @@ export function widgetIndexForUnitIndex(unitWidgetCounts: number[], unitIndex: n
 }
 
 /**
+ * A zone's units (member ids) from its ordered widget list — consecutive widgets
+ * sharing a `groupId` form one unit — with `excludeIds` left out. The
+ * document-side twin of the measured units (used when no DOM was measured).
+ */
+export function zoneUnitsFromWidgets(
+  widgets: { id: string; groupId?: string | null }[],
+  excludeIds: Iterable<string> = []
+): { widgetIds: string[] }[] {
+  const excluded = new Set(excludeIds);
+  const units: { widgetIds: string[] }[] = [];
+  const groupSlot = new Map<string, number>();
+  for (const widget of widgets) {
+    if (excluded.has(widget.id)) continue;
+    const slot = widget.groupId ? groupSlot.get(widget.groupId) : undefined;
+    if (slot != null) units[slot].widgetIds.push(widget.id);
+    else {
+      if (widget.groupId) groupSlot.set(widget.groupId, units.length);
+      units.push({ widgetIds: [widget.id] });
+    }
+  }
+  return units;
+}
+
+/**
+ * Convert a UNIT insertion index into the zone's WIDGET-order index from the
+ * units' member ids — not by counting: a zone may hold widgets it does not
+ * render (a type the host gates off, e.g. a device without it), so counting the
+ * rendered units would land one slot early past such a widget.
+ *
+ *   - before `units[i]`: the order index of its first member;
+ *   - past the last unit: one past the last member of `units[i - 1]`;
+ *   - a unit whose members are unknown is skipped (the next / previous one decides);
+ *   - no unit to anchor to: the end of the zone.
+ *
+ * `orderedIds` is the zone's widget order as the reducer splices into it (moving
+ * widgets already left out).
+ */
+export function widgetOrderIndexForUnits(
+  orderedIds: readonly string[],
+  units: ReadonlyArray<{ readonly widgetIds: readonly string[] }>,
+  unitIndex: number
+): number {
+  const position = new Map(orderedIds.map((id, index) => [id, index]));
+  const indices = (unit: { readonly widgetIds: readonly string[] }) =>
+    unit.widgetIds.map((id) => position.get(id)).filter((index): index is number => index != null);
+  const at = Math.max(0, Math.min(Math.trunc(unitIndex) || 0, units.length));
+  for (let i = at; i < units.length; i++) {
+    const found = indices(units[i]);
+    if (found.length) return Math.min(...found);
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const found = indices(units[i]);
+    if (found.length) return Math.max(...found) + 1;
+  }
+  return orderedIds.length;
+}
+
+/**
  * Widget-order index that keeps a re-placed block ANCHORED where it currently
  * sits (design: "whole zone re-numbered with the group block anchored where it
  * currently sits"). The reducer's `placeWidgets` splices the moved ids into the
@@ -263,12 +302,6 @@ export function zoneAtPointer(zones: { zone: WidgetZoneId; rect: WorkbenchRect }
   return found;
 }
 
-export function dockTargetLabel(intent: PanelDropIntent): string {
-  if (intent.kind === 'tab') return 'Tab panel';
-  if (intent.kind === 'split') return `Split ${intent.position}`;
-  return `Dock ${intent.region}`;
-}
-
 /**
  * Full-region drop-highlight rect for an edge (new-panel) drop, given the
  * workspace's own client rect (T21 directive #1: the "DOCK LEFT/RIGHT/…"
@@ -303,7 +336,7 @@ export function defaultRegionBand(region: DockRegionId, workspace: WorkbenchRect
  * docked region element (`.aw-workspace [data-region="…"]`) so the highlight
  * exactly wraps the region already on screen; falls back to `defaultRegionBand`
  * (a full-cross-axis band on the target edge) when that region has no panels
- * yet. Shared by the parameter-source edge drop (DockWorkspace) and the widget
+ * yet (an empty side region is only a slim edit-mode strip). Shared by the parameter-source edge drop (DockWorkspace) and the widget
  * new-panel edge drop (WidgetHost) so both read identically. Returns null only
  * when the workspace itself can't be measured.
  */
@@ -315,7 +348,9 @@ export function fullRegionHighlightRect(region: DockRegionId): WorkbenchRect | n
   if (ws.width <= 0 || ws.height <= 0) return null;
   const workspace: WorkbenchRect = { left: ws.left, top: ws.top, width: ws.width, height: ws.height };
   const regionEl = workspaceEl.querySelector<HTMLElement>(`[data-region="${region}"]`);
-  if (regionEl) {
+  // An EMPTY side region renders as a slim edit-mode strip: its rect is not the
+  // area a new panel will get, so fall back to the default band for it.
+  if (regionEl && !(region !== 'main' && regionEl.classList.contains('empty'))) {
     const r = regionEl.getBoundingClientRect();
     if (r.width > 8 && r.height > 8) return { left: r.left, top: r.top, width: r.width, height: r.height };
   }
