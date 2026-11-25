@@ -519,7 +519,8 @@
       <div class="be-wavebox" title="Looper waveform">
         <svg class="be-wavesvg" viewBox="0 0 {NWAVE} 40" preserveAspectRatio="none" aria-hidden="true">
           {#each host.wave as mag, i (i)}
-            <rect class="be-wbar" x={i + 0.15} y={20 - mag * 19} width="0.7" height={Math.max(0.5, mag * 38)} />
+            {@const step = NWAVE / Math.max(1, host.wave.length)}
+            <rect class="be-wbar" x={i * step + 0.15} y={20 - mag * 19} width={Math.max(0.3, step * 0.7)} height={Math.max(0.5, mag * 38)} />
           {/each}
           <line class="be-playhead" x1={host.wavePos * NWAVE} y1="0" x2={host.wavePos * NWAVE} y2="40" />
         </svg>

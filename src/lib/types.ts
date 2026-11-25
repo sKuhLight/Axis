@@ -740,6 +740,10 @@ export interface DeviceCaps {
    *  slots carry `graphKey`. True on the gen-3 Axe-Fx III / FM3 / FM9; false elsewhere; absent on older
    *  servers → no graph tiles. */
   blockVisuals?: boolean;
+  /** The server serves the device-rendered graph curves (`GET /preset/blocks/:eid/curve`, telemetry cap
+   *  `graphCurves`): EQ/PEQ/filter/comp/LFO/ADSR/modifier/cab/RTA curves straight from the unit. FM3 only
+   *  by design; absent on older servers (the tiles then keep computing locally). */
+  graphCurves?: boolean;
   /** The server can poll the open Looper's waveform and playhead. */
   looperTelemetry?: boolean;
 }
