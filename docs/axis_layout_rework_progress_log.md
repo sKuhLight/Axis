@@ -2831,3 +2831,93 @@ Branch `feature/block-editor-fixed-area`, on top of ROUND BE-9 (`a830d76`). The 
 
 - **Custom panels as a block-editor board** (handover: `HANDOVER-CUSTOM-PANEL.md` in the workspace root): one "Quick Controls" panel, 4 cells wide by default, grid drag/drop, block grouping with labelled dividers.
 - **EQ style switch** on the tile (Output EQ / Input EQ / PEQ rendering as selectable views) and **clamping a seeded graph tile to the page/slot span**.
+
+## Quick Controls: the custom panel is a Block Editor board
+
+Branch `feature/block-editor-fixed-area`, on top of the second-pass follow-ups. A custom panel now lays its
+widgets out on the Block Editor's cell raster, collects every control into ONE "Quick Controls" panel, and
+groups them under a labelled divider per block. The EQ of a graphic-EQ block takes the place of the faders it
+replaces instead of falling onto "More".
+
+### What changed
+
+- **Pure board** (`workbench/core/customPanelBoard.ts`, new + test): `layoutPanelBoard({ widgets, groupByBlock })`
+  → `{ cols, rows, items }` with `PanelBoardItem { id, x, y, w, h, kind: 'control' | 'divider', label?, widgetId? }`.
+  A control is 2×2 cells; 4 cells (two knobs) wide by default. The width grows one knob column at a time when a
+  control no longer fits the two knob rows the default width holds (5th control → 6, 7th → 8), then the height
+  grows (four knobs a row max). Grouping ON sorts by block label then control order and puts a labelled divider
+  (`h = 0`, a line in the grid gap) above each block's first row; each block starts on a fresh row. Grouping OFF
+  keeps the plain order and drops the dividers. `sortPanelWidgets` is the pure re-sort; `controlAtCell` maps a
+  pointer to the tile under it. Deterministic and idempotent.
+- **Tiles** (`axis-workbench/customPanelTiles.ts`, new + test): a widget as a board tile — bound block (the group
+  name/key), parameter label, accent, and whether it is a parameter control at all (`Widgets` group for the
+  other widget types). Grouping/auto-sort options are read from `panel.state` with their defaults (on).
+- **Panel body** (`AxisCustomPanel.svelte`): replaces the `WidgetZone` body with the raster — one
+  `AxisQuickControlTile` per control and a labelled line per divider. The tile (`AxisQuickControlTile.svelte`,
+  new) renders the Block Editor's own `BeControl` (knob / on-off pill) and provides a minimal `BeHost`: values,
+  typing, track/keyboard gestures and enum cycling go through the editor's pinned-block hydration, so a control
+  works whether or not its block is open. Per block accent, 2×2 cells, no hover actions
+  (`BeHost.hideHoverActions`, new optional field). Drops append at the pointer's cell (parameter drag), ⌘/Ctrl-drag
+  reorders (a widget move by the pointer's cell), right-click selects and ×/Delete removes (`widget.hide`), Esc
+  clears. The empty panel keeps the `+ Widget` / dashed drop hint.
+- **One panel** (`axisParameterActions.ts`): `AXIS_CONTROLS_PANEL_TITLE = 'Quick Controls'`. Every collect path
+  (edge drop, pin action, panel drop) goes through `axisCollectPanelId()`; a panel that is still at its default
+  "Custom Panel" title is named Quick Controls on its first control, and a parked panel is docked and activated
+  (collecting into an off-screen panel used to look like nothing happened).
+- **Grouping toggle**: the panel's own header overflow (`⋯`, `data-quick-controls-menu`) carries "Group by block"
+  and the `cols × rows` readout. The choice persists as `panel.state.groupByBlock` / `autoSort` through a new
+  generic `panel.state` command (merge semantics like `widget.state`, one reducer test); switching it back on
+  re-sorts and rewrites the widget order.
+- **EQ placement** (`deviceLayoutBoardV2`): while a graphic EQ's band gains are dropped from a page, the first
+  dropped fader's anchor becomes the `eq` tile (page tile, marked represented so it never reaches "More"); a page
+  that already stamps an EQ graph keeps that slot instead. A page that draws its EQ gets the height budget for it
+  (`BE_SPEC.eq.h + TITLE_LINES`), so the EQ no longer disappears when the faders it replaces were one line tall.
+
+### Decisions
+
+- **Width rule:** the handover's prose ("`cols += 2` when a control would start beyond `cols`", "the 5th widens")
+  and its example numbers (3 → 6 cols, 5 → 8/6) contradict each other and its own e2e (three knobs → 4 wide).
+  Implemented the coherent rule behind "the 5th control widens the panel": grow one knob column instead of
+  stacking a third knob row at the current width, up to four knobs a row, then grow the height. Unit-tested
+  (1–2 → 4/2, 3–4 → 4/4, 5–6 → 6/4, 7–8 → 8/4, 9 → 8/6).
+- **A divider takes no cell** (h = 0): it is drawn in the grid gap above its block's first row, like the block
+  editor's compacted section titles; the panel reserves one gap-band of top padding so the first one shows.
+- **Widget drag in Customize:** the board's own ⌘/Ctrl-drag does the moving; the edit-mode dashed surface is
+  decorative, so a Quick Controls tile is not dragged out of its panel with the workbench widget drag any more
+  (see follow-ups — dropping INTO the panel still works).
+
+### Tests and gates
+
+- `npm run check`: 0 errors, 0 warnings. `npm test`: 191 files / 2,985 tests (2,965 + 12 board + 5 tiles + 1
+  reducer + 1 pin-collect + 1 EQ placement).
+- New `e2e/23-quick-controls.spec.ts` (5): one "Quick Controls" panel on the first drop, 4 cells wide with
+  block-editor tiles, the 5th control widens to 6 without wrapping, labelled dividers per block + toggle off/on,
+  width survives a reload, select + × narrows the panel back.
+- Chromium e2e (system Chrome, temporary local config): spec 23 5/5, workbench 09 + 15 11/11, spec 42 21/21,
+  block editor 17 + 40 + 43 + 51 50/50. Full suite 289/295 — the six failures were one renamed-panel expectation
+  (fixed) and five stale specs unrelated to this work (see follow-ups).
+
+### Still open
+
+- **Edit-mode widget drag-out of a Quick Controls tile:** start the workbench `beginWidgetDrag` from the tile in
+  Customize (the dashed surface is there; the pointer handler is not).
+- **Graph-tile size clamp (handover item 2):** `graphTiles.ts` no longer exists — graph/EQ sizing lives in
+  `layoutPlacement.ts` (`sizeFor` + the per-anchor cursor that gives up height, then width). Clamping a seeded
+  graph tile to "the stamped slot's span" needs a definition of that span (the free run on the anchored line, else
+  the page edge) and tests beside `layoutPlacement.test.ts`; the EQ injection above already reuses the fader's
+  anchor.
+- **EQ style switch on the tile (handover item 3):** the plumbing is in place (`BE_VIEWS`, `VIEW_NAME`,
+  `controlMenu.viewS`, per-key `viewsByKey`), but a second `BE_SPEC` entry with the same footprint, the persisted
+  per-tile view and the three renderings (Output EQ / Input EQ / PEQ) need the block's served EQ visuals per
+  variant; `BeControl`'s `eq` branch draws one `EQGraph` today.
+- **Visual DynaCab UI (handover item 4):** no `dynaCab` visual exists in `editor.blockVisuals`; it needs a codec
+  visual (forgefx-midi) + ForgeFX pass-through, a drawing model (mic position/distance from `DYNA_CAB_*`) and a
+  `kind: 'graph'` (or dedicated) tile anchored on the DynaCab page.
+- **Cab Align graph (handover item 5):** roles `delay1`/`delay2` resolve to `CABINET_DELAY1/2` and the axis is
+  fitted (`max(delay1, delay2) × 1.5`, capped at the param's max) in `graphModel.cabAlignPlot`. The likely causes
+  are the tile span (the graph's seeded 8×4 cells shift the page, item 2) and the unit: the spikes/ticks draw
+  `paramValue()` and `p.max` without the display unit. Needs a real CAB block to compare the served delays with the
+  drawn scale and to confirm both roles resolve.
+- **Stale e2e specs noticed in the full run:** `45-block-editor-graphs` (4 cases still expect METER off by default;
+  `meteringOn` starts true) and `46-block-editor-fixed` (the right-edge case still expects the `.be-tip` value
+  bubble, removed earlier). Both fail on the base branch too.

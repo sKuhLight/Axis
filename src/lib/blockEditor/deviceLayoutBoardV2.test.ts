@@ -96,6 +96,7 @@ describe('buildDeviceLayoutBoardV2', () => {
       pageControls: [ctl('dropdown', 4, 'Type'), ctl('graph', null, 'Output EQ', { graphKey: 'outputEq' })] };
     const c = buildCatalog({
       params: [{ id: 0, name: '120 Hz' }, { id: 1, name: '240 Hz' }], enums: [{ id: 4, name: 'Type', options: opts(4) }],
+      eqBandCount: 5,
       visuals: [{ key: 'outputEq', title: 'Output EQ', kind: 'eq', mode: 'graphic', roles: {}, bands: [
         { key: 'low', centerHz: 120, gain: 0 }, { key: 'high', centerHz: 240, gain: 1 }
       ] }]
@@ -104,6 +105,27 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(b.pageOrder).toEqual(['Output EQ']);
     expect(b.boards['Output EQ']!.flatMap((it) => 'key' in it ? [it.key] : [])).toEqual(['e4', 'graph:outputEq']);
     expect(bbox(b.boards['Output EQ']!).R).toBe(4);
+  });
+
+  it('puts the EQ tile in the place of a graphic EQ’s faders so it never falls onto More', () => {
+    const c = buildCatalog({
+      params: [{ id: 0, name: '31 Hz' }, { id: 1, name: '62 Hz' }],
+      enums: [],
+      eqBandCount: 10,
+      visuals: [{ key: 'geq', title: 'Graphic EQ', kind: 'eq', mode: 'graphic', roles: {}, bands: [
+        { key: 'low', centerHz: 31, gain: 0 }, { key: 'high', centerHz: 62, gain: 1 }
+      ] }]
+    });
+    const eqPage = { name: 'Graphic EQ', rows: [{ controls: [ctl('slider', 0, '31 Hz'), ctl('slider', 1, '62 Hz')] }] };
+    const b = buildDeviceLayoutBoardV2(layout([eqPage]), c)!;
+
+    expect(b.pageOrder).toEqual(['Graphic EQ']);
+    const page = b.boards['Graphic EQ']!;
+    expect(find(page, 'eq')).toMatchObject({ view: 'eq', x: 0, y: 0 });
+    // the gains are drawn by the tile: neither a fader nor a second control stays on the page
+    expect(page.filter((it) => 'key' in it).map((it) => (it as { key: string }).key)).toEqual(['eq']);
+    // and no `eq` entry reaches a More page
+    expect(b.pageOrder.some((name) => name.startsWith('More'))).toBe(false);
   });
 
   it('makes repeated page names unique and skips empty pages', () => {

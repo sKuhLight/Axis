@@ -180,13 +180,29 @@ export function buildDeviceLayoutBoardV2(
     if (c.visual?.kind !== 'eq' || c.visual.mode !== 'graphic') continue;
     for (const band of c.visual.bands ?? []) if (band.gain != null) eqGains.add(`k${band.gain}`);
   }
-  const entries = opts.rowFlowOnly ? [] : rows.map((r) => {
-    const page = pageEntries(r, byKey, owner, skip);
-    if (!eqGains.size) return page;
-    return page.map((entry) => {
+  // The EQ tile (kind `eq`) is what draws those gains. Where the layout stamps an EQ graph on the page, that
+  // slot already draws them; otherwise the tile takes the first dropped fader's place on the page, so the EQ
+  // stays beside the controls it came from instead of falling onto "More".
+  const eqCtl = catalog.find((c) => c.key === 'eq') ?? null;
+  const eqGraphKeys = new Set(catalog.filter((c) => c.kind === 'graph' && c.visual?.kind === 'eq').map((c) => c.key));
+  /** Pages whose EQ the board draws (an injected `eq` tile or a stamped EQ graph): their height must hold it. */
+  const eqPages = new Set<number>();
+  const entries = opts.rowFlowOnly ? [] : rows.map((r, page) => {
+    const pageEntries_ = pageEntries(r, byKey, owner, skip);
+    if (!eqGains.size) return pageEntries_;
+    const stamped = pageEntries_.some((entry) => entry.kind === 'tile' && entry.key != null && eqGraphKeys.has(entry.key));
+    if (stamped && eqCtl) represented.add(eqCtl.key);
+    if (stamped) eqPages.add(page);
+    let took = false;
+    return pageEntries_.map((entry) => {
       if (entry.kind !== 'tile' || !entry.key || !eqGains.has(entry.key)) return entry;
       represented.add(entry.key);
-      return { ...entry, kind: 'gone' as const };
+      if (!eqCtl || stamped || took || skip.has(eqCtl.key)) return { ...entry, kind: 'gone' as const };
+      // One EQ per page: the first dropped fader's anchor becomes the EQ tile.
+      took = true;
+      represented.add(eqCtl.key);
+      eqPages.add(page);
+      return { ...entry, key: eqCtl.key, view: 'eq' as BeView };
     });
   });
   const layoutPitch = opts.rowFlowOnly ? null : measureLayoutPitch(entries.map(pitchSamples));
@@ -209,7 +225,9 @@ export function buildDeviceLayoutBoardV2(
     if (opts.rowFlowOnly) items = rowsOnly();
     else {
       const options = { pageIndex, layoutPitch };
-      ({ items, mode } = fitLayoutPage(entries[i]!, options, budget, rowsOnly));
+      // A page that draws its EQ needs the room for the EQ tile: the fader rows it replaces may be one line.
+      const pageBudget = eqPages.has(i) ? Math.max(budget, BE_SPEC.eq.h + TITLE_LINES) : budget;
+      ({ items, mode } = fitLayoutPage(entries[i]!, options, pageBudget, rowsOnly));
       if (useTwoRows && bbox(items).R > PAGE_REFERENCE_ROWS) {
         const compact = fitLayoutPage(entries[i]!, options, PAGE_REFERENCE_ROWS, rowsOnly);
         // The two-row preference may re-flow controls, never lose a title or divider the page shows:
