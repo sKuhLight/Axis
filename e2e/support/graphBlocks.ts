@@ -203,16 +203,22 @@ export function graphBlockParams(eid: number, o: { sustainOnly: boolean }): Reco
           block: 'Cab',
           slug: 'cab',
           page: 1,
-          named: [knob(93, 'Position', 0.35, 0, 1), knob(97, 'Distance', 0.4, 0, 1)],
+          named: [knob(93, 'Position', 0.35, 0, 1), knob(97, 'Distance', 0.4, 0, 1), knob(16, 'Distance 1', 0.2, 0, 1), knob(17, 'Distance 2', 0.3, 0, 1)],
           enums: [enm(85, 'Cab', ['4x12 UK', '2x12 USA'], 0), enm(89, 'Mic', ['Condenser 57', 'Ribbon 121'], 0)],
           type: null
         },
         {
           family: 'CABINET',
           variantName: 'DynaCab',
-          pages: [{ name: 'DynaCab', rows: [row(c('Position', 93), c('Distance', 97), slot('dynaCab'))] }]
+          pages: [
+            { name: 'DynaCab', rows: [row(c('Position', 93), c('Distance', 97), slot('dynaCab'))] },
+            { name: 'Align', rows: [row(c('Distance 1', 16), c('Distance 2', 17), slot('cabAlign'))] }
+          ]
         },
-        [{ key: 'dynaCab', kind: 'dynaCab', title: 'DynaCab mic', roles: { position: 93, distance: 97, cabType: 85, mic: 89 } }]
+        [
+          { key: 'dynaCab', kind: 'dynaCab', title: 'DynaCab mic', roles: { position: 93, distance: 97, cabType: 85, mic: 89 } },
+          { key: 'cabAlign', kind: 'cabAlign', title: 'Cab alignment', roles: { delay1: 16, delay2: 17 } }
+        ]
       );
     case GATE_EID:
       return out(

@@ -570,32 +570,55 @@ function adsrPlot(v: BlockVisual, r: RoleReader): GraphPlot {
 
 // ── cab alignment ──────────────────────────────────────────────────────────────────────────────────
 
+/** A fitted axis ceiling in a 1-2-5 step of the values' own scale: the drawn scale stays put while a knob
+ *  turns (a fit that moves with every step reads as a rendering error), and two small values still sit
+ *  apart. */
+export function niceCeil(v: number): number {
+  if (!(v > 0)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / pow;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * pow;
+}
+
+/** A tick label without trailing zeros (0.5, 0.25, 2 - not 0.500). */
+const tickLabel = (v: number): string => String(Math.round(v * 1000) / 1000);
+
 function cabAlignPlot(v: BlockVisual, r: RoleReader): GraphPlot {
   const out = blank();
   const p1 = r.knob('delay1');
   const p2 = r.knob('delay2');
-  if (!p1 || !p2) return { ...out, empty: 'No delays', caption: '', aria: `${v.title}: no delays` };
-  const rangeMax = Math.max(p1.max ?? 1, p2.max ?? 1);
-  const most = Math.max(paramValue(p1), paramValue(p2));
-  const span = most > 0 ? Math.min(rangeMax, most * CAB_AXIS_FIT) : rangeMax;
+  if (!p1 && !p2) return { ...out, empty: 'No delays', caption: '', aria: `${v.title}: no delays` };
+  const v1 = p1 ? paramValue(p1) : null;
+  const v2 = p2 ? paramValue(p2) : null;
+  const rangeMax = Math.max(p1?.max ?? 1, p2?.max ?? 1);
+  const most = Math.max(v1 ?? 0, v2 ?? 0);
+  // fitted, in a nice step, never beyond the device's own maximum and never a sliver of a scale
+  const span = Math.min(rangeMax, Math.max(niceCeil(Math.max(most * CAB_AXIS_FIT, rangeMax / 10)), rangeMax / 10));
   const x = (val: number) => linMap(Math.max(0, Math.min(span, val)), 0, span, 6, VB_W - 6);
   out.hlines.push({ y: VB_H / 2, tone: 'faint' });
-  out.spikes.push({ x: x(paramValue(p1)), y0: VB_H - 10, y1: 12, tone: 'main' });
-  out.spikes.push({ x: x(paramValue(p2)), y0: VB_H - 10, y1: 12, tone: 'alt' });
-  out.vlines.push({ x: x(paramValue(p1)), tone: 'main', label: '1' }, { x: x(paramValue(p2)), tone: 'alt', label: '2' });
+  // the two markers end at different heights, so an equal pair still shows both
+  const x1 = v1 == null ? null : x(v1);
+  const x2 = v2 == null ? null : x(v2);
+  if (x1 != null) out.spikes.push({ x: x1, y0: VB_H - 10, y1: 12, tone: 'main' });
+  if (x2 != null) out.spikes.push({ x: x2, y0: VB_H - 10, y1: 20, tone: 'alt' });
+  // labels only where they do not sit on top of each other; the caption always names both values
+  const apart = x1 != null && x2 != null && Math.abs(x1 - x2) >= 18;
+  if (x1 != null) out.vlines.push({ x: x1, tone: 'main', label: apart ? '1' : undefined });
+  if (x2 != null) out.vlines.push({ x: x2, tone: 'alt', label: apart ? '2' : undefined });
   out.xTicks = niceTicks(0, span, 4)
     .filter((t) => t > 0 && t < span)
-    .map((t) => ({ pos: x(t), label: String(Math.round(t * 1000) / 1000) }));
-  out.notes.push('Delays in the unit the device shows; the axis is fitted to them.');
-  const diff = Math.abs(paramValue(p1) - paramValue(p2));
+    .map((t) => ({ pos: x(t), label: tickLabel(t) }));
+  out.notes.push('Values in the unit the device shows; the axis is fitted to them in a 1-2-5 step of that scale.');
+  if (v1 == null || v2 == null) out.notes.push(`Slot ${v1 == null ? '1' : '2'} is not served: only slot ${v1 == null ? '2' : '1'} is drawn.`);
+  const shown = [p1 ? `1: ${formatFull(p1)}` : null, p2 ? `2: ${formatFull(p2)}` : null].filter(Boolean).join(' · ');
+  const diff = v1 != null && v2 != null ? Math.abs(v1 - v2) : null;
   return {
     ...out,
-    caption: `1: ${formatFull(p1)} · 2: ${formatFull(p2)} · Δ ${Math.round(diff * 1000) / 1000}`,
-    aria: `${v.title}: cab 1 ${formatFull(p1)}, cab 2 ${formatFull(p2)}`
+    caption: `${shown}${diff == null ? '' : ` · Δ ${tickLabel(diff)}`}`,
+    aria: `${v.title}: ${join([v1 != null ? `cab 1 ${formatFull(p1!)}` : null, v2 != null ? `cab 2 ${formatFull(p2!)}` : null])}`
   };
 }
-
-// ── entry ──────────────────────────────────────────────────────────────────────────────────────────
 
 // -- dynaCab -------------------------------------------------------------------------------------
 

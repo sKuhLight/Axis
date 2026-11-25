@@ -16,7 +16,7 @@ async function openCab(page: Page): Promise<void> {
   await expect(tile(page)).toBeVisible();
 }
 
-test.describe('DynaCab mic graphic', () => {
+test.describe('DynaCab mic and cab alignment', () => {
   test('the cab silhouette and the mic sit on the DynaCab page, named by the block’s cab and mic, following the controls', async ({ page }) => {
     await bootBlockEditorMock(page, { graphs: true });
     await openCab(page);
@@ -47,5 +47,28 @@ test.describe('DynaCab mic graphic', () => {
     await expect.poll(() => caption(page).innerText()).not.toBe(captionBefore);
     // drawing wrote nothing to the device
     expect(await page.evaluate(() => document.querySelectorAll('[data-be-board]').length)).toBeGreaterThan(0);
+  });
+
+  test('the cab alignment markers share one fitted scale that only steps when a value leaves it', async ({ page }) => {
+    await bootBlockEditorMock(page, { graphs: true });
+    await openCab(page);
+    await page.locator('[data-be-tab="Align"]').click();
+    const align = page.locator('[data-be-key="graph:cabAlign"]');
+    await expect(align).toBeVisible();
+    const g = align.locator('[data-be-graph="cabAlign"]');
+    await expect(g).toHaveAttribute('aria-label', /^Cab alignment: cab 1 /);
+    await expect(align.locator('[data-be-graph-caption]')).toContainText('Δ 0.1');
+    // both markers, ending at different heights so an equal pair still shows both
+    await expect(g.locator('line.be-gspike')).toHaveCount(2);
+    const tops = await g.locator('line.be-gspike').evaluateAll((els) => els.map((e) => e.getAttribute('y2')));
+    expect(new Set(tops).size).toBe(2);
+    // one tick row, not a moving scale: turning Distance 1 a little keeps every tick where it was
+    const ticks = async () => g.locator('.be-gtick.x').evaluateAll((els) => els.map((e) => `${e.getAttribute('style')}|${e.textContent}`));
+    const before = await ticks();
+    const d1 = page.locator('section[data-be-page="Align"] [data-be-key="k16"] .be-dial');
+    await d1.focus();
+    for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowUp');
+    await expect.poll(() => g.locator('[data-be-graph-caption]').innerText()).not.toContain('Δ 0.1');
+    expect(await ticks()).toEqual(before);
   });
 });

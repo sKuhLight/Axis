@@ -219,6 +219,37 @@ describe('decay, echo, adsr, cab', () => {
     const p = graphPlot(vis('cabAlign', { delay1: 16, delay2: 17 }, { title: 'Cab alignment' }), inputs([knob(16, 0.1, '', 0, 1), knob(17, 0.3, '', 0, 1)]));
     expect(p.spikes).toHaveLength(2);
     expect(p.caption).toContain('Δ 0.2');
+    // the two are far enough apart for their labels
+    expect(p.vlines.map((l) => l.label)).toEqual(['1', '2']);
+  });
+  it('cab alignment: the fitted axis moves in a 1-2-5 step, so turning one knob does not rescale the other', () => {
+    const v = vis('cabAlign', { delay1: 16, delay2: 17 }, { title: 'Cab alignment' });
+    const a = graphPlot(v, inputs([knob(16, 0.2, '', 0, 1), knob(17, 0.25, '', 0, 1)]));
+    const b = graphPlot(v, inputs([knob(16, 0.2, '', 0, 1), knob(17, 0.3, '', 0, 1)]));
+    // both fit under the same 0.5 ceiling: the ticks and the slot-1 marker do not move
+    expect(a.xTicks).toEqual(b.xTicks);
+    expect(a.spikes[0]!.x).toBe(b.spikes[0]!.x);
+    expect(a.spikes[1]!.x).not.toBe(b.spikes[1]!.x);
+  });
+  it('cab alignment: an equal pair still shows both markers, without colliding labels', () => {
+    const p = graphPlot(vis('cabAlign', { delay1: 16, delay2: 17 }, { title: 'Cab alignment' }), inputs([knob(16, 0.5, '', 0, 1), knob(17, 0.5, '', 0, 1)]));
+    expect(p.spikes).toHaveLength(2);
+    expect(p.spikes[0]!.x).toBe(p.spikes[1]!.x);
+    expect(p.spikes[0]!.y1).not.toBe(p.spikes[1]!.y1);
+    expect(p.vlines.map((l) => l.label)).toEqual([undefined, undefined]);
+    expect(p.caption).toContain('Δ 0');
+  });
+  it('cab alignment: both at 0 is drawn at the scale origin, not an empty plot', () => {
+    const p = graphPlot(vis('cabAlign', { delay1: 16, delay2: 17 }, { title: 'Cab alignment' }), inputs([knob(16, 0, '', 0, 1), knob(17, 0, '', 0, 1)]));
+    expect(p.empty).toBeUndefined();
+    expect(p.spikes.map((s) => s.x)).toEqual([6, 6]);
+    expect(p.caption).toContain('Δ 0');
+  });
+  it('cab alignment: one served slot still draws it and says what is missing', () => {
+    const p = graphPlot(vis('cabAlign', { delay1: 16, delay2: 17 }, { title: 'Cab alignment' }), inputs([knob(16, 0.4, '', 0, 1)]));
+    expect(p.empty).toBeUndefined();
+    expect(p.spikes).toHaveLength(1);
+    expect(p.notes.join(' ')).toContain('Slot 2 is not served');
   });
   it('DynaCab: the cab silhouette with the mic at the served position and distance', () => {
     const v = vis('dynaCab', { position: 1, distance: 2, cabType: 3, mic: 4 }, { title: 'DynaCab mic' });
