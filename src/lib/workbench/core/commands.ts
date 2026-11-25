@@ -99,6 +99,9 @@ export type WorkbenchCommand =
       position?: 'before' | 'after';
     }
   | { type: 'panel.rename'; panelId: string; title: string }
+  // panel.state merges functional panel state (a panel's own options — the grouping toggle of a custom
+  // panel, a view choice): like widget.state it is not layout, so a locked panel may still change it.
+  | { type: 'panel.state'; panelId: string; state: JsonObject }
   | { type: 'panel.collapse'; panelId: string; collapsed: boolean }
   | { type: 'region.resize'; region: DockRegionId; sizePx: number }
   | { type: 'region.collapse'; region: DockRegionId; collapsed: boolean }

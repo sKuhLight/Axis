@@ -1,4 +1,5 @@
 export * from './commands';
+export * from './customPanelBoard';
 export * from './customPanels';
 export * from './defaults';
 export * from './dockTree';

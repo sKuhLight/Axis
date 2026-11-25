@@ -51,6 +51,9 @@ export interface BeHost {
   readonly fixedScrollAxis: Axis;
   /** A workbench with the pin action is around. */
   readonly canPin: boolean;
+  /** A host that has no modifier / pin affordance to offer (a Quick Controls tile: its block may not even be
+   *  open): the tile draws neither hover action. */
+  readonly hideHoverActions?: boolean;
   readonly eqBands: EQBand[];
   readonly eqGainRange: number;
   readonly bypassed: boolean;

@@ -218,7 +218,7 @@ test.describe('Block Editor pin (real pointer)', () => {
     // its count went up; Escape walks back out of the submenu, then closes
     menu = await openCtx(page, 'k2');
     await menu.locator('.be-ci-pin').click();
-    await expect(menu.locator('.be-ci-pin-panel').filter({ hasNotText: 'not on a page' })).toHaveText(/^\s*Custom Panel\s*1 · /);
+    await expect(menu.locator('.be-ci-pin-panel').filter({ hasNotText: 'not on a page' })).toHaveText(/^\s*Quick Controls\s*1\s*$/);
     await page.keyboard.press('Escape');
     await expect(menu.locator('.be-ci-pin')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -237,7 +237,7 @@ test.describe('Block Editor pin (real pointer)', () => {
     // a new "Controls" tab in the editor's stack, right after the Block Editor, holding the control
     await expect(tabs).toHaveCount(before + 1);
     const names = (await tabs.allTextContents()).map((t) => t.trim());
-    expect(names[names.indexOf('Block Editor') + 1]).toBe('Controls');
+    expect(names[names.indexOf('Block Editor') + 1]).toBe('Quick Controls');
     await expect(page.locator('.custom-panel .axis-widget.param').filter({ hasText: 'Treble' })).toHaveCount(1);
   });
 });

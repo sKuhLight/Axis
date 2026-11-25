@@ -209,6 +209,22 @@ describe('reduceWorkbenchDocument — panels', () => {
     expect(missing.error?.code).toBe('missing-panel');
   });
 
+  it('merges panel state (and a locked panel may still change its own options)', () => {
+    const first = reduceWorkbenchDocument(doc(), {
+      type: 'panel.add',
+      panel: panel('panel.a', { state: { groupByBlock: true } }),
+      region: 'main'
+    }).next;
+    const merged = reduceWorkbenchDocument(first, { type: 'panel.state', panelId: 'panel.a', state: { groupByBlock: false } });
+    const missing = reduceWorkbenchDocument(first, { type: 'panel.state', panelId: 'missing', state: { a: 1 } });
+
+    expect(merged.success).toBe(true);
+    expect(layout(merged.next).panels['panel.a'].state).toEqual({ groupByBlock: false });
+    expect(layout(first).panels['panel.a'].state).toEqual({ groupByBlock: true });
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-panel');
+  });
+
   it('collapses and expands a panel', () => {
     const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
     const collapsed = reduceWorkbenchDocument(first, { type: 'panel.collapse', panelId: 'panel.a', collapsed: true });

@@ -11,6 +11,7 @@ import {
   type DockRegionId,
   type JsonObject,
   type WorkbenchActionHandler,
+  type WorkbenchCommand,
   type WorkbenchController,
   type WorkbenchDocument,
   type WorkbenchParameterSource
@@ -20,14 +21,13 @@ import { axisParameterSourcesFromCurrentEditor } from './axisParameterSources';
 export const AXIS_PIN_SELECTED_PARAMETERS_ACTION = 'axis.pinSelectedParameters';
 export const AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION = WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION;
 export const AXIS_CUSTOM_PANEL_TYPE = 'axis.customPanel';
-/** Sensible default name for a fresh collect panel (renamable like any panel). */
-export const AXIS_CONTROLS_PANEL_TITLE = 'Controls';
-
+/** The one panel every "add a control" path collects into (renamable like any panel). */
+export const AXIS_CONTROLS_PANEL_TITLE = 'Quick Controls';
 export type AxisParameterSourceProvider = () => WorkbenchParameterSource[] | Promise<WorkbenchParameterSource[]>;
 
-// A dropped parameter no longer spawns a tab per param: a fresh panel gets the
-// generic "Controls" name (renamable) so several blocks' key controls collect in
-// ONE panel. An explicit `title` arg (e.g. the "pin this page" path) still wins.
+// A dropped parameter never spawns a tab per param: a fresh panel gets the shared "Quick Controls" name so
+// several blocks' key controls collect in ONE panel. An explicit `title` arg (e.g. the "pin this page"
+// path) still wins.
 function titleForSources(): string {
   return AXIS_CONTROLS_PANEL_TITLE;
 }
@@ -51,11 +51,22 @@ export function axisCollectPanelId(doc: WorkbenchDocument, region: DockRegionId)
   return customPanels.length === 1 ? customPanels[0].id : null;
 }
 
-/** Append parameter-source widgets to the end of a panel's widget zone. */
-function appendSourcesCommands(controller: WorkbenchController, panelId: string, sources: WorkbenchParameterSource[]) {
+/** Append parameter-source widgets to a panel, dock it when it is parked and show it. */
+function appendSourcesCommands(controller: WorkbenchController, panelId: string, sources: WorkbenchParameterSource[], region: DockRegionId = 'main') {
   const zone = panelWidgetZoneId(panelId);
+  const panel = selectActiveLayout(controller.document)?.panels[panelId];
   const startIndex = selectVisibleWidgetsByZone(controller.document, zone).length;
-  return createParameterWidgetsForZoneCommands(controller.document, sources, { zone, index: startIndex });
+  const commands: WorkbenchCommand[] = [];
+  // The first control a never-touched custom panel receives names it "Quick Controls" (there is ONE panel).
+  if (panel && startIndex === 0 && (panel.title ?? '') === 'Custom Panel') {
+    commands.push({ type: 'panel.rename', panelId, title: AXIS_CONTROLS_PANEL_TITLE });
+  }
+  commands.push(...createParameterWidgetsForZoneCommands(controller.document, sources, { zone, index: startIndex }));
+  // Collecting into a parked panel would leave the controls off-screen: dock it, then show it.
+  const docked = selectPanelLocation(controller.document, panelId);
+  if (!docked) commands.unshift({ type: 'panel.move', panelId, to: { kind: 'region', region } });
+  commands.push({ type: 'panel.activate', panelId });
+  return commands;
 }
 
 function numericParamId(value: unknown): number | null {
@@ -117,14 +128,25 @@ export function createAxisPinSelectedParametersAction(
       // named panel isn't a live custom panel.
       const panelId = panelIdFromArgs(args);
       if (panelId && isAxisCustomPanel(controller, panelId)) {
-        controller.dispatchMany(appendSourcesCommands(controller, panelId, sources));
+        controller.dispatchMany(appendSourcesCommands(controller, panelId, sources, 'right'));
         return;
+      }
+
+      // No explicit title: collect into the one Quick Controls panel (never a panel
+      // per knob). The "pin this page" path names its panel and keeps getting one.
+      const explicitTitle = typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : null;
+      if (!explicitTitle) {
+        const collectId = axisCollectPanelId(controller.document, 'right');
+        if (collectId) {
+          controller.dispatchMany(appendSourcesCommands(controller, collectId, sources, 'right'));
+          return;
+        }
       }
 
       controller.dispatchMany(
         createCustomPanelFromParameterSourcesCommands(controller.document, sources, {
           panelType: AXIS_CUSTOM_PANEL_TYPE,
-          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(),
+          title: explicitTitle ?? titleForSources(),
           region: 'right'
         })
       );
@@ -166,7 +188,7 @@ export function createAxisParameterSourceEdgeDropAction(): WorkbenchActionHandle
       // panel that subsequent drops then collect into.
       const collectId = axisCollectPanelId(controller.document, region);
       if (collectId) {
-        controller.dispatchMany(appendSourcesCommands(controller, collectId, [source]));
+        controller.dispatchMany(appendSourcesCommands(controller, collectId, [source], region));
         return;
       }
 

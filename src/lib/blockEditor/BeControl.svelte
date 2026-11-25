@@ -161,8 +161,8 @@
   // they would cover the control (one-row tiles, small pills / fields — the control menu has both there)
   const tact = $derived(hoverActionPx(c));
   const actFits = $derived(hoverActionsFit(view, pos.h, pxW, pxH, tact, tileContentBox(view, { pxW, pxH, c, lf, showLabel, ctlH })));
-  const showPin = $derived(!ed && !!ctl && !host.isPhone && actFits && host.canPin && host.pinnable(ctl));
-  const showMod = $derived(!ed && ctl?.kind === 'cont' && !host.isPhone && actFits);
+  const showPin = $derived(!ed && !!ctl && !host.isPhone && !host.hideHoverActions && actFits && host.canPin && host.pinnable(ctl));
+  const showMod = $derived(!ed && ctl?.kind === 'cont' && !host.isPhone && !host.hideHoverActions && actFits);
 
   // arrange: the selected tile is outlined, shows its w×h and its corner handle (the bar holds its tools)
   const selected = $derived(ed && host.selectedId === item.id);

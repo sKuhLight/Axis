@@ -712,6 +712,12 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       panel.title = title;
       return ok(next);
     }
+    case 'panel.state': {
+      const panel = layout.panels[command.panelId];
+      if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
+      panel.state = { ...panel.state, ...command.state };
+      return ok(next);
+    }
     case 'panel.collapse': {
       const panel = layout.panels[command.panelId];
       if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
