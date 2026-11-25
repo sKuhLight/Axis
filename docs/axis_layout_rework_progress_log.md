@@ -2814,3 +2814,20 @@ Branch `feature/block-editor-fixed-area`, on top of ROUND BE-9 (`a830d76`). The 
 
 
 
+
+## UI follow-ups (second pass): navigation, palette, footer, scenes, EQ visuals
+
+- **Side list is the built-in navigation** (`DEFAULT_PREFS.nav = 'side'`) and the header's ⋯ menu gained **Reset all editor layouts**: it drops every block family's boards, meta and saved seeds (`surfRemovePrefix`), so each regenerates from its device layout with the side list - a stored Top choice is cleared too. The Virtual / Setup screens mount `BeSurface`, so they follow the same default and reset.
+- **Meter on by default** (`meteringOn` starts true; the demand flag reaches the server on connect).
+- **No value bubble above knobs** (the value is on the tile): markup, CSS, state and the drag/hover triggers are gone; the parameter help still shows in the footer.
+- **Add-block palette**: block rows resolve the Signal Grid's family catalog (`name -> pack`), so each row carries its block's accent + glyph; the "Place in cell" chip row is gone.
+- **Scene widget (SCN)**: the preset shape without arrows (`SCN n`, name when expanded); clicking the number unfolds a bar of scene numbers over the widget itself - the channel selector's pattern, not a dropdown - the active one marked, a pick or a click-away folds it.
+- **Grid re-read button** (the floating `.regrid` in the Signal Grid's corner) removed, both variants.
+- **Footer**: `StatusBar` is the top bar's three areas - left hint (ticker), center device · preset · scene, right support / copyright / imprint.
+- **EQ visuals**: the codec serves the PEQ parametric (5 bands) and GEQ graphic (10 bands) EQs; Axis keeps a graphic EQ's band gains off every page (catalog-wide, not just mixer-rail layouts), so a GEQ's faders are gone and the EQ tile draws them. The compressor graph works since the layout regeneration (its slot stamps to `dynamics`).
+- Gates: `npm run check` clean, 189 files / 2,965 tests; block-editor e2e 40/45/46 47/47, workbench 05 + 22 29/29; codec `npm run build && npm test` green.
+
+### Still open (UI)
+
+- **Custom panels as a block-editor board** (handover: `HANDOVER-CUSTOM-PANEL.md` in the workspace root): one "Quick Controls" panel, 4 cells wide by default, grid drag/drop, block grouping with labelled dividers.
+- **EQ style switch** on the tile (Output EQ / Input EQ / PEQ rendering as selectable views) and **clamping a seeded graph tile to the page/slot span**.
