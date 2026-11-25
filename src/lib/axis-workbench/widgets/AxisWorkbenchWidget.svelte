@@ -356,7 +356,11 @@ function openWidget() {
   onpointerdown={(e) => {
     if (!scnOpen) return;
     const t = e.target as HTMLElement | null;
-    if (!t?.closest('.scn-bar') && !t?.closest('[data-scn-toggle]')) scnOpen = false;
+    if (!t?.closest('.scn-inline') && !t?.closest('[data-scn-toggle]')) scnOpen = false;
+  }}
+  onkeydown={(e) => {
+    // the channel selector folds on Escape
+    if (scnOpen && e.key === 'Escape') scnOpen = false;
   }}
 />
 
@@ -394,25 +398,12 @@ function openWidget() {
 {:else if kind === 'scenes'}
   <!-- Capability-gated like the legacy TopBar: no scene chips on a device without scenes (or before caps load). -->
   {#if editor.sceneCount > 0}
-    <div class="axis-widget preset scn" data-size={size}>
-      <button
-        class="preset-main"
-        type="button"
-        data-scn-toggle
-        title="Scene {editor.scene} - {editor.sceneName(editor.scene)}"
-        aria-haspopup="listbox"
-        aria-expanded={scnOpen}
-        onclick={() => (scnOpen = !scnOpen)}
-      >
-        <span class="mono token">SCN</span>
-        <span class="mono preset-num">{editor.scene}</span>
-        {#if expanded}<span class="preset-name">{editor.sceneName(editor.scene)}</span>{/if}
-        {#if !mini}<span class="chev">▾</span>{/if}
-      </button>
+    <div class="axis-widget preset scn" class:open={scnOpen} data-size={size}>
       {#if scnOpen}
-        <!-- the block editor's channel selector, for scenes: the widget's own row of scene numbers unfolds
-             over it (no dropdown), the active one marked -->
-        <div class="scn-bar" role="group" aria-label="Scene" tabindex="-1">
+        <!-- the channel selector's pattern: the widget itself unfolds to the right - SCN, every scene number,
+             then the active scene's name; a pick or a click-away folds it back -->
+        <div class="scn-inline" role="group" aria-label="Scene" tabindex="-1">
+          <span class="mono token">SCN</span>
           {#each Array(editor.sceneCount) as _, i (i)}
             {@const n = i + 1}
             <button
@@ -420,14 +411,30 @@ function openWidget() {
               class:on={editor.scene === n}
               type="button"
               aria-pressed={editor.scene === n}
-              title="Scene {n} - {editor.sceneName(n)}"
+              title="Scene {n}"
               onclick={() => {
                 editor.selectScene(n);
                 scnOpen = false;
               }}>{n}</button
             >
           {/each}
+          <span class="scn-name">{editor.sceneName(editor.scene)}</span>
         </div>
+      {:else}
+        <button
+          class="preset-main"
+          type="button"
+          data-scn-toggle
+          title="Scene {editor.scene} - {editor.sceneName(editor.scene)}"
+          aria-haspopup="listbox"
+          aria-expanded={scnOpen}
+          onclick={() => (scnOpen = true)}
+        >
+          <span class="mono token">SCN</span>
+          <span class="mono preset-num">{editor.scene}</span>
+          {#if expanded}<span class="preset-name">{editor.sceneName(editor.scene)}</span>{/if}
+          {#if !mini}<span class="chev">▾</span>{/if}
+        </button>
       {/if}
     </div>
   {/if}
@@ -889,49 +896,51 @@ function openWidget() {
     font-size: 13px;
     font-weight: 600;
   }
-  /* scenes: the preset shape without arrows; the number opens a scene list (the block editor's channel selector) */
+  /* scenes: the preset shape without arrows; opening it unfolds the stage in place (channel-selector pattern) */
   .axis-widget.scn {
     position: relative;
     overflow: visible;
   }
-  /* the channel selector's bar (block editor), over the widget instead of a dropdown */
-  .scn-bar {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    z-index: 80;
-    transform: translateY(-50%);
-    display: flex;
+  .axis-widget.scn.open {
+    /* the unfolded row (SCN · 1..8 · name) is wider than the closed widget: let it grow instead of clipping */
+    max-width: none;
+    flex: none;
+  }
+  .scn-inline {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    width: max-content;
-    min-width: 100%;
-    padding: 2px 4px;
-    border-radius: 9px;
-    background: var(--surface);
-    border: 1px solid var(--accent-border, var(--border2));
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent);
+    gap: 5px;
+    padding: 0 2px;
   }
   .scn-chip {
     flex: none;
-    min-width: 30px;
+    min-width: 26px;
     height: 30px;
-    padding: 0 6px;
-    border: 1px solid var(--border2);
+    padding: 0 5px;
+    border: 1px solid transparent;
     border-radius: 7px;
     background: transparent;
-    color: var(--text2);
-    font: 800 13px/1 var(--font-mono);
+    color: var(--amber);
+    font: 800 14px/1 var(--font-mono);
     cursor: pointer;
   }
   .scn-chip:hover {
-    border-color: var(--accent);
-    color: var(--text);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
   }
   .scn-chip.on {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    border-color: var(--accent);
-    color: var(--accent);
+    background: color-mix(in srgb, var(--amber) 16%, transparent);
+    border-color: var(--amber-border, var(--amber));
+    color: var(--amber);
+  }
+  .scn-name {
+    max-width: 150px;
+    margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
   }
   .chev {
     color: var(--textmuted);
